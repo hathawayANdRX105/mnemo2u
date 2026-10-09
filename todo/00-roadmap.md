@@ -110,12 +110,12 @@
 
 1. **kuzu 上游归档**：接受冻结版 + trait 抽象（替换成本收敛在 `mnemo-store` 一个文件）。待点头。
 2. **turso beta**（0.8.3-pre.1）：API 可能漂移；钉版本 + 契约测试护栏。
-3. **参考克隆缺口**：microsoft/graphrag ✅、hindsight 稀疏克隆中；TGRAG 论文未核实，其数字不采信。
+3. **参考克隆**：全部落地（7/7）——nano-graphrag、LightRAG、microsoft/graphrag、graphrag-rs、graphiti、hindsight（稀疏）。TGRAG 论文未核实，其数字不采信。
 4. **Jev 调用成本模型**：写路径每次抽取的调用上限与缓存策略在 R4 定稿。
 5. **TRACE 与 MTRAG 许可**：使用前核实。
 
 ## 9. 接续记录
 
-- 已完成：core 骨架 + 三库/词法/命名决策 + refs 拷贝（6/7）+ 本路线图。
-- 未完成：评审、R1 开工、hindsight 收尾。
+- 已完成：core 骨架 + 三库/词法/命名决策 + refs 拷贝（7/7）+ 本路线图。
+- 未完成：评审、R1 开工。
 - 下一动作：评审本文件与 01–06 → 修订 → R1。
