@@ -96,28 +96,16 @@ mod tests {
         assert_eq!(limiter.available(), 3);
         assert_eq!(limiter.in_flight(), 0);
 
-        let barrier = Arc::new(tokio::sync::Barrier::new(4));
-        let mut handles = Vec::new();
-        for _ in 0..3 {
-            let limiter = limiter.clone();
-            let barrier = barrier.clone();
-            let observer = limiter.clone();
-            handles.push(tokio::spawn(async move {
-                let guard = observer.clone();
-                observer
-                    .run(async move {
-                        barrier.wait().await;
-                        // All three permits are out while the barrier holds.
-                        assert_eq!(guard.in_flight(), 3);
-                        assert_eq!(guard.available(), 0);
-                    })
-                    .await;
-            }));
-        }
-        barrier.wait().await;
-        for handle in handles {
-            handle.await.expect("task completes");
-        }
+        // Inside a single granted permit the counters are exact (no scheduling
+        // races); the *cap* itself is covered by `caps_inflight_calls`.
+        let observer = limiter.clone();
+        limiter
+            .run(async move {
+                assert_eq!(observer.in_flight(), 1);
+                assert_eq!(observer.available(), 2);
+            })
+            .await;
+
         assert_eq!(limiter.in_flight(), 0, "permits return after completion");
         assert_eq!(limiter.available(), 3);
     }

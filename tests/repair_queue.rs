@@ -124,11 +124,22 @@ async fn failed_derived_write_is_queued_and_replayed() {
         .flush()
         .await
         .expect("flush with still-failing store");
+    let still_queued = repair_again.pending().await.expect("pending");
     assert_eq!(
-        repair_again.pending().await.expect("pending").len(),
-        2,
-        "a replay that fails again must stay queued"
+        still_queued.len(),
+        1,
+        "drain is per item: the replay that fails again stays queued, the healthy one leaves"
     );
+    assert!(still_queued.len() == 1, "exactly one row stays queued");
+
+    // The healthy row was already replayed into the second store.
+    let replayed = failing_again
+        .inner
+        .query("BETA LABS", 5)
+        .await
+        .expect("query replayed store");
+    assert_eq!(replayed.len(), 1, "the non-failing replay lands");
+    assert_eq!(replayed[0].meta, json!({"entity_name": "\"BETA LABS\""}));
 
     // With the store healthy, flush replays the queued rows and empties the queue.
     pipeline.flush().await.expect("flush replays");
