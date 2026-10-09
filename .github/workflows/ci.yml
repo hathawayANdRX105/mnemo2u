@@ -47,6 +47,12 @@ jobs:
   # `<cstdint>`).
   kuzu:
     runs-on: ubuntu-latest
+    env:
+      # kuzu links its vendored simsimd with `+whole-archive` while `turso_core`
+      # pulls the `simsimd` crate — the same upstream C library, so the duplicate
+      # symbols are benign; the linker only needs permission to drop one copy.
+      # Build locally with the same flag (or `RUSTFLAGS` in .cargo/config.toml).
+      RUSTFLAGS: -C link-arg=-Wl,--allow-multiple-definition
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
