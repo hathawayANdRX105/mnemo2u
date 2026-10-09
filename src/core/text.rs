@@ -167,7 +167,11 @@ pub fn html_unescape(s: &str) -> String {
         if bytes[i] == b'&' {
             if let Some(end) = s[i..].find(';') {
                 let entity = &s[i + 1..i + end];
-                let replacement = match entity {
+                // HTML5 entity names are case-sensitive as a set but include
+                // uppercase variants for the common ones (`&AMP;`), and the
+                // reference upcases attributes before unescaping.
+                let name = entity.to_ascii_lowercase();
+                let replacement = match name.as_str() {
                     "amp" => Some('&'),
                     "lt" => Some('<'),
                     "gt" => Some('>'),

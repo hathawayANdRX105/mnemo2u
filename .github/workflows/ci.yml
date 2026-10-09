@@ -36,8 +36,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+      # `--no-fail-fast`: report every failing test binary in one run instead of
+      # one per 15-minute CI cycle.
       - name: Test
-        run: cargo test --all-targets
+        run: cargo test --all-targets --no-fail-fast
 
   # The kuzu graph backend vendors a C++ engine (slow build). It is behind the
   # `kuzu-backend` feature and gets its own job once the adapter lands (R1.T6);
