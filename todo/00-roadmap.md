@@ -120,14 +120,14 @@
 
 1. **kuzu 上游归档**：接受冻结版 + trait 抽象（替换成本收敛在 `src/store` 一个文件）。待点头。
 2. **turso beta**（0.8.3-pre.1）：API 可能漂移；钉版本 + 契约测试护栏。
-3. **参考库扩充**：论文 11/11 已落地；新增克隆（agent-memory-atlas / TRACE / mt-rag-benchmark / HippoRAG / fast-graphrag / mem0）后台下载中（见 §10）。TGRAG 论文未核实，其数字不采信。
+3. **参考库**：论文 11/11、克隆 12/12 全部落地（见 §10，均为浅克隆）。TGRAG 论文未核实，其数字不采信。
 4. **Jev 调用成本模型**：写路径每次抽取的调用上限与缓存策略在 R4 定稿。
 5. **TRACE 与 MTRAG 许可**：使用前核实。
 
 ## 9. 接续记录
 
-- 已完成：单 crate 骨架 + 三库/词法/命名决策 + 核心参考库（7/7）+ 路线图 + R1/R2 全文文档。
-- 未完成：评审、扩充克隆与论文、R1 开工。
+- 已完成：单 crate 骨架 + 三库/词法/命名决策 + 参考库（克隆 12/12 + 论文 11/11）+ 路线图 + R1/R2 全文文档。
+- 未完成：评审、R1 开工。
 - 下一动作：评审 00–06 → 修订 → R1。
 
 ## 10. 参考库索引（todo/refs/）
@@ -141,12 +141,14 @@
 | `graphrag/` | microsoft/graphrag | ✅ 5faaaf4 |
 | `graphrag-rs/` | automataIA/graphrag-rs | ✅ a7222c1 |
 | `graphiti/` | getzep/graphiti | ✅ 1026ae7 |
-| `hindsight/` | vectorize-io/hindsight（稀疏） | ✅ |
-| `agent-memory-atlas/` | neoneye/agent-memory-atlas | 下载中 |
-| `TRACE/` | husain34/TRACE | 下载中 |
-| `mt-rag-benchmark/` | IBM/mt-rag-benchmark | 下载中 |
-| `HippoRAG/` | OSU-NLP-Group/HippoRAG | 下载中 |
-| `fast-graphrag/` | circlemind-ai/fast-graphrag | 下载中 |
-| `mem0/` | mem0ai/mem0 | 下载中 |
+| `hindsight/` | vectorize-io/hindsight | ✅ 6d8b096 |
+| `agent-memory-atlas/` | neoneye/agent-memory-atlas | ✅ 9d99eaa |
+| `TRACE/` | husain34/TRACE | ✅ 8f764be |
+| `mt-rag-benchmark/` | IBM/mt-rag-benchmark | ✅ 53fef6f（稀疏：scripts/README） |
+| `HippoRAG/` | OSU-NLP-Group/HippoRAG | ✅ d5c8329 |
+| `fast-graphrag/` | circlemind-ai/fast-graphrag | ✅ 23b3a1b |
+| `mem0/` | mem0ai/mem0 | ✅ b7ad69a |
+
+说明：全部为 `--depth 1` 浅克隆（读参考代码足够）；`mt-rag-benchmark` 数据集（corpora 206MB）未拉取，用 `blob:none` + cone 稀疏检出，需要哪个文件单独 `git show` 即懒加载。
 
 **论文 PDF**（`papers/`，11/11 已落地，PDF 头校验通过）：microsoft-graphrag(2404.16130)、lightrag(2410.05779)、ket-rag(2502.09304)、synapticrag(2410.13553)、mtrag(2501.03468)、okralong(2503.02603)、hipporag(2405.14831)、zep(2501.13956)、mem0(2504.19413)、hindsight(2512.12818)、evorag(2604.15676)。
