@@ -409,10 +409,17 @@ impl Tokenizer {
         self.bpe.encode_ordinary(text)
     }
 
+    /// Decode tokens to text.
+    ///
+    /// Python's tiktoken decodes with `errors="replace"`, and token windows can
+    /// split a multi-byte character, so strict UTF-8 validation would reject
+    /// inputs the reference happily chunks — mirror the reference instead.
     pub fn decode(&self, tokens: &[Rank]) -> TextResult<String> {
-        self.bpe
-            .decode(tokens)
-            .map_err(|e| TextError::Tokenizer(e.to_string()))
+        let bytes = self
+            .bpe
+            .decode_bytes(tokens)
+            .map_err(|e| TextError::Tokenizer(e.to_string()))?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     pub fn decode_batch(&self, batch: &[Vec<Rank>]) -> TextResult<Vec<String>> {
