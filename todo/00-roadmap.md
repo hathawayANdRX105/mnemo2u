@@ -54,7 +54,7 @@
 | 借什么 | 来源 | 许可 | 本地副本（todo/refs/） | 落到 |
 |---|---|---|---|---|
 | 组件 trait 骨架（LLM/Embedding/Graph/Vector/KV 可插拔） | nano-graphrag | MIT | `nano-graphrag/` @ acb35c0 | `src/core`（已映射）；R1 全面复刻 |
-| 双层检索、增量更新、关系关键词标签 | LightRAG (EMNLP'25) | MIT | `LightRAG/` @ 453dce8 | R2 |
+| 增量合并（无全局重算）、关系向量 + hl/ll 双关键词检索、级联删除与悬空判定、追踪行/限额 | LightRAG (EMNLP'25) | MIT | `LightRAG/` @ 453dce8（深度魔改 fork，仅借核心机制） | R2 |
 | 骨架式索引：只对高价值 chunk 抽取（成本-1 个数量级） | KET-RAG (KDD'25) | 论文 | `papers/ket-rag.pdf` | R2 成本控制 |
 | 实体/关系/claims 图模型、local/global 检索划分 | Microsoft GraphRAG | MIT | `graphrag/` @ 5faaaf4 | R1 对齐参考 |
 | 双时态边（闭区间不删） | Zep/Graphiti | Apache-2.0 | `graphiti/`；`papers/zep.pdf` | `Fact`/`Edge` 字段（已建） |
@@ -78,7 +78,7 @@
 - **向量库**：`lancedb` 0.40（嵌入式 ANN）。
 - **真值库**：`turso` 0.8.x（beta；SQLite 兼容、原生 async、Tantivy FTS BM25）。
 - **嵌入**：`fastembed` 7.x（ONNX 本地，bge-small 系；离线；模型名进缓存键）。
-- **中文分词**：`jieba-rs` 0.11（切块 token 近似、FTS 辅助）。
+- **分词/计数**：**`tiktoken-rs` 0.12.1**（与参考实现同 tokenizer，cl100k/o200k——切块与截断的等价基准）；`jieba-rs` 0.11 仅用于中文 FTS 辅助。
 - **HTTP/LLM**：`reqwest` + `serde_json`（OpenAI-compatible 生成客户端；Jev compatible 判断客户端）。
 - **异步/基础设施**：`tokio`；错误 `thiserror`；哈希 `sha2`（幂等/缓存键）；日志 `tracing` + `tracing-subscriber`；配置 `serde` + `toml`。
 
@@ -97,7 +97,7 @@
 | 阶段 | 可交付行为 | 验收要点 |
 |---|---|---|
 | R1 | **复刻 nano-graphrag**：insert/merge/图/社区/报告/local-global-naive 查询 + 三库提交协议 | 功能验收 FAC1–5；测试验收 TAC1–6 |
-| R2 | **LightRAG 增强**：增量更新、双层检索、关键词、合并、选择性删除、成本控制 | 功能验收 FAC1–6；测试验收 TAC1–8 |
+| R2 | **LightRAG 增强**：增量合并（无全局重算）、关系向量+hl/ll 双关键词检索、级联删除、追踪行、成本 | 功能验收 FAC1–6；测试验收 TAC1–8 |
 | R3 | 读路径硬化：前滤→多臂→融合→rerank→分层返回 | 精确召回、scope 负例、降级可观测 |
 | R4 | Jev 全链 + 外发门 | 未 opt-in 零外发；无 Jev 显式降级 |
 | R5 | 反思更新与后台整理 | 纠正抗重建、独立来源计数、级联失效 |
@@ -114,6 +114,7 @@
 | 向量库 | lancedb（弃 qdrant-edge beta） | jev opt_d |
 | 词法 | turso Tantivy FTS（非 FTS5 语法：`fts_match`/`fts_score`） | 官方 COMPAT.md 核实 |
 | 写路径形态 | 零-LLM 捕获 + Jev 选择性增强（KET-RAG 式） | 调研 + 用户路线 |
+| 社区策略 | R1 保留 nano 语义（全量重算）；R2 起默认 `off`、按需触发 | LightRAG 全仓无社区（grep 佐证）；增量与社区重算成本不可共存 |
 | 命名 | mnemo2u | 用户拍板 |
 
 ## 8. 开放风险与待办
