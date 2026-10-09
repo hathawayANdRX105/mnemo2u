@@ -75,14 +75,15 @@ async fn upsert_query_threshold_and_persistence() {
         .await
         .expect("reopen");
     let hits = reopened.query("kubernetes pods", 5).await.expect("query");
-    let ids: Vec<&str> = hits.iter().map(|hit| hit.id.as_str()).collect();
+    let mut ids: Vec<&str> = hits.iter().map(|hit| hit.id.as_str()).collect();
+    ids.sort_unstable();
     assert_eq!(ids, vec!["c1", "c2"], "one row per id across reopen");
     assert!(
         reopened
-            .query("completely unrelated words", 5)
+            .query("cats purr", 5)
             .await
             .expect("query")
             .is_empty(),
-        "threshold still applies after reopen"
+        "the updated row must not answer for its old content"
     );
 }
