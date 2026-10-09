@@ -1,7 +1,9 @@
 //! Store backends.
 
+pub mod lancedb;
 pub mod memory;
 pub mod turso;
 
-// NOT YET IMPLEMENTED: turso / kuzu / lancedb (R1.T6, R1.T10).
-// No backend may be registered as available before its contract tests pass.
+// `memory` covers the pipeline for tests; `lancedb` and `kuzu` (behind
+// `kuzu-backend`) are the durable backends. A backend is only registered as
+// available once its contract tests pass.

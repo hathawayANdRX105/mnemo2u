@@ -5084,9 +5084,12 @@ dependencies = [
 name = "mnemo2u"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "async-trait",
  "clap",
  "fastembed",
+ "futures",
  "kuzu",
  "lancedb",
  "leiden-rs",

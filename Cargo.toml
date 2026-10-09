@@ -34,6 +34,10 @@ leiden-rs = { version = "0.8", default-features = false }
 # storage backends
 turso = "0.8.3-pre.1"
 lancedb = { version = "0.40", features = ["remote"] }
+# same wheel as lancedb's lock (arrow 58) so no duplicate arrow builds
+arrow-array = "58"
+arrow-schema = "58"
+futures = "0.3"
 # kuzu vendors its C++ engine (slow build; needs the CXXFLAGS workaround in
 # .cargo/config.toml); kept non-default so the pipeline builds and tests
 # without it, and enabled for the kuzu adapter work (R1.T6).
