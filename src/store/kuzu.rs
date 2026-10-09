@@ -75,13 +75,24 @@ impl KuzuGraph {
     }
 
     fn upsert_node_locked(&self, node_id: &str, data: Json) -> Result<()> {
-        let merged = merge_attributes(self.get_node(node_id)?.as_ref(), &data);
+        let merged = merge_attributes(self.read_node(node_id)?.as_ref(), &data);
         let connection = self.connection()?;
         let params = vec![
             ("id", Value::String(node_id.to_string())),
             ("props", Value::String(merged.to_string())),
         ];
         run(&connection, UPSERT_NODE, params).map(|_| ())
+    }
+
+    /// Sync read: the write paths run under the write lock and cannot await.
+    fn read_node(&self, node_id: &str) -> Result<Option<Json>> {
+        let connection = self.connection()?;
+        let rows = run(
+            &connection,
+            GET_NODE,
+            vec![("id", Value::String(node_id.to_string()))],
+        )?;
+        decode_payload(rows.first())
     }
 
     fn upsert_edge_locked(&self, src: &str, tgt: &str, data: Json) -> Result<()> {
@@ -170,13 +181,7 @@ impl GraphStore for KuzuGraph {
     }
 
     async fn get_node(&self, node_id: &str) -> Result<Option<Json>> {
-        let connection = self.connection()?;
-        let rows = run(
-            &connection,
-            GET_NODE,
-            vec![("id", Value::String(node_id.to_string()))],
-        )?;
-        decode_payload(rows.first())
+        self.read_node(node_id)
     }
 
     async fn get_nodes_batch(&self, ids: &[String]) -> Result<Vec<Option<Json>>> {
