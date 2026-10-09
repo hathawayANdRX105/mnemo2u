@@ -96,8 +96,8 @@
 
 三库无共享事务。不变量：**turso 是唯一真值；kuzu/lancedb 是派生索引，任何时刻可重建**。
 
-1. **turso 先提交**：文档/chunk/缓存/状态（含幂等键）同事务落库。成功即事实成立。
-2. **派生库后写**：kuzu 节点/边 + lancedb 向量；失败不阻塞事实成立，进 repair 队列（id + 失败库），下轮重试。
+1. **提交点在 turso 的文档/chunk 行**：`full_docs`/`text_chunks` 在整条插入链**最后**落库（参考实现同序，graphrag.py:342-346）。写在这里之前崩溃 → 该文档视为「未入库」，重跑 insert 从头执行（LLM 缓存让重跑廉价）。
+2. **派生库写通过即幂等**：图节点/边与实体向量在过程中 upsert（同键覆盖），重跑不产生重复；`community_reports` 每次插入前 `drop_all`（参考语义）。
 3. **重建路径**：`rebuild(scope)` 从 turso 全量重建 kuzu/lancedb；契约测试：删派生库→重建→检索一致。
 4. **错误分类**：`StoreError::{Backend, ScopeViolation, StaleRevision, NotFound}`；「臂失败」与「空结果」可区分。
 
@@ -131,6 +131,9 @@
 
 ## 9. 接续记录
 
-- 已完成：单 crate 骨架（core 类型/trait/RRF），`cargo check` 绿；参考实现坐标全量核实（本文件）。
-- 未完成：R1.T1–T12。
-- 下一动作：T1 依赖入册（`tiktoken-rs` 先做切块对照脚本）→ T2/T3 并行。
+- 已完成：
+  - T1 依赖入册（`turso`/`lancedb`/`leiden-rs`/`tiktoken-rs`/`md-5`/`regex`/`tokio`/`reqwest`/`petgraph` 等；`kuzu` 因上游 vendored C++ 需 `CXXFLAGS=-include cstdint`，暂以 `kuzu-backend` feature 门控）。
+  - T2 切块器 + golden 对照（`tools/golden/gen_chunks.py`，11 chunk 逐字段相等）、T3 LLM/嵌入客户端 + 参数哈希缓存（与 Python `md5(str((model, messages)))` 同值，golden 4 例）、T4 抽取管线（gleaning + 解析，golden 5 例）、T5 合并（节点/边 + 摘要三档，golden 4 例）、T7 社区检测（leiden-rs 层次社区 + schema，含确定性/覆盖测试）、T8 社区报告（预算分配 + JSON→Markdown + 并发分相）、T9 查询三模式（local/global/naive，含 `only_need_context`）、T10 管线（`src/pipeline.rs`，含提交点语义）、内存后端（KV/向量/图）。
+  - 测试面：`tests/{chunk_parity,hash_parity,extraction_parity,merge_parity,extraction_mock,llm_cache,community_reports,pipeline_e2e,turso_kv}.rs`。
+- 未完成：T6 的 kuzu 适配器（GraphStore）、lancedb 向量后端、T11 repair 队列、T12 真实语料烟测；`turso` 契约测试待随首个本地 `cargo test` 验证。
+- 下一动作：全量编译绿后跑 `cargo test`，再落 lancedb/kuzu 适配器与 repair 队列。

@@ -1,0 +1,180 @@
+[
+ {
+  "name": "reference_example_quoted",
+  "chunk_key": "chunk-aaa",
+  "raw": "(\"entity\"<|>\"Alex\"<|>\"person\"<|>\"Alex is a character.\")##(\"entity\"<|>\"Taylor\"<|>\"person\"<|>\"Taylor is certain.\")##(\"relationship\"<|>\"Alex\"<|>\"Taylor\"<|>\"Alex observes Taylor.\"<|>7)##(\"entity\"<|>\"The Device\"<|>\"technology\"<|>\"Central to the story.\")<|COMPLETE|>",
+  "expected": {
+   "nodes": [
+    [
+     "\"ALEX\"",
+     [
+      {
+       "entity_name": "\"ALEX\"",
+       "entity_type": "\"PERSON\"",
+       "description": "\"Alex is a character.\"",
+       "source_id": "chunk-aaa"
+      }
+     ]
+    ],
+    [
+     "\"TAYLOR\"",
+     [
+      {
+       "entity_name": "\"TAYLOR\"",
+       "entity_type": "\"PERSON\"",
+       "description": "\"Taylor is certain.\"",
+       "source_id": "chunk-aaa"
+      }
+     ]
+    ],
+    [
+     "\"THE DEVICE\"",
+     [
+      {
+       "entity_name": "\"THE DEVICE\"",
+       "entity_type": "\"TECHNOLOGY\"",
+       "description": "\"Central to the story.\"",
+       "source_id": "chunk-aaa"
+      }
+     ]
+    ]
+   ],
+   "edges": [
+    [
+     [
+      "\"ALEX\"",
+      "\"TAYLOR\""
+     ],
+     [
+      {
+       "src_id": "\"ALEX\"",
+       "tgt_id": "\"TAYLOR\"",
+       "weight": 7.0,
+       "description": "\"Alex observes Taylor.\"",
+       "source_id": "chunk-aaa",
+       "order": 1
+      }
+     ]
+    ]
+   ]
+  }
+ },
+ {
+  "name": "unquoted_fields_and_spacing",
+  "chunk_key": "chunk-bbb",
+  "raw": "( \"entity\"<|>  acme corp <|> organization <|> makes things )  ##\n(\"relationship\" <|> acme corp <|> beta labs <|> owns <|> 3.25 )",
+  "expected": {
+   "nodes": [
+    [
+     "ACME CORP",
+     [
+      {
+       "entity_name": "ACME CORP",
+       "entity_type": "ORGANIZATION",
+       "description": "makes things",
+       "source_id": "chunk-bbb"
+      }
+     ]
+    ]
+   ],
+   "edges": [
+    [
+     [
+      "ACME CORP",
+      "BETA LABS"
+     ],
+     [
+      {
+       "src_id": "ACME CORP",
+       "tgt_id": "BETA LABS",
+       "weight": 3.25,
+       "description": "owns",
+       "source_id": "chunk-bbb",
+       "order": 1
+      }
+     ]
+    ]
+   ]
+  }
+ },
+ {
+  "name": "malformed_and_multiline",
+  "chunk_key": "chunk-ccc",
+  "raw": "(\"entity\"<|>\"A\"<|>\"B\")##(\"entity\"<|>\"  \"<|>\"B\"<|>\"d\")##(\"entity\"<|>\"C\"<|>\"D\"<|>\"first line\nsecond line\")##(\"relationship\"<|>\"C\"<|>\"D\"<|>\"desc\"<|>not-a-number)",
+  "expected": {
+   "nodes": [
+    [
+     "\"  \"",
+     [
+      {
+       "entity_name": "\"  \"",
+       "entity_type": "\"B\"",
+       "description": "\"d\"",
+       "source_id": "chunk-ccc"
+      }
+     ]
+    ]
+   ],
+   "edges": [
+    [
+     [
+      "\"C\"",
+      "\"D\""
+     ],
+     [
+      {
+       "src_id": "\"C\"",
+       "tgt_id": "\"D\"",
+       "weight": 1.0,
+       "description": "\"desc\"",
+       "source_id": "chunk-ccc",
+       "order": 1
+      }
+     ]
+    ]
+   ]
+  }
+ },
+ {
+  "name": "nested_parentheses",
+  "chunk_key": "chunk-ddd",
+  "raw": "(\"entity\"<|>\"X (the founder)\"<|>\"person\"<|>\"X (born 1970) leads.\")",
+  "expected": {
+   "nodes": [
+    [
+     "\"X (THE FOUNDER)\"",
+     [
+      {
+       "entity_name": "\"X (THE FOUNDER)\"",
+       "entity_type": "\"PERSON\"",
+       "description": "\"X (born 1970) leads.\"",
+       "source_id": "chunk-ddd"
+      }
+     ]
+    ]
+   ],
+   "edges": []
+  }
+ },
+ {
+  "name": "escaped_entities_and_controls",
+  "chunk_key": "chunk-eee",
+  "raw": "(\"entity\"<|>\"A&amp;B\u0007\"<|>\"org\"<|>\"R&amp;D unit\")",
+  "expected": {
+   "nodes": [
+    [
+     "\"A&B\"",
+     [
+      {
+       "entity_name": "\"A&B\"",
+       "entity_type": "\"ORG\"",
+       "description": "\"R&D unit\"",
+       "source_id": "chunk-eee"
+      }
+     ]
+    ]
+   ],
+   "edges": []
+  }
+ }
+]

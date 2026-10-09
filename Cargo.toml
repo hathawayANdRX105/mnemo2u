@@ -11,6 +11,40 @@ serde_json = "1"
 thiserror = "2"
 async-trait = "0.1"
 
-# R1 (nano-graphrag port) will add, pinned by stage doc:
-# tokio, clap, reqwest, sha2/blake3, jieba-rs, fastembed, leiden-rs, petgraph,
-# turso, kuzu, lancedb, tracing
+# async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util"] }
+
+# hashing / tokenization / text (parity with the reference implementation)
+md-5 = "0.11"
+tiktoken-rs = "0.12"
+regex = "1"
+
+# http + config + cli + logs
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+toml = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# graph algorithms (leiden-rs without default features: no CLI, no rayon —
+# parallel local moving would cost determinism)
+petgraph = "0.8"
+leiden-rs = { version = "0.8", default-features = false }
+
+# storage backends
+turso = "0.8.3-pre.1"
+lancedb = { version = "0.40", features = ["remote"] }
+# kuzu vendors its C++ engine (slow build; needs the CXXFLAGS workaround in
+# .cargo/config.toml); kept non-default so the pipeline builds and tests
+# without it, and enabled for the kuzu adapter work (R1.T6).
+kuzu = { version = "0.11", optional = true }
+
+# local embeddings (ONNX)
+fastembed = "7"
+
+[features]
+default = []
+kuzu-backend = ["dep:kuzu"]
+
+[dev-dependencies]
+tempfile = "3"

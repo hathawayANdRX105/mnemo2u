@@ -1,0 +1,41 @@
+[
+ {
+  "model": "gpt-4o",
+  "messages": [
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "expected_md5": "81afaec8014b3077d4bb03dd968dd4a2"
+ },
+ {
+  "model": "gpt-4o-mini",
+  "messages": [
+   {
+    "role": "system",
+    "content": "sys"
+   },
+   {
+    "role": "user",
+    "content": "a\nb"
+   }
+  ],
+  "expected_md5": "19aa64eca32c0e42e53bd2e9bb0eef3f"
+ },
+ {
+  "model": "gpt-4o",
+  "messages": [
+   {
+    "role": "user",
+    "content": "it's \"quoted\""
+   }
+  ],
+  "expected_md5": "de7cbdbaf0bf719b48cdc4af971b7294"
+ },
+ {
+  "model": "gpt-4o",
+  "messages": [],
+  "expected_md5": "6a418105c0188af9116f906cbf15c130"
+ }
+]
