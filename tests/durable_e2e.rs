@@ -27,6 +27,8 @@ const DOCS: [&str; 2] = [
 ];
 
 const EXTRACTION: &str = "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"ACME builds cobots.\")##(\"entity\"<|>\"BETA LABS\"<|>\"ORGANIZATION\"<|>\"BETA builds drones.\")##(\"relationship\"<|>\"ACME\"<|>\"BETA LABS\"<|>\"competes with\"<|>\"they compete\"<|>2.0)<|COMPLETE|>";
+const GLEAN: &str =
+    "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"Acme ships cobots to warehouses.\")<|COMPLETE|>";
 const REPORT: &str = r#"{"title": "t", "summary": "s", "rating": 7.5, "rating_explanation": "e", "findings": [{"summary": "f", "explanation": "e"}]}"#;
 const ANSWER: &str = "answer";
 
