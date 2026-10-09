@@ -1,6 +1,5 @@
 [build]
 jobs = 4
-rustc-wrapper = "sccache"
 
 [env]
 # kuzu vendors an old thrift that relies on transitive <cstdint> includes;
