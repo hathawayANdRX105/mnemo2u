@@ -14,6 +14,7 @@ Usage:
     .venv-ref/bin/python tools/golden/gen_merge.py > tests/fixtures/merge_golden.json
 """
 
+import copy
 import json
 import re
 import sys
@@ -34,8 +35,12 @@ def split_string_by_multi_markers(content, markers):
 
 class DictGraph:
     def __init__(self, nodes=None, edges=None):
-        self.nodes = dict(nodes or {})
-        self.edges = dict(edges or {})
+        # Deep copy: the caller's dicts are recorded verbatim as the case
+        # `seed`, and `upsert_*` mutates inner node/edge dicts in place —
+        # without the copy the fixture would capture post-merge state as the
+        # "before" state and the Rust test would seed its graph with it.
+        self.nodes = copy.deepcopy(nodes or {})
+        self.edges = copy.deepcopy(edges or {})
 
     def get_node(self, node_id):
         return self.nodes.get(node_id)

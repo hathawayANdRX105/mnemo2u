@@ -50,8 +50,8 @@
    "nodes": {
     "ACME": {
      "entity_type": "ORG",
-     "description": "new description<SEP>old description",
-     "source_id": "chunk-1<SEP>chunk-2<SEP>chunk-old"
+     "description": "old description",
+     "source_id": "chunk-old<SEP>chunk-1"
     }
    },
    "edges": {}
@@ -100,10 +100,10 @@
    },
    "edges": {
     "ACME\u0000BETA": {
-     "weight": 5.5,
-     "description": "new relation<SEP>old relation<SEP>third relation",
-     "source_id": "chunk-9<SEP>chunk-2<SEP>chunk-3",
-     "order": 1
+     "weight": 2.0,
+     "description": "old relation",
+     "source_id": "chunk-9",
+     "order": 3
     }
    }
   },
@@ -138,7 +138,7 @@
     "chunk-9"
    ],
    "endpoint_node": {
-    "source_id": "chunk-9<SEP>chunk-2<SEP>chunk-3",
+    "source_id": "chunk-9<SEP>chunk-3<SEP>chunk-2",
     "description": "new relation<SEP>old relation<SEP>third relation",
     "entity_type": "\"UNKNOWN\""
    },
