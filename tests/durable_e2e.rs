@@ -37,6 +37,7 @@ fn routed_llm() -> CachedLlm {
         "mock-best",
         vec![
             ("identify all entities".to_string(), EXTRACTION.to_string()),
+            ("MANY entities were missed".to_string(), GLEAN.to_string()),
             (
                 "general information discovery".to_string(),
                 REPORT.to_string(),
