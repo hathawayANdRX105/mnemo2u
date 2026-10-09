@@ -38,7 +38,7 @@
   → 治理写网关（去重/冲突/tombstone）→ 按提交协议落三库
         │
         ├─→ turso   真值+审计+双时态+BM25(Tantivy FTS)   ← 唯一可重建源
-        ├─→ kuzu    图/边/多跳/PageRank（冻结 0.11.3）    ← 派生，可重建
+        ├─→ turso    图/边邻接表（同一引擎的第二 schema）  ← 派生，可重建
         └─→ lancedb 向量 ANN（0.40）                      ← 派生，可重建
 
 读路径 (mnemo-query)
@@ -47,7 +47,7 @@
   → L0 摘要先行，L2 原文按需 read（SourceRef 回 harness）
 ```
 
-**可重建性是核心不变量**：turso 是唯一真值；kuzu/lancedb 是派生索引，任何时候可以从 turso 全量重建。三库不共享事务，跨库一致性靠提交协议（见 01）。
+**可重建性是核心不变量**：turso 是唯一真值；lancedb（向量索引）与 turso 邻接表（图索引）都是派生，任何时候可以从真值全量重建。索引不共享事务，跨索引一致性靠提交协议（见 01）。
 
 ## 3. 借鉴来源（逐条标注，含许可证）
 
@@ -73,7 +73,7 @@
 
 - **语言/形态**：Rust 2021，**单 crate**（`src/{core,store,llm,graph,index,query}`），需要时再拆。
 - **CLI**：`clap` 4.x（`insert` / `query` / `admin` 子命令，调试与管理入口）。
-- **图数据库**：**`kuzu` 0.11.3**（嵌入式 Cypher、列存、进程内；上游已归档 → 冻结版 + `GraphStore` trait 兜底）。
+- **图存储**：R1 用 **turso 邻接表**（同一引擎两种 schema：KV 真值 + 图/边邻接）。kuzu 0.11.3 静态链与 turso_core 的 simsimd 冲突不可解（cxxbridge shim 未链入），已劝退；触发条件与替换成本见 `01 §kuzu 偏离`。
 - **图算法**：`leiden-rs` 0.8（层次社区检测，R1 社区）、`petgraph` 0.8（内存图辅助/算法）；PPR 自实现（参考 `refs/fast-graphrag`，R3）。
 - **向量库**：`lancedb` 0.40（嵌入式 ANN）。
 - **真值库**：`turso` 0.8.x（beta；SQLite 兼容、原生 async、Tantivy FTS BM25）。
@@ -109,8 +109,8 @@
 
 | 决策 | 结论 | 依据 |
 |---|---|---|
-| 存储形态 | 三库结合（turso+kuzu+lancedb） | 用户拍板（2026-10-09） |
-| 图库 | kuzu 0.11.3 冻结 + `GraphStore` trait 兜底（**待用户点头**） | jev opt_d；上游归档风险已知 |
+| 存储形态 | turso（真值+图邻接）+ lancedb（向量） | 用户拍板（2026-10-09）；图引擎偏离见 01 §kuzu 偏离 |
+| 图库 | R1 turso 邻接表；R2 需要多跳/PageRank 再评估 kuzu shared 模式或升级 | 链接期证据；01 §kuzu 偏离 |
 | 向量库 | lancedb（弃 qdrant-edge beta） | jev opt_d |
 | 词法 | turso Tantivy FTS（非 FTS5 语法：`fts_match`/`fts_score`） | 官方 COMPAT.md 核实 |
 | 写路径形态 | 零-LLM 捕获 + Jev 选择性增强（KET-RAG 式） | 调研 + 用户路线 |
@@ -119,7 +119,7 @@
 
 ## 8. 开放风险与待办
 
-1. **kuzu 上游归档**：接受冻结版 + trait 抽象（替换成本收敛在 `src/store` 一个文件）。待点头。
+1. ~~kuzu 上游归档~~：已处置——R1 不引入 kuzu（01 §kuzu 偏离），替换成本收敛在 `src/store/turso_graph.rs` 一个文件。
 2. **turso beta**（0.8.3-pre.1）：API 可能漂移；钉版本 + 契约测试护栏。
 3. **参考库**：论文 11/11、克隆 12/12 全部落地（见 §10，均为浅克隆）。TGRAG 论文未核实，其数字不采信。
 4. **Jev 调用成本模型**：写路径每次抽取的调用上限与缓存策略在 R4 定稿。

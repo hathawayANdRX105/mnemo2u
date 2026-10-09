@@ -2,7 +2,7 @@
 //! design, mirroring nano-graphrag's pluggable surface (`base.py`) so pipeline
 //! code never names a backend:
 //!
-//! - [`GraphStore`]  -> kuzu (Cypher) / in-memory (tests)
+//! - [`GraphStore`]  -> turso adjacency / in-memory (tests)
 //! - [`VectorStore`] -> lancedb / in-memory (tests)
 //! - [`KvStore`]     -> turso / in-memory or JSON files (tests)
 //! - [`Embedder`]    -> fastembed (local ONNX) / deterministic mock (tests)

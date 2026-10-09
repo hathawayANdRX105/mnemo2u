@@ -1,11 +1,11 @@
 //! mnemo2u — memory/RAG library for coding harnesses.
 //!
 //! Three-store design: turso (truth: facts, audit, bi-temporal, BM25) +
-//! kuzu (graph: entities, edges, communities) + lancedb (vector ANN).
+//! turso (graph: adjacency) + lancedb (vector ANN).
 //! Single crate; big features live in subdirectories:
 //!
 //! - [`core`]  — types, text/parity utilities, storage traits (nano-graphrag `base.py`)
-//! - [`store`] — backend implementations (turso / kuzu / lancedb + in-memory)
+//! - [`store`] — backend implementations (turso / lancedb + in-memory)
 //! - [`llm`]   — LLM + embedding client adapters
 //! - [`graph`] — graph pipeline: chunking, extraction, merge, communities (R1)
 //! - [`index`] — write path: incremental merge, purge, cost gates (R2)

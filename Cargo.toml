@@ -38,17 +38,11 @@ lancedb = { version = "0.40", features = ["remote"] }
 arrow-array = "58"
 arrow-schema = "58"
 futures = "0.3"
-# kuzu vendors its C++ engine (slow build; needs the CXXFLAGS workaround in
-# .cargo/config.toml); kept non-default so the pipeline builds and tests
-# without it, and enabled for the kuzu adapter work (R1.T6).
-kuzu = { version = "0.11", optional = true }
-
 # local embeddings (ONNX)
 fastembed = "7"
 
 [features]
 default = []
-kuzu-backend = ["dep:kuzu"]
 
 [dev-dependencies]
 tempfile = "3"

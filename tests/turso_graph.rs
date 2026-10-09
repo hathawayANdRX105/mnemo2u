@@ -1,27 +1,22 @@
-//! Kuzu graph contract: attribute merge, edges (with implicit endpoints),
-//! degree/adjacency, snapshot, persistence across reopen.
-//!
-//! Runs only with the `kuzu-backend` feature (the adapter vendors a C++ engine;
-//! CI has its own job for it).
-
-#![cfg(feature = "kuzu-backend")]
+//! Turso graph contract: attribute merge, edges, degrees, adjacency ordering,
+//! snapshot, scope isolation, persistence across reopen.
 
 use mnemo2u::core::traits::GraphStore;
-use mnemo2u::store::kuzu::KuzuGraph;
+use mnemo2u::store::turso_graph::TursoGraph;
 use serde_json::json;
 
 #[tokio::test]
-async fn graph_semantics_match_memory_backend() {
+async fn graph_semantics_and_persistence() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir
         .path()
-        .join("graph.kz")
+        .join("graph.db")
         .to_str()
         .expect("utf8 path")
         .to_string();
 
     {
-        let graph = KuzuGraph::open(&path).await.expect("open");
+        let graph = TursoGraph::open(&path, "entity_graph").await.expect("open");
 
         assert!(
             !graph.has_node("ACME").await.expect("has"),
@@ -51,16 +46,15 @@ async fn graph_semantics_match_memory_backend() {
             graph.get_node("ACME").await.expect("get").expect("row"),
             json!({"entity_type": "\"ORG\"", "source_id": "chunk-1"})
         );
-        assert_eq!(
-            graph
-                .get_nodes_batch(&["BETA".into(), "NOPE".into()])
-                .await
-                .expect("batch get")
-                .len(),
-            2
-        );
+        // A missing id comes back as `None`, and the batch preserves order.
+        let batch = graph
+            .get_nodes_batch(&["BETA".to_string(), "NOPE".to_string()])
+            .await
+            .expect("batch get");
+        assert!(batch[0].is_some());
+        assert!(batch[1].is_none());
 
-        // Second write merges attributes key-by-key instead of replacing.
+        // A second write merges attributes key-by-key instead of replacing.
         graph
             .upsert_node(
                 "ACME",
@@ -75,7 +69,6 @@ async fn graph_semantics_match_memory_backend() {
         );
         assert_eq!(merged["clusters"], json!([0]));
 
-        // An edge implies its endpoints.
         graph
             .upsert_edge("ACME", "BETA", json!({"weight": 3.0, "order": 1}))
             .await
@@ -103,18 +96,30 @@ async fn graph_semantics_match_memory_backend() {
                 .expect("edge degree"),
             2
         );
-        let pairs = graph
-            .node_edges("ACME")
-            .await
-            .expect("edges")
-            .expect("some");
-        assert_eq!(pairs, vec![("ACME".to_string(), "BETA".to_string())]);
-        let reversed = graph
-            .node_edges("BETA")
-            .await
-            .expect("edges")
-            .expect("some");
-        assert_eq!(reversed, vec![("BETA".to_string(), "ACME".to_string())]);
+        assert_eq!(
+            graph
+                .node_edges("ACME")
+                .await
+                .expect("edges")
+                .expect("some"),
+            vec![("ACME".to_string(), "BETA".to_string())]
+        );
+        // The queried node comes first for incoming edges too (`MemoryGraph`).
+        assert_eq!(
+            graph
+                .node_edges("BETA")
+                .await
+                .expect("edges")
+                .expect("some"),
+            vec![("BETA".to_string(), "ACME".to_string())]
+        );
+        assert_eq!(
+            graph
+                .node_degrees_batch(&["ACME".to_string(), "GAMMA".to_string()])
+                .await
+                .expect("degrees"),
+            vec![1, 0]
+        );
 
         graph
             .upsert_edges_batch(vec![
@@ -131,6 +136,15 @@ async fn graph_semantics_match_memory_backend() {
             ])
             .await
             .expect("batch edges");
+        assert_eq!(
+            graph
+                .get_edges_batch(&[("ACME".into(), "GAMMA".into())])
+                .await
+                .expect("batch edges")[0]
+                .as_ref()
+                .expect("row")["weight"],
+            1.0
+        );
 
         let snapshot = graph.snapshot().await.expect("snapshot");
         assert_eq!(snapshot.nodes.len(), 3);
@@ -141,7 +155,9 @@ async fn graph_semantics_match_memory_backend() {
     }
 
     // Reopening sees committed state.
-    let graph = KuzuGraph::open(&path).await.expect("reopen");
+    let graph = TursoGraph::open(&path, "entity_graph")
+        .await
+        .expect("reopen");
     assert!(graph.has_node("ACME").await.expect("has"));
     assert!(graph.has_edge("ACME", "BETA").await.expect("has edge"));
     assert_eq!(
@@ -149,4 +165,13 @@ async fn graph_semantics_match_memory_backend() {
         "chunk-1<SEP>chunk-2"
     );
     assert_eq!(graph.snapshot().await.expect("snapshot").edges.len(), 3);
+
+    // A different scope in the same file is empty.
+    let other = TursoGraph::open(&path, "other_graph")
+        .await
+        .expect("other scope");
+    assert!(
+        !other.has_node("ACME").await.expect("has"),
+        "scope isolates graphs"
+    );
 }
