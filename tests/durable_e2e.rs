@@ -30,7 +30,6 @@ const EXTRACTION: &str = "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"ACME bui
 const GLEAN: &str =
     "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"Acme ships cobots to warehouses.\")<|COMPLETE|>";
 const REPORT: &str = r#"{"title": "t", "summary": "s", "rating": 7.5, "rating_explanation": "e", "findings": [{"summary": "f", "explanation": "e"}]}"#;
-const ANSWER: &str = "answer";
 
 fn routed_llm() -> CachedLlm {
     let routed = Arc::new(RoutedLlm::new(
@@ -43,16 +42,17 @@ fn routed_llm() -> CachedLlm {
                 REPORT.to_string(),
             ),
             ("\"points\": [".to_string(), "[\"x\"]".to_string()),
-            ("Multiple Paragraphs".to_string(), ANSWER.to_string()),
         ],
     ));
     CachedLlm::new(routed, Arc::new(MemoryKv::new()))
 }
 
-fn query_param(mode: QueryMode) -> QueryParam {
+/// Context-only queries: the assertions are about what retrieval actually
+/// pulled out of the durable stores, not about the (mocked) answer text.
+fn context_param(mode: QueryMode) -> QueryParam {
     QueryParam {
         mode,
-        only_need_context: false,
+        only_need_context: true,
         ..QueryParam::default()
     }
 }
@@ -143,7 +143,7 @@ async fn durable_ingest_restart_and_rebuild() {
     let second = build(&truth, &vectors).await;
 
     let naive = second
-        .query("ACME cobots", &query_param(QueryMode::Naive))
+        .query("ACME cobots", &context_param(QueryMode::Naive))
         .await
         .expect("naive query");
     assert!(
@@ -152,7 +152,7 @@ async fn durable_ingest_restart_and_rebuild() {
     );
 
     let local = second
-        .query("ACME", &query_param(QueryMode::Local))
+        .query("ACME", &context_param(QueryMode::Local))
         .await
         .expect("local query");
     assert!(
@@ -161,7 +161,7 @@ async fn durable_ingest_restart_and_rebuild() {
     );
 
     let global = second
-        .query("competition", &query_param(QueryMode::Global))
+        .query("competition", &context_param(QueryMode::Global))
         .await
         .expect("global query");
     assert!(
@@ -179,7 +179,7 @@ async fn durable_ingest_restart_and_rebuild() {
     );
 
     let restored = third
-        .query("ACME cobots", &query_param(QueryMode::Naive))
+        .query("ACME cobots", &context_param(QueryMode::Naive))
         .await
         .expect("naive query after rebuild");
     assert_eq!(
