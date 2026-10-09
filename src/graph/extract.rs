@@ -295,7 +295,12 @@ mod tests {
 
     #[test]
     fn parser_skips_malformed_records() {
-        let raw = "no parens here\n(\"entity\"<|>\"A\"<|>\"B\")\n(\"relationship\"<|>\"A\"<|>\"B\"<|>\"d\"<|>not-a-number)";
+        // Records are split on the record delimiter first (reference
+        // `split_string_by_multi_markers`), so each malformed case needs its
+        // own record.
+        let raw = "no parens here##\
+(\"entity\"<|>\"A\"<|>\"B\")##\
+(\"relationship\"<|>\"A\"<|>\"B\"<|>\"d\"<|>not-a-number)";
         let parsed = parse_extraction_result(raw, "c");
         assert!(
             parsed.nodes.is_empty(),

@@ -135,5 +135,6 @@
   - T1 依赖入册（`turso`/`lancedb`/`leiden-rs`/`tiktoken-rs`/`md-5`/`regex`/`tokio`/`reqwest`/`petgraph` 等；`kuzu` 因上游 vendored C++ 需 `CXXFLAGS=-include cstdint`，暂以 `kuzu-backend` feature 门控）。
   - T2 切块器 + golden 对照（`tools/golden/gen_chunks.py`，11 chunk 逐字段相等）、T3 LLM/嵌入客户端 + 参数哈希缓存（与 Python `md5(str((model, messages)))` 同值，golden 4 例）、T4 抽取管线（gleaning + 解析，golden 5 例）、T5 合并（节点/边 + 摘要三档，golden 4 例）、T7 社区检测（leiden-rs 层次社区 + schema，含确定性/覆盖测试）、T8 社区报告（预算分配 + JSON→Markdown + 并发分相）、T9 查询三模式（local/global/naive，含 `only_need_context`）、T10 管线（`src/pipeline.rs`，含提交点语义）、内存后端（KV/向量/图）。
   - 测试面：`tests/{chunk_parity,hash_parity,extraction_parity,merge_parity,extraction_mock,llm_cache,community_reports,pipeline_e2e,turso_kv}.rs`。
-- 未完成：T6 的 kuzu 适配器（GraphStore）、lancedb 向量后端、T11 repair 队列、T12 真实语料烟测；`turso` 契约测试待随首个本地 `cargo test` 验证。
-- 下一动作：全量编译绿后跑 `cargo test`，再落 lancedb/kuzu 适配器与 repair 队列。
+- 未完成：T6 的 kuzu 适配器（GraphStore）、lancedb 向量后端、T11 repair 队列、T12 真实语料烟测。
+- 验证方式：测试只在 GitHub Actions 跑（仓库 `hathawayANdRX105/mnemo2u`，`.github/workflows/ci.yml`：fmt + clippy `-D warnings` + `cargo test --all-targets`）；本机不跑测试.
+- 下一动作：CI 全绿后落 lancedb/kuzu 适配器与 repair 队列。

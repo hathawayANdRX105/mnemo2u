@@ -21,7 +21,10 @@ fn chunk(content: &str) -> (String, Chunk) {
     )
 }
 
-const INITIAL: &str = "(\"entity\"<|>\"ACME\"<|>\"ORG\"<|>\"Acme makes things.\")";
+// Real extractions end with the completion delimiter (the prompt requires it),
+// and gleaning results are appended verbatim — the mock must do the same or
+// record splitting merges both responses into one.
+const INITIAL: &str = "(\"entity\"<|>\"ACME\"<|>\"ORG\"<|>\"Acme makes things.\")<|COMPLETE|>";
 const GLEAN: &str = "(\"entity\"<|>\"BETA\"<|>\"ORG\"<|>\"Beta labs.\")<|COMPLETE|>";
 
 #[tokio::test]
