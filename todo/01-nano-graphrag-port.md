@@ -76,7 +76,7 @@
 | R1.T9 | 查询三模式：local（vdb→社区/文本/关系三路）/ global（level 过滤→occurrence→rating→分组 map→points→reduce）/ naive | `_op.py:700-1140` | `src/query/{local,global,naive}.rs` |
 | R1.T10 | 持久化重载：新进程全量恢复（三库）+ 同查询一致 | `graphrag.py:__post_init__` 恢复逻辑 | `src/store/*` + `src/pipeline.rs` |
 | R1.T11 | 并发与提交：三路信号量（16/16/16）可配可观测；index_start/index_done 映射为「turso 先提交→派生库 repair」 | `_utils.py:276-295`、`graphrag.py:349-380` | `src/core/concurrency.rs`、`src/pipeline.rs` |
-| R1.T12 | golden fixtures + e2e：参考实现生成 golden（切块/合并/上下文文本），全离线 e2e 快照 | 全部 | `tests/`、`fixtures/` |
+| R1.T12 | golden fixtures + e2e：参考实现生成 golden（切块/抽取/哈希/合并），全离线 e2e 快照 + 耐久全链 | 全部 | `tests/`、`fixtures/` |
 
 ### 逐条判据
 
@@ -90,7 +90,7 @@
 - **T9**：三模式在 `only_need_context=true` 下返回的上下文文本与 Python 参考相等（同 fixture 库 + 同 mock 嵌入的确定性排序）；global 的 map/reduce 两段分别有断言。
 - **T10**：进程 A insert → 进程 B 启动查询，结果与 A 内存态一致；turso 崩溃点注入（提交前/后）不产生半状态。
 - **T11**：并发上限可观测（同时挂起数 ≤16）；repair 队列在派生库失败时记录并在下轮补齐。
-- **T12**：e2e：小语料 insert→community→3 模式 query 快照；`cargo test` 全离线可过（无网络、无真实 LLM）。
+- **T12**：e2e：小语料 insert→community→3 模式 query 快照；`cargo test` 全离线可过（无网络、无真实 LLM）。耐久版见 `tests/durable_e2e.rs`。
 
 ## 5. 三库提交协议（本阶段落地）
 
@@ -117,8 +117,8 @@
 - [ ] R1.TAC3 抽取+合并：mock 全分支（含 JSON 容错解析的三级降级）。
 - [ ] R1.TAC4 社区+报告：固定图 fixture 的 schema 与上下文文本快照。
 - [ ] R1.TAC5 查询三模式：`only_need_context` 上下文快照 + fail_response 路径。
-- [ ] R1.TAC6 提交协议：repair 队列、重建等价、崩溃点注入。
-- [ ] R1.TAC7 e2e 离线全链（mock LLM，`cargo test` 无网络）。
+- [x] R1.TAC6 提交协议：repair 队列（`tests/repair_queue.rs`：派生失败→入队→flush 逐条重放→失败留队）+ 重建等价（`tests/durable_e2e.rs`：删 lancedb 派生库→从 text_chunks 重建→检索一致）。未做：turso 提交前/后的崩溃点注入（需故障注入 harness，R1 未排）。
+- [x] R1.TAC7 e2e 离线全链（mock LLM，`cargo test` 无网络）：`tests/pipeline_e2e.rs`（内存后端）+ `tests/durable_e2e.rs`（耐久三后端、跨"进程"重启、派生库重建）。
 
 ## 8. 偏差记录（开工时登记，逐条给出批准人）
 
@@ -153,4 +153,4 @@
   - 测试面：`tests/{chunk_parity,hash_parity,extraction_parity,merge_parity,extraction_mock,llm_cache,community_reports,pipeline_e2e,turso_kv}.rs`。
 - 未完成：T6 的 kuzu 适配器（GraphStore）、lancedb 向量后端、T11 repair 队列、T12 真实语料烟测。
 - 验证方式：测试只在 GitHub Actions 跑（仓库 `hathawayANdRX105/mnemo2u`，`.github/workflows/ci.yml`：fmt + clippy `-D warnings` + `cargo test --all-targets`）；本机不跑测试.
-- 下一动作：CI 全绿后落 T12 耐久 e2e + 派生库重建。
+- 下一动作：进入 R2（LightRAG 增强）；R1 收尾前跑一次快照回归（全量 `cargo test`）。
