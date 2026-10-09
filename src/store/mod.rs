@@ -1,5 +1,7 @@
 //! Store backends.
 
+#[cfg(feature = "kuzu-backend")]
+pub mod kuzu;
 pub mod lancedb;
 pub mod memory;
 pub mod turso;

@@ -41,6 +41,23 @@ jobs:
       - name: Test
         run: cargo test --all-targets --no-fail-fast
 
-  # The kuzu graph backend vendors a C++ engine (slow build). It is behind the
-  # `kuzu-backend` feature and gets its own job once the adapter lands (R1.T6);
-  # until then the pipeline is exercised through the in-memory stores.
+  # The kuzu backend vendors a C++ engine: its own job so the default pipeline
+  # stays fast, and the adapter only compiles/tests with the feature enabled.
+  # `CXXFLAGS` comes from the checked-in `.cargo/config.toml` (old thrift needs
+  # `<cstdint>`).
+  kuzu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: System dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler pkg-config libssl-dev cmake
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: kuzu
+      - name: Clippy
+        run: cargo clippy --features kuzu-backend --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --features kuzu-backend --all-targets --no-fail-fast
