@@ -29,6 +29,16 @@ impl Limiter {
         self.max
     }
 
+    /// Permits currently handed out — the observable in-flight count (T11).
+    pub fn in_flight(&self) -> usize {
+        self.max - self.permits.available_permits()
+    }
+
+    /// Permits still free.
+    pub fn available(&self) -> usize {
+        self.permits.available_permits()
+    }
+
     /// Run `fut` once a permit is free; the permit is released on completion.
     pub async fn run<F, T>(&self, fut: F) -> T
     where
@@ -77,5 +87,38 @@ mod tests {
             "peak {} exceeded the cap",
             peak.load(Ordering::SeqCst)
         );
+    }
+
+    #[tokio::test]
+    async fn in_flight_is_observable_and_settles_back() {
+        let limiter = Limiter::new(3);
+        assert_eq!(limiter.max(), 3);
+        assert_eq!(limiter.available(), 3);
+        assert_eq!(limiter.in_flight(), 0);
+
+        let barrier = Arc::new(tokio::sync::Barrier::new(4));
+        let mut handles = Vec::new();
+        for _ in 0..3 {
+            let limiter = limiter.clone();
+            let barrier = barrier.clone();
+            let observer = limiter.clone();
+            handles.push(tokio::spawn(async move {
+                let guard = observer.clone();
+                observer
+                    .run(async move {
+                        barrier.wait().await;
+                        // All three permits are out while the barrier holds.
+                        assert_eq!(guard.in_flight(), 3);
+                        assert_eq!(guard.available(), 0);
+                    })
+                    .await;
+            }));
+        }
+        barrier.wait().await;
+        for handle in handles {
+            handle.await.expect("task completes");
+        }
+        assert_eq!(limiter.in_flight(), 0, "permits return after completion");
+        assert_eq!(limiter.available(), 3);
     }
 }

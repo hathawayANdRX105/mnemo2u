@@ -6,12 +6,22 @@
 //! last** and are the commit point. A crash before that leaves the document
 //! "not ingested", so a retry re-runs extraction (LLM cache makes it cheap)
 //! and re-upserts the derived rows — the reference's own retry semantics.
+//!
+//! Derived writes (graph, vectors, reports) additionally go through a
+//! [`RepairQueue`]: when one fails mid-insert the ingest still finishes, the
+//! failed payload is queued in the truth layer, and the next [`Pipeline::flush`]
+//! replays it. Truth-first commits plus a replay queue means no ingest is lost
+//! to a transient derived-store error, and no derived row is silently skipped.
+
+use tracing::warn;
 
 use std::sync::Arc;
 
-use crate::core::rag::{Chunk, DocRecord, QueryParam};
+use crate::core::rag::{Chunk, DocRecord, EntityRecord, QueryParam, RelationRecord};
 use crate::core::text::{compute_mdhash_id, Tokenizer};
-use crate::core::traits::{GraphStore, KvStore, Result as StoreResult, StoreError, VectorStore};
+use crate::core::traits::{
+    GraphStore, KvStore, Result as StoreResult, StoreError, VectorRow, VectorStore,
+};
 use crate::graph::chunk::{get_chunks, DEFAULT_CHUNK_OVERLAP_TOKEN_SIZE, DEFAULT_CHUNK_TOKEN_SIZE};
 use crate::graph::community::{detect_communities, CommunityOptions};
 use crate::graph::extract::{extract_entities, ExtractOptions};
@@ -22,6 +32,7 @@ use crate::graph::reports::{generate_community_report, report_kv_rows, ReportOpt
 use crate::llm::cache::CachedLlm;
 use crate::llm::LlmResult;
 use crate::query::QueryStores;
+use crate::store::repair::{RepairItem, RepairQueue, RepairTarget};
 
 /// Namespaces mirroring the reference KV stores (`graphrag.py:186-205`).
 pub const NS_FULL_DOCS: &str = "full_docs";
@@ -86,6 +97,8 @@ pub struct Pipeline {
     pub llm: CachedLlm,
     pub tokenizer: Tokenizer,
     pub options: PipelineOptions,
+    /// Derived-write failures, queued in the truth layer and replayed by `flush`.
+    pub repair: Arc<RepairQueue>,
 }
 
 impl Pipeline {
@@ -153,18 +166,20 @@ impl Pipeline {
 
         if self.options.enable_naive_rag {
             if let Some(chunks_vdb) = &self.chunks_vdb {
-                chunks_vdb
-                    .upsert(
-                        chunks
-                            .iter()
-                            .map(|(key, chunk)| crate::core::traits::VectorRow {
-                                id: key.clone(),
-                                content: chunk.content.clone(),
-                                meta: serde_json::to_value(chunk).expect("chunk serializes"),
-                            })
-                            .collect(),
-                    )
-                    .await?;
+                let rows: Vec<VectorRow> = chunks
+                    .iter()
+                    .map(|(key, chunk)| VectorRow {
+                        id: key.clone(),
+                        content: chunk.content.clone(),
+                        meta: serde_json::to_value(chunk).expect("chunk serializes"),
+                    })
+                    .collect();
+                if let Err(error) = chunks_vdb.upsert(rows.clone()).await {
+                    // Naive RAG is an optional arm; a failure here defers to the
+                    // repair queue instead of aborting the ingest.
+                    self.queue_vectors(RepairTarget::ChunkVector, &rows).await?;
+                    warn!(%error, rows = rows.len(), "chunk vector write deferred to repair");
+                }
             }
         }
 
@@ -181,7 +196,7 @@ impl Pipeline {
 
         let mut merged_nodes = Vec::new();
         for (entity_name, nodes_data) in &records.nodes {
-            let node = merge_nodes_then_upsert(
+            match merge_nodes_then_upsert(
                 entity_name,
                 nodes_data,
                 self.graph.as_ref(),
@@ -190,11 +205,16 @@ impl Pipeline {
                 &self.options.merge,
             )
             .await
-            .map_err(|e| StoreError::Backend(format!("merge node: {e}")))?;
-            merged_nodes.push(node);
+            {
+                Ok(node) => merged_nodes.push(node),
+                Err(error) => {
+                    self.queue_graph_node(entity_name, nodes_data).await?;
+                    warn!(%error, entity = entity_name, "graph node write deferred to repair");
+                }
+            }
         }
         for ((src, tgt), edges_data) in &records.edges {
-            merge_edges_then_upsert(
+            if let Err(error) = merge_edges_then_upsert(
                 src,
                 tgt,
                 edges_data,
@@ -204,12 +224,18 @@ impl Pipeline {
                 &self.options.merge,
             )
             .await
-            .map_err(|e| StoreError::Backend(format!("merge edge: {e}")))?;
+            {
+                self.queue_graph_edge(src, tgt, edges_data).await?;
+                warn!(%error, src, tgt, "graph edge write deferred to repair");
+            }
         }
 
-        self.entities_vdb
-            .upsert(entity_vector_rows(&merged_nodes))
-            .await?;
+        let vector_rows = entity_vector_rows(&merged_nodes);
+        if let Err(error) = self.entities_vdb.upsert(vector_rows.clone()).await {
+            self.queue_vectors(RepairTarget::EntityVector, &vector_rows)
+                .await?;
+            warn!(%error, rows = vector_rows.len(), "entity vector write deferred to repair");
+        }
 
         let communities = detect_communities(self.graph.as_ref(), &self.options.community).await?;
         let reports = generate_community_report(
@@ -222,9 +248,17 @@ impl Pipeline {
         )
         .await
         .map_err(|e| StoreError::Backend(format!("community reports: {e}")))?;
-        self.community_reports
-            .upsert(report_kv_rows(&reports))
-            .await?;
+        let report_rows = report_kv_rows(&reports);
+        if let Err(error) = self.community_reports.upsert(report_rows.clone()).await {
+            self.repair
+                .record(
+                    RepairTarget::CommunityReport,
+                    "all",
+                    serde_json::to_value(&report_rows).expect("report rows serialize"),
+                )
+                .await?;
+            warn!(%error, "community report write deferred to repair");
+        }
 
         // Commit point: documents and chunks become visible last.
         let doc_rows = new_docs
@@ -259,12 +293,142 @@ impl Pipeline {
     /// The reference closes a run by flushing every store
     /// (`_insert_done`, graphrag.py:349-372).
     pub async fn flush(&self) -> StoreResult<()> {
+        self.drain_repair().await?;
         self.community_reports.index_done().await?;
         self.entities_vdb.index_done().await?;
         if let Some(chunks_vdb) = &self.chunks_vdb {
             chunks_vdb.index_done().await?;
         }
         self.graph.index_done().await?;
+        Ok(())
+    }
+
+    /// Replay queued derived writes (T11). A replay that fails again stays in
+    /// the queue: the next `flush` retries it, so a persistent failure is
+    /// visible as a non-empty queue instead of dropping the row.
+    async fn drain_repair(&self) -> StoreResult<()> {
+        for item in self.repair.pending().await? {
+            match self.replay(&item).await {
+                Ok(()) => self.repair.done(std::slice::from_ref(&item.id)).await?,
+                Err(error) => {
+                    warn!(%error, id = item.id, target = ?item.target, "repair replay deferred");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn replay(&self, item: &RepairItem) -> StoreResult<()> {
+        match item.target {
+            RepairTarget::GraphNode => {
+                let records: Vec<EntityRecord> = serde_json::from_value(item.payload.clone())
+                    .map_err(|error| {
+                        StoreError::Backend(format!("repair graph node payload: {error}"))
+                    })?;
+                let entity_name = records
+                    .first()
+                    .map(|record| record.entity_name.clone())
+                    .unwrap_or_default();
+                merge_nodes_then_upsert(
+                    &entity_name,
+                    &records,
+                    self.graph.as_ref(),
+                    &self.llm,
+                    &self.tokenizer,
+                    &self.options.merge,
+                )
+                .await
+                .map_err(|error| StoreError::Backend(format!("repair graph node: {error}")))?;
+            }
+            RepairTarget::GraphEdge => {
+                let records: Vec<RelationRecord> = serde_json::from_value(item.payload.clone())
+                    .map_err(|error| {
+                        StoreError::Backend(format!("repair graph edge payload: {error}"))
+                    })?;
+                let (src, tgt) = match records.first() {
+                    Some(record) => (record.src_id.clone(), record.tgt_id.clone()),
+                    None => return Ok(()),
+                };
+                merge_edges_then_upsert(
+                    &src,
+                    &tgt,
+                    &records,
+                    self.graph.as_ref(),
+                    &self.llm,
+                    &self.tokenizer,
+                    &self.options.merge,
+                )
+                .await
+                .map_err(|error| StoreError::Backend(format!("repair graph edge: {error}")))?;
+            }
+            RepairTarget::ChunkVector => {
+                let rows: Vec<VectorRow> =
+                    serde_json::from_value(item.payload.clone()).map_err(|error| {
+                        StoreError::Backend(format!("repair vector payload: {error}"))
+                    })?;
+                let Some(store) = &self.chunks_vdb else {
+                    return Err(StoreError::NotFound("chunks_vdb disabled".into()));
+                };
+                store.upsert(rows).await?;
+            }
+            RepairTarget::EntityVector => {
+                let rows: Vec<VectorRow> =
+                    serde_json::from_value(item.payload.clone()).map_err(|error| {
+                        StoreError::Backend(format!("repair vector payload: {error}"))
+                    })?;
+                self.entities_vdb.upsert(rows).await?;
+            }
+            RepairTarget::CommunityReport => {
+                let rows: Vec<(String, serde_json::Value)> =
+                    serde_json::from_value(item.payload.clone()).map_err(|error| {
+                        StoreError::Backend(format!("repair report payload: {error}"))
+                    })?;
+                self.community_reports.upsert(rows).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn queue_graph_node(
+        &self,
+        entity_name: &str,
+        records: &[EntityRecord],
+    ) -> StoreResult<()> {
+        self.repair
+            .record(
+                RepairTarget::GraphNode,
+                entity_name,
+                serde_json::to_value(records).expect("records serialize"),
+            )
+            .await
+    }
+
+    async fn queue_graph_edge(
+        &self,
+        src: &str,
+        tgt: &str,
+        records: &[RelationRecord],
+    ) -> StoreResult<()> {
+        let name = format!("{src}{tgt}");
+        self.repair
+            .record(
+                RepairTarget::GraphEdge,
+                &name,
+                serde_json::to_value(records).expect("records serialize"),
+            )
+            .await
+    }
+
+    async fn queue_vectors(&self, target: RepairTarget, rows: &[VectorRow]) -> StoreResult<()> {
+        for row in rows {
+            self.repair
+                .record(
+                    target,
+                    &row.id,
+                    serde_json::to_value(std::slice::from_ref(row)).expect("row serializes"),
+                )
+                .await?;
+        }
         Ok(())
     }
 }

@@ -2,6 +2,7 @@
 
 pub mod lancedb;
 pub mod memory;
+pub mod repair;
 pub mod turso;
 pub mod turso_graph;
 

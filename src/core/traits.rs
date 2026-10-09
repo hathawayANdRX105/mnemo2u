@@ -10,10 +10,12 @@
 //! `FactStore`/`LexicalStore` describe the later memory layer (R3+); they have
 //! no implementation yet and are not wired into the R1 pipeline.
 
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use serde_json::Value;
 
 use crate::core::types::{Edge, Fact, FactId, RelKind, ScopeKey};
 
@@ -34,7 +36,7 @@ pub type Result<T, E = StoreError> = std::result::Result<T, E>;
 
 /// One vector row: `content` is embedded by the store's embedder, `meta`
 /// rides along (reference `BaseVectorStorage.upsert`, base.py:85-89).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorRow {
     pub id: String,
     pub content: String,
@@ -67,6 +69,9 @@ pub trait KvStore: Send + Sync {
     /// un-exist keys, base.py:105-107).
     async fn filter_keys(&self, ids: &[String]) -> Result<Vec<String>>;
     async fn upsert(&self, rows: Vec<(String, Value)>) -> Result<()>;
+    /// Drop rows by key; unknown keys are ignored. Needed by the repair queue
+    /// (replayed items leave) and tombstone paths (R2).
+    async fn remove(&self, keys: &[String]) -> Result<()>;
     async fn drop_all(&self) -> Result<()>;
     async fn index_done(&self) -> Result<()>;
 }

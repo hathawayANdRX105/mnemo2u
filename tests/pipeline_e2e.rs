@@ -8,6 +8,7 @@ use mnemo2u::llm::cache::CachedLlm;
 use mnemo2u::llm::mock::{MockEmbedder, RoutedLlm};
 use mnemo2u::pipeline::{InsertOutcome, Pipeline, PipelineOptions};
 use mnemo2u::store::memory::{MemoryGraph, MemoryKv, MemoryVector};
+use mnemo2u::store::repair::RepairQueue;
 use mnemo2u::Tokenizer;
 
 const EXTRACTION: &str = "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"Acme makes things.\")##\
@@ -34,6 +35,7 @@ fn build_pipeline(enable_naive_rag: bool) -> (Pipeline, Arc<RoutedLlm>) {
     ));
     let cache = Arc::new(MemoryKv::new());
     let llm = CachedLlm::new(routed.clone(), cache);
+    let repair = Arc::new(RepairQueue::new(Arc::new(MemoryKv::new())));
     let embedder = Arc::new(MockEmbedder::new());
 
     let pipeline = Pipeline {
@@ -48,6 +50,7 @@ fn build_pipeline(enable_naive_rag: bool) -> (Pipeline, Arc<RoutedLlm>) {
         }),
         llm,
         tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
+        repair,
         options: PipelineOptions {
             enable_naive_rag,
             ..PipelineOptions::default()

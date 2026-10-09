@@ -62,6 +62,12 @@ impl KvStore for MemoryKv {
         Ok(())
     }
 
+    async fn remove(&self, keys: &[String]) -> Result<()> {
+        let mut data = self.data.lock().expect("kv lock");
+        data.retain(|key, _| !keys.contains(key));
+        Ok(())
+    }
+
     async fn index_done(&self) -> Result<()> {
         Ok(())
     }

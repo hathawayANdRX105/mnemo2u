@@ -145,6 +145,26 @@ impl KvStore for TursoKv {
         Ok(())
     }
 
+    async fn remove(&self, keys: &[String]) -> Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute_batch("BEGIN").await.map_err(backend_error)?;
+        for key in keys {
+            let statement = conn
+                .execute(
+                    "DELETE FROM kv WHERE namespace = ?1 AND key = ?2",
+                    params![self.namespace.clone(), key.clone()],
+                )
+                .await;
+            if statement.is_err() {
+                conn.execute_batch("ROLLBACK")
+                    .await
+                    .map_err(backend_error)?;
+            }
+            statement.map_err(backend_error)?;
+        }
+        conn.execute_batch("COMMIT").await.map_err(backend_error)
+    }
+
     async fn index_done(&self) -> Result<()> {
         // Writes are committed per call; nothing to flush.
         Ok(())
