@@ -1,8 +1,0 @@
-[package]
-name = "mnemo-query"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-mnemo-core = { path = "../mnemo-core" }

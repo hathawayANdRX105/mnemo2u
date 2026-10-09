@@ -9,7 +9,7 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 
-use crate::types::{Edge, Fact, FactId, RelKind, ScopeKey};
+use crate::core::types::{Edge, Fact, FactId, RelKind, ScopeKey};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -21,6 +21,7 @@ pub enum StoreError {
     StaleRevision(String),
 }
 
+/// Result alias with defaulted error type (repo rule).
 pub type Result<T, E = StoreError> = std::result::Result<T, E>;
 
 /// Graph store: edges and traversal. Fact bodies are NOT stored here.
@@ -29,16 +30,20 @@ pub trait GraphStore: Send + Sync {
     async fn upsert_edges(&self, edges: &[Edge]) -> Result<()>;
     async fn remove_edges_from(&self, src: &FactId) -> Result<()>;
     /// Bounded n-hop neighborhood from a set of seed fact ids.
-    async fn neighbors(&self, seeds: &[FactId], hops: u8, scope: &ScopeKey)
-        -> Result<Vec<Edge>>;
+    async fn neighbors(&self, seeds: &[FactId], hops: u8, scope: &ScopeKey) -> Result<Vec<Edge>>;
     async fn edges_by_rel(&self, scope: &ScopeKey, rel: RelKind) -> Result<Vec<Edge>>;
 }
 
 /// Vector store: ANN similarity over embeddings keyed by (scope, model, id).
 #[async_trait]
 pub trait VectorStore: Send + Sync {
-    async fn upsert(&self, scope: &ScopeKey, model: &str, id: &FactId, vector: &[f32])
-        -> Result<()>;
+    async fn upsert(
+        &self,
+        scope: &ScopeKey,
+        model: &str,
+        id: &FactId,
+        vector: &[f32],
+    ) -> Result<()>;
     async fn remove(&self, scope: &ScopeKey, id: &FactId) -> Result<()>;
     /// Hard scope filter must apply inside the search, not after it.
     async fn search(
