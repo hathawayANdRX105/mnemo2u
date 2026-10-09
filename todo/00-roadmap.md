@@ -120,7 +120,7 @@
 
 1. **kuzu 上游归档**：接受冻结版 + trait 抽象（替换成本收敛在 `src/store` 一个文件）。待点头。
 2. **turso beta**（0.8.3-pre.1）：API 可能漂移；钉版本 + 契约测试护栏。
-3. **参考库扩充中**：新增克隆（agent-memory-atlas / TRACE / mt-rag-benchmark / HippoRAG / fast-graphrag / mem0）+ 11 篇论文 PDF 下载中（见 §10）。TGRAG 论文未核实，其数字不采信。
+3. **参考库扩充**：论文 11/11 已落地；新增克隆（agent-memory-atlas / TRACE / mt-rag-benchmark / HippoRAG / fast-graphrag / mem0）后台下载中（见 §10）。TGRAG 论文未核实，其数字不采信。
 4. **Jev 调用成本模型**：写路径每次抽取的调用上限与缓存策略在 R4 定稿。
 5. **TRACE 与 MTRAG 许可**：使用前核实。
 
@@ -149,4 +149,4 @@
 | `fast-graphrag/` | circlemind-ai/fast-graphrag | 下载中 |
 | `mem0/` | mem0ai/mem0 | 下载中 |
 
-**论文 PDF**（`papers/`）：microsoft-graphrag(2404.16130)、lightrag(2410.05779)、ket-rag(2502.09304)、synapticrag(2410.13553)、mtrag(2501.03468)、okralong(2503.02603)、hipporag(2405.14831)、zep(2501.13956)、mem0(2504.19413)、hindsight(2512.12818)、evorag(2604.15676)——下载中。
+**论文 PDF**（`papers/`，11/11 已落地，PDF 头校验通过）：microsoft-graphrag(2404.16130)、lightrag(2410.05779)、ket-rag(2502.09304)、synapticrag(2410.13553)、mtrag(2501.03468)、okralong(2503.02603)、hipporag(2405.14831)、zep(2501.13956)、mem0(2504.19413)、hindsight(2512.12818)、evorag(2604.15676)。
