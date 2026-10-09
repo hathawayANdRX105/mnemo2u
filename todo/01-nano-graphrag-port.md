@@ -153,4 +153,4 @@
   - 测试面：`tests/{chunk_parity,hash_parity,extraction_parity,merge_parity,extraction_mock,llm_cache,community_reports,pipeline_e2e,turso_kv}.rs`。
 - 未完成：T6 的 kuzu 适配器（GraphStore）、lancedb 向量后端、T11 repair 队列、T12 真实语料烟测。
 - 验证方式：测试只在 GitHub Actions 跑（仓库 `hathawayANdRX105/mnemo2u`，`.github/workflows/ci.yml`：fmt + clippy `-D warnings` + `cargo test --all-targets`）；本机不跑测试.
-- 下一动作：CI 全绿后落 T11 repair 队列 + T12 真实语料烟测。
+- 下一动作：CI 全绿后落 T12 耐久 e2e + 派生库重建。

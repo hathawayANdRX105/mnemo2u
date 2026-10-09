@@ -303,6 +303,39 @@ impl Pipeline {
         Ok(())
     }
 
+    /// Rebuild the chunk vector index from the truth layer.
+    ///
+    /// `text_chunks` owns the chunk rows, so the naive-RAG index is fully
+    /// derivable: deleting the derived table and re-running this restores
+    /// identical retrieval (the commit protocol's "rebuildable derived" rule).
+    /// Returns the number of rows written.
+    pub async fn rebuild_chunk_vectors(&self) -> StoreResult<usize> {
+        let chunks_vdb = self
+            .chunks_vdb
+            .as_ref()
+            .ok_or_else(|| StoreError::NotFound("naive RAG disabled".into()))?;
+        let keys = self.text_chunks.all_keys().await?;
+        let rows = self.text_chunks.get_by_ids(&keys).await?;
+        let mut vector_rows = Vec::with_capacity(rows.len());
+        for (key, row) in keys.into_iter().zip(rows) {
+            let Some(row) = row else { continue };
+            let content = row
+                .get("content")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            vector_rows.push(VectorRow {
+                id: key,
+                content,
+                meta: row,
+            });
+        }
+        let written = vector_rows.len();
+        chunks_vdb.upsert(vector_rows).await?;
+        chunks_vdb.index_done().await?;
+        Ok(written)
+    }
+
     /// Replay queued derived writes (T11). A replay that fails again stays in
     /// the queue: the next `flush` retries it, so a persistent failure is
     /// visible as a non-empty queue instead of dropping the row.
