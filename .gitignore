@@ -6,3 +6,4 @@ todo/
 tests/.venvs/
 .ruff_cache/
 __pycache__/
+.wt/
