@@ -1,8 +1,8 @@
 # R1 复刻 nano-graphrag（单 crate 基础闭环）
 
-**状态**：待开工（单 crate 骨架已建：`cargo check` 绿；core 类型/trait/RRF 已就位）。
+**状态**：R1 已实现并 CI 全绿（43 用例）；收尾差异见 §8.5/§8.6/§9，未完成项见 §6 FAC6、§7 备注与 §9。
 **目标**：在 Rust 单 crate 中复刻 nano-graphrag 全流程——切块→抽取→合并→建图→社区检测→报告→三种查询；三库替代其 json/nano-vectordb/networkx；LLM 经可替换客户端。
-**复刻基准**：`todo/refs/nano-graphrag` @ `acb35c0`（MIT；核心约 2,800 行 + prompt.py 520 行）。codegraph 索引已建（865 节点/1,670 边），本文件所有坐标来自该索引 + 源码核对。
+**复刻基准**：`todo/refs/nano-graphrag` @ `acb35c0`（MIT；核心约 2,800 行 + prompt.py 520 行）。源码坐标经 codegraph 索引 + 逐行核对（2026-10-10 复审）。
 **前置**：无（骨架已可用）。
 **下一阶段**：[R2 LightRAG 增强](02-lightrag-upgrade.md)。
 
@@ -19,22 +19,22 @@
 
 | nano-graphrag（file:line @ acb35c0） | 作用 | 我们的落点 |
 |---|---|---|
-| `graphrag.py::GraphRAG` (52-229)：`ainsert` (279-347)、`aquery` (236-275) | 门面装配 + 读写入口 | `src/lib.rs`（`Mnemo` 门面）+ `src/pipeline.rs` |
+| `graphrag.py::GraphRAG` (52-229)：`ainsert` (279-347)、`aquery` (236-275) | 门面装配 + 读写入口 | `src/pipeline.rs`（R1 无独立门面；`Pipeline` 即装配入口） |
 | `_op.py::chunking_by_token_size` (31-58)、`get_chunks` (94-108) | 切块 + chunk 哈希 | `src/graph/chunk.rs` |
 | `_op.py::extract_entities` (282-414) | 抽取主流程（gleaning→解析→合并→实体向量化） | `src/graph/extract.rs` |
 | `_op.py::_handle_single_entity_extraction` (138-156)、`_handle_single_relationship_extraction` (159-179) | 记录解析与字段校验 | `src/graph/extract.rs` |
 | `_op.py::_merge_nodes_then_upsert` (182-227)、`_merge_edges_then_upsert` (230-279) | 实体/边合并 | `src/graph/merge.rs` |
 | `_op.py::_handle_entity_relation_summary` (111-135) | 超限摘要（cheap model） | `src/graph/merge.rs` |
-| `_op.py::_pack_single_community_by_sub_communities` (417-461)、`_pack_single_community_describe` (464-600) | 社区上下文装配（预算分配/截断） | `src/graph/report.rs` |
-| `_op.py::generate_community_report` (625-697)、`_community_report_json_to_str` (603-622) | 分层报告生成 + JSON→Markdown | `src/graph/report.rs` |
+| `_op.py::_pack_single_community_by_sub_communities` (417-461)、`_pack_single_community_describe` (464-600) | 社区上下文装配（预算分配/截断） | `src/graph/reports.rs` |
+| `_op.py::generate_community_report` (625-697)、`_community_report_json_to_str` (603-622) | 分层报告生成 + JSON→Markdown | `src/graph/reports.rs` |
 | `_op.py::_find_most_related_community_from_entities` (700-745)、`_find_most_related_text_unit_from_entities` (748-804)、`_find_most_related_edges_from_entities` (807-841)、`_build_local_query_context` (844-932)、`local_query` (935-967) | local 检索链路 | `src/query/local.rs` |
 | `_op.py::_map_global_communities` (970-1014)、`global_query` (1017-1104) | global map-reduce | `src/query/global.rs` |
 | `_op.py::naive_query` (1107-1140) | naive 纯向量 | `src/query/naive.rs` |
 | `_utils.py::compute_mdhash_id` (186-187)、`compute_args_hash` (216-217)、`truncate_list_by_token_size` (169-183)、`clean_str` (241-249)、`split_string_by_multi_markers` (219-224)、`convert_response_to_json` (105-118)、`list_of_list_to_csv` (234-239)、`TokenizerWrapper` (123-165)、`limit_async_func_call` (276-295) | 工具函数 | `src/core/text.rs`、`src/core/concurrency.rs` |
-| `_llm.py::openai_complete_if_cache` (38-64)、`gpt_4o_complete`/`gpt_4o_mini_complete` (~126-153)、`openai_embedding` (224-235) | LLM/嵌入客户端 + 缓存 | `src/llm/{client,openai,mock}.rs` |
+| `_llm.py::openai_complete_if_cache` (38-64)、`gpt_4o_complete`/`gpt_4o_mini_complete` (~126-153)、`openai_embedding` (224-235) | LLM/嵌入客户端 + 缓存 | `src/llm/{openai,cache,mock}.rs` |
 | `base.py::QueryParam` (10-29)、`BaseKVStorage` (93-113)、`BaseVectorStorage` (78-89)、`BaseGraphStorage` (117-186) | 接口与默认查询参数 | `src/core/traits.rs`（已建，差集补 T1） |
 | `_storage/kv_json.py` (46)、`vdb_nanovectordb.py` (68)、`gdb_networkx.py` (268) | 三类存储参考实现 | `src/store/{turso,turso_graph,lancedb}.rs` |
-| `prompt.py`：`entity_extraction`/`entiti_continue_extraction`/`entiti_if_loop_extraction`/`summarize_entity_descriptions`/`community_report`/`local_rag_response`/`global_map_rag_points`/`global_reduce_rag_response`/`naive_rag_response`/`fail_response`/`default_text_separator` | 提示词（英文，逐字保留） | `src/graph/prompts.rs`（常量） |
+| `prompt.py`：`entity_extraction`/`entiti_continue_extraction`/`entiti_if_loop_extraction`/`summarize_entity_descriptions`/`community_report`/`local_rag_response`/`global_map_rag_points`/`global_reduce_rag_response`/`naive_rag_response`/`fail_response` | 提示词（英文，逐字保留） | `src/graph/prompts/<key>.txt`（`prompts.rs` 内 `include_str!`；由 `tools/golden/gen_prompts.py` 从参考仓抽取） |
 
 ## 2. 常量与默认值（复刻契约；改动=偏差需登记）
 
@@ -49,9 +49,10 @@
 | 向量 | `query_better_than_threshold=0.2`；参考嵌入 `text-embedding-3-small`(1536)；batch 32 | `vdb_nanovectordb.py:13,28`、`_llm.py:223-235`、`graphrag.py:129` |
 | 并发 | best/cheap/embedding 各 **16** 并发（`limit_async_func_call` 假信号量） | `graphrag.py:117-131`、`_utils.py:276-295` |
 | QueryParam 默认 | mode=global、level=2、top_k=20；naive 12000；local 4000/4800/3200；global min_rating=0/max_consider=512/max_token=16384 | `base.py:10-29` |
+| 开关 | `enable_local=True`（false 则不建 `entities_vdb`、local 查询报错）、`enable_naive_rag=False` | `graphrag.py:58,74` |
 | 缓存 | 键=`md5(str((model, messages)))`，`enable_llm_cache=True` | `_llm.py:52`、`_utils.py:217`、`graphrag.py:135` |
 | 提交 | 每次 insert **全量 drop 社区报告再重算**（原版 TODO 注明不支持增量） | `graphrag.py:329-330` |
-| tokenizer | tiktoken `encoding_for_model("gpt-4o")` → Rust 用 **`tiktoken-rs` 0.12.1**（cl100k/o200k 对齐） | `_utils.py:130-141` |
+| tokenizer | tiktoken `encoding_for_model("gpt-4o")` → Rust 用 **`tiktoken-rs` 的 `o200k_base`**（gpt-4o 口径；`decode` 按 Python `errors="replace"` 语义） | `_utils.py:130-141`、`src/core/text.rs` |
 
 ## 3. 三库落位
 
@@ -94,29 +95,29 @@
 
 ## 5. 三库提交协议（本阶段落地）
 
-三库无共享事务。不变量：**turso 是唯一真值；kuzu/lancedb 是派生索引，任何时刻可重建**。
+三库无共享事务。不变量：**turso KV 是唯一真值；lancedb 向量索引是派生索引、turso 邻接表是可从真值重建的图投影，任何时刻可重建**（图与真值同引擎不同 schema，见 §8.5）。
 
 1. **提交点在 turso 的文档/chunk 行**：`full_docs`/`text_chunks` 在整条插入链**最后**落库（参考实现同序，graphrag.py:342-346）。写在这里之前崩溃 → 该文档视为「未入库」，重跑 insert 从头执行（LLM 缓存让重跑廉价）。
 2. **派生库写通过即幂等**：图节点/边与实体向量在过程中 upsert（同键覆盖），重跑不产生重复；`community_reports` 每次插入前 `drop_all`（参考语义）。
-3. **重建路径**：`rebuild(scope)` 从 turso 全量重建 lancedb；契约测试：删派生库→重建→检索一致。
+3. **重建路径**：`Pipeline::rebuild_chunk_vectors` 从 `text_chunks` 重建 lancedb chunk 索引；契约测试：删 lancedb 派生目录→重建→naive 检索逐字符一致（`tests/durable_e2e.rs`）。实体向量暂无重建入口（抽取需 LLM，走修复队列/重跑 insert）。
 4. **错误分类**：`StoreError::{Backend, ScopeViolation, StaleRevision, NotFound}`；「臂失败」与「空结果」可区分。
 
 ## 6. 功能验收（运行时可见）
 
-- [ ] R1.FAC1 小语料全链跑通：insert→社区→local/global/naive 三模式各出结果。
-- [ ] R1.FAC2 同一文本重复 insert 不产生重复 chunk/实体，图与向量表行数不变。
-- [ ] R1.FAC3 图数据可从 turso_graph 读出（节点属性/边权重/来源），社区 schema 层次可见。
-- [ ] R1.FAC4 重复查询命中 LLM 缓存（mock/真实调用计数不变）。
-- [ ] R1.FAC5 新进程重开后可继续查询，结果与关库前一致。
+- [x] R1.FAC1 小语料全链跑通（`tests/pipeline_e2e.rs` / `tests/durable_e2e.rs`）。
+- [x] R1.FAC2 重复 insert 幂等（filter_keys 短路 + upsert 同键覆盖；`chunk_parity`/`merge_parity` 的幂等断言）。
+- [x] R1.FAC3（`tests/turso_graph.rs`：节点属性/边权重/来源读回，scope 隔离）。
+- [x] R1.FAC4（`tests/llm_cache.rs`：同 args 二次调用零新增 LLM 调用）。
+- [x] R1.FAC5（`tests/durable_e2e.rs`：跨"进程"重开三模式查询 + 派生库重建后一致）。
 - [ ] R1.FAC6 `only_need_context` 模式输出与参考实现一致（人工抽查 3 例）。
 
 ## 7. 测试验收（自动化）
 
-- [ ] R1.TAC1 切块 golden 对照（含空文本/单 token/超长/中文混合边界）。
+- [x] R1.TAC1（`tests/chunk_parity.rs`：11 chunk 逐字段相等，含中文混合与跨多字节窗口边界）。
 - [x] R1.TAC2 存储契约：turso / lancedb / turso_graph 三后端（写读/批量/scope/错误分类/重开恢复）——`tests/{turso_kv,lancedb_vector,turso_graph}.rs`，CI 全绿。
-- [ ] R1.TAC3 抽取+合并：mock 全分支（含 JSON 容错解析的三级降级）。
-- [ ] R1.TAC4 社区+报告：固定图 fixture 的 schema 与上下文文本快照。
-- [ ] R1.TAC5 查询三模式：`only_need_context` 上下文快照 + fail_response 路径。
+- [x] R1.TAC3（`tests/extraction_mock.rs` gleaning/if_loop 分支、`tests/extraction_parity.rs` 解析、`tests/merge_parity.rs` 合并）。
+- [x] R1.TAC4（`tests/community_reports.rs`：schema 层次、预算分配、JSON→Markdown）。
+- [x] R1.TAC5（`tests/pipeline_e2e.rs` 三模式 only_need_context 快照；fail 路径见 naive/local 禁用测试）。
 - [x] R1.TAC6 提交协议：repair 队列（`tests/repair_queue.rs`：派生失败→入队→flush 逐条重放→失败留队）+ 重建等价（`tests/durable_e2e.rs`：删 lancedb 派生库→从 text_chunks 重建→检索一致）。未做：turso 提交前/后的崩溃点注入（需故障注入 harness，R1 未排）。
 - [x] R1.TAC7 e2e 离线全链（mock LLM，`cargo test` 无网络）：`tests/pipeline_e2e.rs`（内存后端）+ `tests/durable_e2e.rs`（耐久三后端、跨"进程"重启、派生库重建）。
 
@@ -130,6 +131,21 @@
 | 图遍历/存储 | networkx 内存图 | turso 邻接表（SQL 度数/邻接） | 语义等价（批量/度数/邻接顺序 API 对齐）；R2 需要多跳/PageRank 时可换图引擎 |
 | 抽取内嵌 entity_vdb upsert | `extract_entities` 内做 `entity_vdb.upsert` | pipeline 在 merge 循环后统一 upsert | 数据与顺序等价（仍在 clustering 前）；派生写统一走 repair 队列包装 |
 | merge 并发 | `asyncio.gather` 并发 merge 节点/边 | 顺序 merge | merge 之间有图状态依赖，顺序更可复现；抽取本身仍并发（`Limiter`） |
+
+## 8.5 kuzu 偏离（2026-10-10）：图存储改用 turso 邻接表
+
+**结论**：R1 图存储用 `turso` 邻接表实现，不引入 kuzu。这不是"待评估"，而是被链接期证据劝退的明确决定。
+
+**证据**（GitHub Actions run `hathawayANdRX105/mnemo2u`）：
+1. kuzu 0.11.3 静态链把它自带的 vendored simsimd 以 `+whole-archive` 无条件链入；turso_core 又拉同名的 `simsimd` crate → `rust-lld: error: duplicate symbol: simsimd_*`（run 37977636547 kuzu job）。
+2. 加 `-Wl,--allow-multiple-definition` 放过重复符号后，真实问题暴露：`undefined symbol: kuzu_rs$cxxbridge1$*`（cxx bridge 的 C++ shim 未链入）→ 静态链在此依赖组合下结构性不可用（run 37982925420）。
+3. 上游 kuzu 仓库已归档，无解。
+
+**为什么 turso 邻接表够用**：R1 复刻 nano-graphrag，它的图面就是 `GraphStore` 的那套操作（has/get/upsert/degree/邻接/snapshot），社区检测走 `snapshot()` + leiden-rs，本来就不需要图引擎。turso 邻接表语义与 `MemoryGraph` 完全一致（甚至允许悬空边，比 kuzu 更贴近）。
+
+**回到 kuzu 的触发条件**：R2（LightRAG）需要多跳遍历/PageRank，且届时先验证 kuzu 的 shared 链接模式（`KUZU_SHARED=1`）或升级版能避开 simsimd 冲突。替换成本收敛在 `src/store/turso_graph.rs` 一个文件。
+
+**已落地**：`src/store/turso_graph.rs` + `tests/turso_graph.rs`（属性合并/边/度/邻接顺序/snapshot/scope 隔离/重开恢复），Cargo.toml 移除 kuzu 依赖与 feature，CI 移除 kuzu job（省 30 分钟/轮）。
 
 ## 8.6 端口审计（2026-10-10，codegraph + 逐函数对照）
 
@@ -145,28 +161,20 @@
 | 存储 | 3 接口 → turso KV / turso 图 / lancedb，均有契约测试 |
 | 未移植 | claim_extraction（参考死代码）、bedrock/azure provider（不在 R1 范围）、huggingface tokenizer（tiktoken 口径） |
 
-## 8.5 kuzu 偏离（2026-10-10）
-
-**结论**：R1 图存储用 `turso` 邻接表实现，不引入 kuzu。这不是"待评估"，而是被链接期证据劝退的明确决定。
-
-**证据**（GitHub Actions run `hathawayANdRX105/mnemo2u`）：
-1. kuzu 0.11.3 静态链把它自带的 vendored simsimd 以 `+whole-archive` 无条件链入；turso_core 又拉同名的 `simsimd` crate → `rust-lld: error: duplicate symbol: simsimd_*`（run 37977636547 kuzu job）。
-2. 加 `-Wl,--allow-multiple-definition` 放过重复符号后，真实问题暴露：`undefined symbol: kuzu_rs$cxxbridge1$*`（cxx bridge 的 C++ shim 未链入）→ 静态链在此依赖组合下结构性不可用（run 37982925420）。
-3. 上游 kuzu 仓库已归档，无解。
-
-**为什么 turso 邻接表够用**：R1 复刻 nano-graphrag，它的图面就是 `GraphStore` 的那套操作（has/get/upsert/degree/邻接/snapshot），社区检测走 `snapshot()` + leiden-rs，本来就不需要图引擎。turso 邻接表语义与 `MemoryGraph` 完全一致（甚至允许悬空边，比 kuzu 更贴近）。
-
-**回到 kuzu 的触发条件**：R2（LightRAG）需要多跳遍历/PageRank，且届时先验证 kuzu 的 shared 链接模式（`KUZU_SHARED=1`）或升级版能避开 simsimd 冲突。替换成本收敛在 `src/store/turso_graph.rs` 一个文件。
-
-**已落地**：`src/store/turso_graph.rs` + `tests/turso_graph.rs`（属性合并/边/度/邻接顺序/snapshot/scope 隔离/重开恢复），Cargo.toml 移除 kuzu 依赖与 feature，CI 移除 kuzu job（省 30 分钟/轮）。
-
 ## 9. 接续记录
 
 - 已完成：
-  - 存储后端三件齐：`turso`（KV 真值）、`turso_graph`（图邻接表）、`lancedb`（向量）。每个后端一份契约测试：`tests/{turso_kv,lancedb_vector,turso_graph}.rs`。
-  - T1 依赖入册（`turso`/`lancedb`/`leiden-rs`/`tiktoken-rs`/`md-5`/`regex`/`tokio`/`reqwest`/`petgraph` 等；`kuzu` 因上游 vendored C++ 需 `CXXFLAGS=-include cstdint`，暂以 `kuzu-backend` feature 门控）。
-  - T2 切块器 + golden 对照（`tools/golden/gen_chunks.py`，11 chunk 逐字段相等）、T3 LLM/嵌入客户端 + 参数哈希缓存（与 Python `md5(str((model, messages)))` 同值，golden 4 例）、T4 抽取管线（gleaning + 解析，golden 5 例）、T5 合并（节点/边 + 摘要三档，golden 4 例）、T7 社区检测（leiden-rs 层次社区 + schema，含确定性/覆盖测试）、T8 社区报告（预算分配 + JSON→Markdown + 并发分相）、T9 查询三模式（local/global/naive，含 `only_need_context`）、T10 管线（`src/pipeline.rs`，含提交点语义）、内存后端（KV/向量/图）。
-  - 测试面：`tests/{chunk_parity,hash_parity,extraction_parity,merge_parity,extraction_mock,llm_cache,community_reports,pipeline_e2e,turso_kv}.rs`。
-- 未完成：T6 的 kuzu 适配器（GraphStore）、lancedb 向量后端、T11 repair 队列、T12 真实语料烟测。
-- 验证方式：测试只在 GitHub Actions 跑（仓库 `hathawayANdRX105/mnemo2u`，`.github/workflows/ci.yml`：fmt + clippy `-D warnings` + `cargo test --all-targets`）；本机不跑测试.
-- 下一动作：进入 R2（LightRAG 增强）；R1 收尾前跑一次快照回归（全量 `cargo test`）。
+  - 存储后端三件齐 + 每件一份契约测试：`turso`（KV 真值，`tests/turso_kv.rs`）、`turso_graph`（图邻接表，`tests/turso_graph.rs`）、`lancedb`（向量，`tests/lancedb_vector.rs`）。
+  - T1 依赖入册（`turso`/`lancedb`/`leiden-rs`/`tiktoken-rs`/`md-5`/`regex`/`tokio`/`reqwest`/`petgraph`；kuzu 已按 §8.5 移除，不再是依赖）。
+  - T2 切块器 + golden 对照（`tools/golden/gen_chunks.py`，11 chunk 逐字段相等）、T3 LLM/嵌入客户端 + 参数哈希缓存（golden 4 例）、T4 抽取管线（gleaning + 解析，golden 5 例）、T5 合并（节点/边 + 摘要三档，golden 4 例）、T7 社区检测（leiden-rs 层次社区 + schema）、T8 社区报告（预算分配 + JSON→Markdown + 并发分相）、T9 查询三模式（local/global/naive，含 `only_need_context`）、T10 管线（`src/pipeline.rs`，含提交点语义）、内存后端（KV/向量/图）。
+  - T11 提交协议：`src/store/repair.rs` 修复队列（真值先提交 → 派生写失败入队 → `flush` 逐条重放 → 失败留队）+ `Limiter::{in_flight,available}` 可观测；`tests/repair_queue.rs`。
+  - T12 全离线 e2e：`tests/pipeline_e2e.rs`（内存后端）+ `tests/durable_e2e.rs`（turso+lancedb+turso_graph 全耐久、跨"进程"重启、删派生库后 `rebuild_chunk_vectors` 重建→检索一致）。
+  - §8.6 审计补的两个缺口：`enable_local`（gate 实体向量 + local 查询）、`embedding_batch_num`（分批 embed）。
+  - 测试面（14 个 target / 43 用例）：`tests/{chunk_parity,hash_parity,extraction_parity,merge_parity,extraction_mock,llm_cache,community_reports,pipeline_e2e,lancedb_vector,turso_graph,turso_kv,repair_queue,durable_e2e}.rs` + lib 单测。
+- 未完成：
+  - FAC6：`only_need_context` 与参考实现的**人工抽查**（自动快照已有，缺 3 例人工对账）。
+  - T10 判据里的 turso 崩溃点注入（提交前/后半状态）——需故障注入 harness，R1 未排。
+  - 实体向量重建入口（当前走修复队列或重跑 insert；`rebuild_chunk_vectors` 只覆盖 chunk 索引）。
+  - R2：LightRAG 增强（增量更新/双层检索/成本控制/选择性删除）。
+- 验证方式：测试只在 GitHub Actions 跑（仓库 `hathawayANdRX105/mnemo2u`，`.github/workflows/ci.yml`：fmt + clippy `-D warnings` + `cargo test --all-targets --no-fail-fast`）；本机不跑测试。代码提交受 canon 钩子把关（`.githooks/`，由 canon 正本仓分发）。
+- 下一动作：R2（LightRAG 增强）开工前，先补 FAC6 人工抽查与实体向量重建入口。
