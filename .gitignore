@@ -1,5 +1,5 @@
 target/
-todo/refs/
+todo/
 .codegraph/
 
 # golden-fixture regeneration venv (test-only tool, see README)
