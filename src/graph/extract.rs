@@ -50,12 +50,15 @@ impl Default for ExtractOptions {
     }
 }
 
-/// Run-fixed prompt strings (`operate.py:4027-4047`): the examples block and
-/// the entity-type guidance are identical for every chunk of a run.
+/// Prompt strings for one extraction run (`operate.py:4027-4047`): the system
+/// and continue prompts are run-fixed; the user prompt keeps its raw template
+/// plus the run-fixed variable pairs, because `{input_text}` and the optional
+/// `{heading_context_block}` are per-chunk (`operate.py:4113-4118`).
 #[derive(Debug, Clone)]
 pub struct ExtractPrompts {
     pub system: String,
     pub user_template: String,
+    pub user_vars: Vec<(String, String)>,
     pub continue_template: String,
 }
 
@@ -82,19 +85,25 @@ pub fn build_extract_prompts() -> LlmResult<ExtractPrompts> {
         // section-context block is always empty (`operate.py:4113-4118`).
         ("heading_context_block", ""),
     ];
-    let mut with_language = common.to_vec();
-    with_language.push(("language", "English"));
+    let mut with_language: Vec<(String, String)> = common
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    with_language.push(("language".to_string(), "English".to_string()));
 
-    let system = fill_template(ENTITY_EXTRACTION_SYSTEM, &with_language)
+    let borrowed: Vec<(&str, &str)> = with_language
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let system = fill_template(ENTITY_EXTRACTION_SYSTEM, &borrowed)
         .map_err(|e| LlmError::Decode(format!("system template: {e}")))?;
-    let user_template = fill_template(ENTITY_EXTRACTION_USER, &with_language)
-        .map_err(|e| LlmError::Decode(format!("user template: {e}")))?;
-    let continue_template = fill_template(ENTITY_CONTINUE_EXTRACTION, &with_language)
+    let continue_template = fill_template(ENTITY_CONTINUE_EXTRACTION, &borrowed)
         .map_err(|e| LlmError::Decode(format!("continue template: {e}")))?;
 
     Ok(ExtractPrompts {
         system,
-        user_template,
+        user_template: ENTITY_EXTRACTION_USER.to_string(),
+        user_vars: with_language,
         continue_template,
     })
 }

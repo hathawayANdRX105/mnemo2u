@@ -333,7 +333,7 @@ def seed_json(seed):
     """Serialise a seed: edge keys are (src, tgt) tuples, JSON needs a string."""
     return {
         "nodes": seed["nodes"],
-        "edges": {f"{src}\\u0000{tgt}": edge for (src, tgt), edge in seed["edges"].items()},
+        "edges": {f"{src}\x00{tgt}": edge for (src, tgt), edge in seed["edges"].items()},
     }
 
 

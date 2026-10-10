@@ -64,9 +64,11 @@ fn relation_key_orders_the_pair() {
 #[test]
 fn relation_key_round_trip() {
     let key = make_relation_chunk_key("GAMMA", "DELTA");
+    assert_eq!(key, "DELTA<SEP>GAMMA", "the key is the sorted pair");
     assert_eq!(
         parse_relation_chunk_key(&key),
-        Some(("GAMMA".to_string(), "DELTA".to_string()))
+        Some(("DELTA".to_string(), "GAMMA".to_string())),
+        "parsing recovers the stored order"
     );
 }
 

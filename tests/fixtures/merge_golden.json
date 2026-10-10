@@ -240,7 +240,7 @@
     }
    },
    "edges": {
-    "ACME\\u0000BETA": {
+    "ACME\u0000BETA": {
      "weight": 1.0,
      "description": "edge description",
      "keywords": "owns",
