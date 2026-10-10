@@ -1,6 +1,6 @@
 # mnemo2u 路线图（施工图 v1）
 
-**状态**：v1 待评审；`crates/mnemo-core` 类型与 trait 骨架已建、`cargo check` 通过；R1 未开工。
+**状态**：v1 施工中。R1（nano-graphrag 复刻）已实现、门禁就位、CI 全绿（43 用例）；仅剩报告路径的双端字节实测（本地 venv 已删，见 01 §9）。R2 未开工。
 **目标**：为 coding harness 提供独立的记忆/RAG 库——graph RAG 存关联、向量 RAG 存事实、Turso 存真值，Jev 承担语义判断；公开仓、独立开发。
 **基线**：本文件 + 分阶段文档（01–06）；参考项目在 `todo/refs/`。
 

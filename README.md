@@ -22,7 +22,8 @@ R1 — port of [nano-graphrag](https://github.com/gusye1234/nano-graphrag)
 - entity/relation extraction with the gleaning loop (`graph/extract.rs`)
 - merge with the reference's summary thresholds (`graph/merge.rs`)
 - hierarchical community detection via `leiden-rs` (`graph/community.rs`)
-- community reports (`graph/reports.rs`)
+- community reports (`graph/reports.rs`) — CSV context is byte-pinned against
+  the reference's quoting rules (numbers bare, `format_row` fully quoted)
 - query paths: local / global / naive (`query/`)
 - insert & query facade with the reference commit order (`pipeline.rs`)
 - LLM clients: OpenAI-compatible HTTP, cache with reference-parity args hash,
@@ -33,6 +34,11 @@ R1 — port of [nano-graphrag](https://github.com/gusye1234/nano-graphrag)
   derived writes on the next flush (`store/repair.rs`)
 - durable end-to-end smoke: ingest → restart over the same files → drop the
   vector index → rebuild it from truth → identical retrieval (`tests/durable_e2e.rs`)
+
+Parity limitation worth knowing: the report-context bytes are pinned to the
+*rules* read out of the reference, not to a live double-run (`.venv-ref` was
+removed locally). Closing that needs a venv with `tiktoken` and a report golden
+generator — tracked as the only open R1 acceptance item.
 
 Why the graph lives in turso rather than a dedicated graph engine: the bundled
 static build of kuzu 0.11.3 cannot link next to `turso_core` (duplicate simsimd
