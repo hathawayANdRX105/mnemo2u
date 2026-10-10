@@ -84,11 +84,11 @@ def merge_nodes_then_upsert(entity_name, nodes_data, graph, llm_response, calls)
 
     from collections import Counter
 
-    entity_type = sorted(
+    # `max` keeps the reference's tie-break (first of the highest count).
+    entity_type = max(
         Counter([dp["entity_type"] for dp in nodes_data] + already_entitiy_types).items(),
         key=lambda x: x[1],
-        reverse=True,
-    )[0][0]
+    )[0]
     description = GRAPH_FIELD_SEP.join(
         sorted(set([dp["description"] for dp in nodes_data] + already_description))
     )
@@ -96,7 +96,11 @@ def merge_nodes_then_upsert(entity_name, nodes_data, graph, llm_response, calls)
     description, calls = handle_entity_relation_summary(
         entity_name, description, 500, 32768, llm_response, calls
     )
-    node_data = dict(entity_type=entity_type, description=description, source_id=source_id)
+    node_data = {
+        "entity_type": entity_type,
+        "description": description,
+        "source_id": source_id,
+    }
     graph.upsert_node(entity_name, node_data=node_data)
     node_data["entity_name"] = entity_name
     return node_data, calls
@@ -137,7 +141,12 @@ def merge_edges_then_upsert(src_id, tgt_id, edges_data, graph, llm_response, cal
     graph.upsert_edge(
         src_id,
         tgt_id,
-        edge_data=dict(weight=weight, description=description, source_id=source_id, order=order),
+        edge_data={
+            "weight": weight,
+            "description": description,
+            "source_id": source_id,
+            "order": order,
+        },
     )
     return calls
 
