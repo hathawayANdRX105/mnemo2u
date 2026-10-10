@@ -34,6 +34,7 @@ const GLEAN: &str =
     "entity<|#|>ACME<|#|>organization<|#|>Acme ships cobots to warehouses.\n<|COMPLETE|>";
 
 const REPORT: &str = r#"{"title": "t", "summary": "s", "rating": 7.5, "rating_explanation": "e", "findings": [{"summary": "f", "explanation": "e"}]}"#;
+const KEYWORDS: &str = r#"{"high_level_keywords": ["competes"], "low_level_keywords": ["ACME"]}"#;
 
 fn routed_llm() -> CachedLlm {
     let routed = Arc::new(RoutedLlm::new(
@@ -51,6 +52,7 @@ fn routed_llm() -> CachedLlm {
                 "general information discovery".to_string(),
                 REPORT.to_string(),
             ),
+            ("high_level_keywords".to_string(), KEYWORDS.to_string()),
         ],
     ));
     CachedLlm::new(routed, Arc::new(MemoryKv::new()))

@@ -263,7 +263,7 @@ async fn query_modes_return_context_and_answers() {
         .await
         .expect("global query");
     assert!(
-        global.contains("-----Relationships-----"),
+        global.contains("Knowledge Graph Data (Relationship):"),
         "global context: {global}"
     );
     assert!(global.contains("ACME"), "global context: {global}");
