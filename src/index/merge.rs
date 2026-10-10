@@ -566,11 +566,35 @@ pub async fn merge_edge(
         }
     };
 
-    let file_path = records
-        .iter()
-        .map(|record| record.file_path.clone())
-        .find(|path| !path.is_empty())
-        .unwrap_or_else(|| UNKNOWN_SOURCE.to_string());
+    // `file_path` is the union of the stored and the incoming paths, in that
+    // order, deduplicated (`operate.py:3067-3116`). The cap is not applied
+    // here — see the note on the node path.
+    let file_path = {
+        let mut paths: Vec<String> = Vec::new();
+        if let Some(edge) = graph
+            .get_edge(src_id, tgt_id)
+            .await
+            .map_err(|e| LlmError::Transport(format!("graph read: {e}")))?
+        {
+            if let Some(value) = edge.get("file_path").and_then(Value::as_str) {
+                paths.extend(
+                    split_string_by_multi_markers(value, &[GRAPH_FIELD_SEP])
+                        .into_iter()
+                        .filter(|path| !path.is_empty()),
+                );
+            }
+        }
+        for record in records {
+            if !record.file_path.is_empty() && !paths.contains(&record.file_path) {
+                paths.push(record.file_path.clone());
+            }
+        }
+        if paths.is_empty() {
+            UNKNOWN_SOURCE.to_string()
+        } else {
+            paths.join(GRAPH_FIELD_SEP)
+        }
+    };
     let created_at = records
         .iter()
         .map(|record| record.timestamp)
@@ -588,7 +612,10 @@ pub async fn merge_edge(
                     endpoint,
                     json!({
                         "source_id": source_id,
-                        "description": "",
+                        // `_merge_edges_then_upsert` (operate.py:3166-3177):
+                        // a relation endpoint the entity phase never produced
+                        // is created with the relation's own description.
+                        "description": description,
                         "entity_type": "UNKNOWN",
                         "file_path": file_path,
                         "created_at": created_at,
@@ -625,7 +652,10 @@ pub fn entity_vector_rows(merged_nodes: &[Value]) -> Vec<VectorRow> {
             let name = node["entity_name"].as_str().unwrap_or_default();
             VectorRow {
                 id: compute_mdhash_id(name, "ent-"),
-                content: format!("{name}{}", node["description"].as_str().unwrap_or_default()),
+                content: format!(
+                    "{name}\n{}",
+                    node["description"].as_str().unwrap_or_default()
+                ),
                 meta: json!({
                     "entity_name": name,
                     "entity_type": node.get("entity_type").cloned().unwrap_or(json!("UNKNOWN")),

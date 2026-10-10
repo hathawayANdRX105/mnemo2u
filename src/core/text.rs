@@ -203,20 +203,39 @@ pub fn html_unescape(s: &str) -> String {
 }
 
 /// `split_string_by_multi_markers` — `_utils.py:219`.
+///
+/// The markers are literals, so the split is a plain leftmost scan: at each
+/// position the first marker that matches wins, exactly like the reference's
+/// `re.split` on escaped markers joined by `|`. A regex cannot be used here —
+/// this engine's `regex::escape` emits `\<`/`\>`, which are word-boundary
+/// assertions rather than literals, so any delimiter containing `<` or `>`
+/// (the tuple delimiter `<|#|>` among them) would never match.
 pub fn split_string_by_multi_markers(content: &str, markers: &[&str]) -> Vec<String> {
     if markers.is_empty() {
         return vec![content.to_string()];
     }
-    let pattern = markers
-        .iter()
-        .map(|m| regex::escape(m))
-        .collect::<Vec<_>>()
-        .join("|");
-    let re = Regex::new(&pattern).expect("escaped markers form a valid regex");
-    re.split(content)
-        .map(|part| part.trim().to_string())
-        .filter(|part| !part.is_empty())
-        .collect()
+    let mut parts: Vec<String> = Vec::new();
+    let mut start = 0usize;
+    let mut i = 0usize;
+    while i < content.len() {
+        let hit = markers
+            .iter()
+            .find(|marker| !marker.is_empty() && content[i..].starts_with(**marker));
+        match hit {
+            Some(marker) => {
+                parts.push(content[start..i].trim().to_string());
+                i += marker.len();
+                start = i;
+            }
+            None => {
+                let ch = content[i..].chars().next().expect("valid utf-8");
+                i += ch.len_utf8();
+            }
+        }
+    }
+    parts.push(content[start..].trim().to_string());
+    parts.retain(|part| !part.is_empty());
+    parts
 }
 
 /// `is_float_regex` — `_utils.py:216`.

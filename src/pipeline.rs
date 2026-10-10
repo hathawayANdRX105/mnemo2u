@@ -184,12 +184,12 @@ impl Pipeline {
             return Ok(InsertOutcome::AllDocsKnown);
         }
 
-        // The provenance path every extraction record carries. We ingest raw
-        // strings rather than files, so the document key is the path — better
-        // provenance than the reference's `unknown_source` default.
+        // `get_chunks` takes (doc key, content) pairs; the doc key doubles as
+        // the provenance path, which beats the reference's `unknown_source`
+        // default because we ingest raw strings rather than files.
         let doc_pairs: Vec<(String, String)> = new_docs
             .iter()
-            .map(|(key, _)| (key.clone(), key.clone()))
+            .map(|(key, doc)| (key.clone(), doc.content.clone()))
             .collect();
         let chunks = get_chunks(
             &doc_pairs,

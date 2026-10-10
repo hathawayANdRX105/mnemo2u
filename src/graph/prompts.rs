@@ -25,6 +25,14 @@ pub const COMMUNITY_REPORT: &str = include_str!("prompts/community_report.txt");
 /// `prompt.py:14` — field separator inside one record.
 pub const DEFAULT_TUPLE_DELIMITER: &str = "<|#|>";
 /// `prompt.py:15` — end-of-extraction marker.
+/// The value the `{user_prompt}` placeholder takes when the query carries no
+/// extra instructions (`utils.py:426`).
+pub const DEFAULT_USER_PROMPT_SLOT: &str = "n/a";
+
+/// `DEFAULT_SUMMARY_LANGUAGE` (`constants.py:16`) — the fallback for every
+/// prompt that renders `{language}` when no summary language is configured.
+pub const DEFAULT_SUMMARY_LANGUAGE: &str = "English";
+
 pub const DEFAULT_COMPLETION_DELIMITER: &str = "<|COMPLETE|>";
 /// `GRAGH_FIELD_SEP` (`constants.py:49`): the `source_id` list separator.
 pub const GRAPH_FIELD_SEP: &str = "<SEP>";

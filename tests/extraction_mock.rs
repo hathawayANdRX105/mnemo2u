@@ -31,9 +31,10 @@ fn chunk(content: &str) -> (String, Chunk) {
 // Real extractions end with the completion delimiter (the prompt requires it).
 // The record layout is LightRAG's: no parentheses, `<|#|>` field separator,
 // entities carry 4 fields, relations carry 5 (no strength column).
-const INITIAL: &str = "entity<|#|>\"ACME\"<|>\"organization\"<|>\"Acme makes things.\"\n\
-                       relation<|#|>\"ACME\"<|>\"BETA\"<|>\"owns\"<|>\"Acme owns Beta.\"<|COMPLETE|>";
-const GLEAN: &str = "entity<|#|>\"GAMMA\"<|>\"organization\"<|>\"Gamma labs.\"<|COMPLETE|>";
+const INITIAL: &str = "entity<|#|>ACME<|#|>organization<|#|>Acme makes things.\n\
+                       relation<|#|>ACME<|#|>BETA<|#|>owns<|#|>Acme owns Beta.\n\
+                       <|COMPLETE|>";
+const GLEAN: &str = "entity<|#|>GAMMA<|#|>organization<|#|>Gamma labs.\n<|COMPLETE|>";
 
 #[tokio::test]
 async fn gleaning_runs_exactly_one_round() {
@@ -67,7 +68,7 @@ async fn gleaning_runs_exactly_one_round() {
         "the initial user prompt embeds the chunk text"
     );
     assert!(
-        prompts[1].contains("continue"),
+        prompts[1].contains("missed or incorrectly formatted"),
         "the gleaning call sends the continue prompt"
     );
     // The relation keywords come from tuple field 3.

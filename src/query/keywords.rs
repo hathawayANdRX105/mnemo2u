@@ -9,7 +9,9 @@
 use serde_json::Value;
 
 use crate::core::rag::ChatMessage;
-use crate::graph::prompts::{KEYWORDS_EXTRACTION, KEYWORDS_EXTRACTION_EXAMPLES};
+use crate::graph::prompts::{
+    DEFAULT_SUMMARY_LANGUAGE, KEYWORDS_EXTRACTION, KEYWORDS_EXTRACTION_EXAMPLES,
+};
 use crate::llm::cache::CachedLlm;
 use crate::llm::{LlmError, LlmResult, ModelOptions};
 
@@ -36,7 +38,13 @@ impl QueryKeywords {
 pub async fn extract_keywords_only(llm: &CachedLlm, query: &str) -> LlmResult<QueryKeywords> {
     let prompt = crate::core::text::fill_template(
         KEYWORDS_EXTRACTION,
-        &[("examples", KEYWORDS_EXTRACTION_EXAMPLES), ("query", query)],
+        &[
+            ("examples", KEYWORDS_EXTRACTION_EXAMPLES),
+            ("query", query),
+            // `extract_keywords_only` (operate.py:5125-5159): the resolved
+            // summary language, defaulting to `DEFAULT_SUMMARY_LANGUAGE`.
+            ("language", DEFAULT_SUMMARY_LANGUAGE),
+        ],
     )
     .map_err(|e| LlmError::Decode(format!("keywords template: {e}")))?;
     let (response, _) = llm

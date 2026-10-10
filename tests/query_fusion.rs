@@ -32,7 +32,7 @@ impl Reranker for InvertedReranker {
         chunks
             .iter()
             .enumerate()
-            .map(|(index, _)| (chunks.len() - index) as f32)
+            .map(|(index, _)| (index + 1) as f32)
             .collect()
     }
 }
@@ -108,12 +108,34 @@ fn rerank_disabled_skips_the_seam() {
 fn rerank_enabled_reorders_and_filters() {
     let tokenizer = Tokenizer::for_gpt_4o().expect("tokenizer");
     let rows = vec![row("DC1", "a"), row("DC2", "b")];
-    let param = QueryParam {
+    // The inverted reranker scores DC1=1, DC2=2.
+    let kept = QueryParam {
         enable_rerank: true,
-        min_rerank_score: 2.0,
+        min_rerank_score: 0.5,
         ..param()
     };
-    let fused = fuse_chunks(rows, "query", &param, &tokenizer, Some(&InvertedReranker));
-    assert_eq!(fused.len(), 1, "scores 2 and 1: only 2 passes the floor");
+    let fused = fuse_chunks(
+        rows.clone(),
+        "query",
+        &kept,
+        &tokenizer,
+        Some(&InvertedReranker),
+    );
+    assert_eq!(fused.len(), 2, "both rows clear the 0.5 floor");
     assert_eq!(fused[0].id, "DC2", "the higher score moves first");
+
+    let filtered = QueryParam {
+        enable_rerank: true,
+        min_rerank_score: 1.5,
+        ..param()
+    };
+    let fused = fuse_chunks(
+        rows,
+        "query",
+        &filtered,
+        &tokenizer,
+        Some(&InvertedReranker),
+    );
+    assert_eq!(fused.len(), 1, "scores 1 and 2: only 2 passes the floor");
+    assert_eq!(fused[0].id, "DC2", "the survivor is the best-scoring row");
 }

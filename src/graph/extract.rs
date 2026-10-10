@@ -335,11 +335,18 @@ impl ChunkTask {
     /// One chunk: initial extraction, one gleaning round (guarded by the input
     /// token budget), then parsing (`operate.py:3990-4330`).
     async fn run(&self) -> LlmResult<ExtractedRecords> {
-        let user_prompt = fill_template(
-            &self.prompts.user_template,
-            &[("input_text", &self.content)],
-        )
-        .map_err(|e| LlmError::Decode(format!("user template: {e}")))?;
+        let mut user_vars: Vec<(&str, &str)> = self
+            .prompts
+            .user_vars
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect();
+        user_vars.push(("input_text", &self.content));
+        // No heading metadata reaches the chunk rows yet, so the optional
+        // section-context block is always empty (`operate.py:4113-4118`).
+        user_vars.push(("heading_context_block", ""));
+        let user_prompt = fill_template(&self.prompts.user_template, &user_vars)
+            .map_err(|e| LlmError::Decode(format!("user template: {e}")))?;
 
         let (mut final_result, _) = self
             .limiter

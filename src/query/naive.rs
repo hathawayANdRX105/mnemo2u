@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::core::rag::QueryParam;
 use crate::core::text::truncate_list_by_token_size;
-use crate::graph::prompts::{FAIL_RESPONSE, NAIVE_RAG_RESPONSE};
+use crate::graph::prompts::{DEFAULT_USER_PROMPT_SLOT, FAIL_RESPONSE, NAIVE_RAG_RESPONSE};
 use crate::llm::{LlmError, LlmResult, ModelOptions};
 use crate::query::QueryStores;
 
@@ -49,6 +49,7 @@ pub async fn naive_query(
         &[
             ("content_data", section.as_str()),
             ("response_type", param.response_type.as_str()),
+            ("user_prompt", DEFAULT_USER_PROMPT_SLOT),
         ],
     )
     .map_err(|e| LlmError::Decode(e.to_string()))?;

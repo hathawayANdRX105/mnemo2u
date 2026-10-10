@@ -17,7 +17,7 @@ use std::sync::Arc;
 use crate::core::rag::{QueryMode, QueryParam};
 use crate::core::text::{truncate_list_by_token_size, GRAPH_FIELD_SEP};
 use crate::core::traits::VectorStore;
-use crate::graph::prompts::{FAIL_RESPONSE, RAG_RESPONSE};
+use crate::graph::prompts::{DEFAULT_USER_PROMPT_SLOT, FAIL_RESPONSE, RAG_RESPONSE};
 use crate::llm::{LlmError, LlmResult, ModelOptions};
 use crate::query::context::{
     assign_chunk_ids, format_created_at, reference_list, ChunkRow, EntityRow, QueryContext,
@@ -125,6 +125,7 @@ pub async fn kg_query(
         &[
             ("context_data", rendered.as_str()),
             ("response_type", param.response_type.as_str()),
+            ("user_prompt", DEFAULT_USER_PROMPT_SLOT),
         ],
     )
     .map_err(|e| LlmError::Decode(format!("rag_response template: {e}")))?;
