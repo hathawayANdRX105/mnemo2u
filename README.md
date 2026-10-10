@@ -36,9 +36,9 @@ R1 — port of [nano-graphrag](https://github.com/gusye1234/nano-graphrag)
   vector index → rebuild it from truth → identical retrieval (`tests/durable_e2e.rs`)
 
 Parity limitation worth knowing: the report-context bytes are pinned to the
-*rules* read out of the reference, not to a live double-run (`.venv-ref` was
-removed locally). Closing that needs a venv with `tiktoken` and a report golden
-generator — tracked as the only open R1 acceptance item.
+*rules* read out of the reference, not to a live double-run (the regeneration
+venv is not checked in). Closing that needs the venv described below plus a
+report golden generator — tracked as the only open R1 acceptance item.
 
 Why the graph lives in turso rather than a dedicated graph engine: the bundled
 static build of kuzu 0.11.3 cannot link next to `turso_core` (duplicate simsimd
@@ -65,15 +65,23 @@ cargo clippy --all-targets -- -D warnings
 Tests run in CI (`.github/workflows/ci.yml`), including the golden-parity
 suites; they need no network and no model downloads.
 
-Regenerate the golden fixtures (needs a venv with `tiktoken` in `.venv-ref/`):
+Regenerating the golden fixtures runs the **reference implementation** (Python),
+so the expected values stay independent of the Rust port. The venv lives under
+`tests/` because it is a test-only tool; it is gitignored and never needed to
+build or run the suite:
 
 ```bash
-.venv-ref/bin/python scripts/gen_chunks.py > tests/fixtures/chunk_golden.json
-.venv-ref/bin/python scripts/gen_extraction.py > tests/fixtures/extraction_golden.json
-.venv-ref/bin/python scripts/gen_hash.py > tests/fixtures/hash_golden.json
-.venv-ref/bin/python scripts/gen_merge.py > tests/fixtures/merge_golden.json
-.venv-ref/bin/python scripts/gen_prompts.py   # src/graph/prompts/*.txt
+python3 -m venv tests/.venvs && tests/.venvs/bin/pip install tiktoken
+
+tests/.venvs/bin/python scripts/gen_chunks.py > tests/fixtures/chunk_golden.json
+tests/.venvs/bin/python scripts/gen_extraction.py > tests/fixtures/extraction_golden.json
+tests/.venvs/bin/python scripts/gen_hash.py > tests/fixtures/hash_golden.json
+tests/.venvs/bin/python scripts/gen_merge.py > tests/fixtures/merge_golden.json
+tests/.venvs/bin/python scripts/gen_prompts.py   # src/graph/prompts/*.txt
 ```
+
+Only `gen_chunks.py` needs the venv (it must tokenize with the real BPE); the
+other four are stdlib-only and run with any `python3`.
 
 ## License
 

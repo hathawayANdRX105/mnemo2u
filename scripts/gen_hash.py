@@ -4,7 +4,7 @@
 Python: `md5(str((model, messages)).encode())` — `_utils.py:216`.
 
 Usage:
-    .venv-ref/bin/python scripts/gen_hash.py > tests/fixtures/hash_golden.json
+    tests/.venvs/bin/python scripts/gen_hash.py > tests/fixtures/hash_golden.json
 """
 
 import hashlib

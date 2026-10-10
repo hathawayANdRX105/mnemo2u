@@ -10,7 +10,7 @@
 
 1. **功能行为等价、数据流等价、查询语义等价**；不逐行翻译 Python，忽略其调试/打印脚手架。
 2. 判定手段：
-   - **确定性函数**（切块/合并/截断/ID/CSV 组装/JSON 容错解析/社区 schema）：本地可跑参考实现（venv：tiktoken + networkx + graspologic），产出 golden 对照，Rust 输出逐条相等。
+   - **确定性函数**（切块/合并/截断/ID/CSV 组装/JSON 容错解析/社区 schema）：本地可跑参考实现（venv 在 `tests/.venvs/`，只需 `tiktoken`；参考函数已抄成 stdlib 独立脚本），产出 golden 对照，Rust 输出逐条相等。
    - **LLM 语义部分**：同一 mock 响应喂双端，断言产出的中间结构（`maybe_nodes`/`maybe_edges`/报告 JSON/查询上下文文本）相等。
    - **端到端**：全离线（mock LLM + 本地嵌入），快照断言。
 3. 允许偏差必须进 §8 偏差表（例：Leiden 实现差异、嵌入模型差异），不得静默漂移。
@@ -117,7 +117,7 @@
 - [x] R1.TAC1（`tests/chunk_parity.rs`：11 chunk 逐字段相等，含中文混合与跨多字节窗口边界）。
 - [x] R1.TAC2 存储契约：turso / lancedb / turso_graph 三后端（写读/批量/scope/错误分类/重开恢复）——`tests/{turso_kv,lancedb_vector,turso_graph}.rs`，CI 全绿。
 - [x] R1.TAC3（`tests/extraction_mock.rs` gleaning/if_loop 分支、`tests/extraction_parity.rs` 解析、`tests/merge_parity.rs` 合并）。
-- [~] R1.TAC4 部分完成：`tests/community_reports.rs` 覆盖 schema 层次 / 预算分配 / JSON→Markdown，CSV 字节形态已按参考规则钉死（`CsvCell`）；**但与真实 Python 双端逐字符相等未闭合**——本地 `.venv-ref` 已删，无法重跑参考实现生成报告 golden（见 §9 未完成）。
+- [~] R1.TAC4 部分完成：`tests/community_reports.rs` 覆盖 schema 层次 / 预算分配 / JSON→Markdown，CSV 字节形态已按参考规则钉死（`CsvCell`）；**但与真实 Python 双端逐字符相等未闭合**——重跑参考实现需要的 venv 未建（位置约定 `tests/.venvs/`），无法生成报告 golden（见 §9 未完成）。
 - [x] R1.TAC5（`tests/pipeline_e2e.rs` 三模式 only_need_context 快照；fail 路径见 naive/local 禁用测试）。
 - [x] R1.TAC6 提交协议：repair 队列（`tests/repair_queue.rs`：派生失败→入队→flush 逐条重放→失败留队）+ 重建等价（`tests/durable_e2e.rs`：删 lancedb 派生库→从 text_chunks 重建→检索一致）。未做：turso 提交前/后的崩溃点注入（需故障注入 harness，R1 未排）。
 - [x] R1.TAC7 e2e 离线全链（mock LLM，`cargo test` 无网络）：`tests/pipeline_e2e.rs`（内存后端）+ `tests/durable_e2e.rs`（耐久三后端、跨"进程"重启、派生库重建）。
@@ -175,7 +175,7 @@
   - §8.6 审计修的真 bug：CSV 单元格类型（`CsvCell{Text,Int,Float}`）——参考仓数字裸输出/`format_row` 逐格加引号，旧实现把两种形态抹成一种，导致报告上下文字节错 + 截断预算度量错；已字节钉死。
   - 测试面（14 个 target / 43 用例）：`tests/{chunk_parity,hash_parity,extraction_parity,merge_parity,extraction_mock,llm_cache,community_reports,pipeline_e2e,lancedb_vector,turso_graph,turso_kv,repair_queue,durable_e2e}.rs` + lib 单测。
 - 未完成：
-  - **T8/TAC4 双端实测**：报告上下文与真实 Python 逐字符相等。规则已对齐 + 字节钉死，但本地 `.venv-ref` 已删除，无法重跑参考实现；需重建 venv 后补 `scripts/gen_report.py` + fixture（纯 stdlib + tiktoken，不依赖 networkx/graspologic）。
+  - **T8/TAC4 双端实测**：报告上下文与真实 Python 逐字符相等。规则已对齐 + 字节钉死，但需先建 `tests/.venvs/`（`pip install tiktoken`）再补 `scripts/gen_report.py` + fixture（纯 stdlib + tiktoken，不依赖 networkx/graspologic）。
   - FAC6：`only_need_context` 与参考实现的**人工抽查**（自动快照已有，缺 3 例人工对账）。
   - T10 判据里的 turso 崩溃点注入（提交前/后半状态）——需故障注入 harness，R1 未排。
   - 实体向量重建入口（当前走修复队列或重跑 insert；`rebuild_chunk_vectors` 只覆盖 chunk 索引）。

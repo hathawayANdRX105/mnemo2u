@@ -6,7 +6,7 @@ imports of its own) and writes every prompt we port into
 `src/graph/prompts/<key>.txt`, preserving the text byte for byte.
 
 Usage:
-    .venv-ref/bin/python scripts/gen_prompts.py
+    tests/.venvs/bin/python scripts/gen_prompts.py
 """
 
 import importlib.util

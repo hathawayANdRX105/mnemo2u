@@ -1,7 +1,8 @@
 target/
 todo/refs/
-.venv-ref/
-
 .codegraph/
+
+# golden-fixture regeneration venv (test-only tool, see README)
+tests/.venvs/
 .ruff_cache/
 __pycache__/
