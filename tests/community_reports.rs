@@ -155,3 +155,46 @@ async fn reports_are_generated_per_community_and_formatted() {
     }));
     assert_eq!(formatted, "# T\n\nS\n\n## plain string finding\n\n");
 }
+
+/// CSV bytes are part of the ported contract: the reference emits numeric cells
+/// **unquoted** (`enclose_string_with_quotes` returns `str(n)` for numbers) and
+/// text cells quoted, joined with `",\t"`; the truncation key (`format_row`)
+/// quotes *every* cell and doubles inner quotes. These two forms used to be
+/// flattened to one, silently changing both the measured budget and the emitted
+/// context, so pin them.
+#[test]
+fn csv_cells_quote_text_and_leave_numbers_bare() {
+    use mnemo2u::core::text::{csv_measurement_row, list_of_list_to_csv, py_repr_float, CsvCell};
+
+    let rows = vec![
+        vec![
+            CsvCell::text("id"),
+            CsvCell::text("entity"),
+            CsvCell::text("type"),
+            CsvCell::text("description"),
+            CsvCell::text("degree"),
+        ],
+        vec![
+            CsvCell::int(0),
+            CsvCell::text("\"ACME\""),
+            CsvCell::text("\"ORGANIZATION\""),
+            CsvCell::text("Acme makes things."),
+            CsvCell::int(3),
+        ],
+    ];
+    assert_eq!(
+        list_of_list_to_csv(&rows),
+        "\"id\",\t\"entity\",\t\"type\",\t\"description\",\t\"degree\"\n\
+         0,\t\"ACME\",\t\"ORGANIZATION\",\t\"Acme makes things.\",\t3"
+    );
+
+    let data_row = &rows[1];
+    assert_eq!(
+        csv_measurement_row(data_row),
+        "\"0\",\"\"\"ACME\"\"\",\"\"\"ORGANIZATION\"\"\",\"Acme makes things.\",\"3\""
+    );
+
+    // Python `str(float)`: 6.0 prints as "6.0", not "6".
+    assert_eq!(py_repr_float(6.0), "6.0");
+    assert_eq!(py_repr_float(0.5), "0.5");
+}

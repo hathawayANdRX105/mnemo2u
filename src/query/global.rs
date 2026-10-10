@@ -9,7 +9,7 @@ use tokio::task::JoinSet;
 
 use crate::core::concurrency::Limiter;
 use crate::core::rag::{CommunitySchema, QueryParam};
-use crate::core::text::{list_of_list_to_csv, truncate_list_by_token_size};
+use crate::core::text::{list_of_list_to_csv, truncate_list_by_token_size, CsvCell};
 use crate::core::traits::GraphSnapshot;
 use crate::graph::community::{build_schema_from_snapshot, ClusterRef};
 use crate::graph::prompts::{FAIL_RESPONSE, GLOBAL_MAP_RAG_POINTS, GLOBAL_REDUCE_RAG_RESPONSE};
@@ -152,17 +152,17 @@ async fn map_communities(
         let query = query.to_string();
         set.spawn(async move {
             let mut rows = vec![vec![
-                "id".to_string(),
-                "content".to_string(),
-                "rating".to_string(),
-                "importance".to_string(),
+                CsvCell::text("id"),
+                CsvCell::text("content"),
+                CsvCell::text("rating"),
+                CsvCell::text("importance"),
             ]];
             for (position, community) in group.iter().enumerate() {
                 rows.push(vec![
-                    position.to_string(),
-                    community.report_string.clone().unwrap_or_default(),
-                    report_rating(community).to_string(),
-                    community.occurrence.to_string(),
+                    CsvCell::int(position as i64),
+                    CsvCell::text(community.report_string.clone().unwrap_or_default()),
+                    CsvCell::float(report_rating(community)),
+                    CsvCell::float(community.occurrence),
                 ]);
             }
             let context = list_of_list_to_csv(&rows);

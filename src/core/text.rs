@@ -233,17 +233,85 @@ pub fn enclose_string_with_quotes(content: &str) -> String {
     format!("\"{stripped}\"")
 }
 
+/// One CSV cell.
+///
+/// The reference distinguishes numbers from text: `enclose_string_with_quotes`
+/// (`_utils.py:230-238`) returns `str(n)` **bare** for anything that is an
+/// `int`/`float`, and only text cells get wrapped in quotes. Getting this wrong
+/// changes the report context byte for byte, so cells carry their kind.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CsvCell {
+    Text(String),
+    Int(i64),
+    Float(f64),
+}
+
+impl CsvCell {
+    pub fn text(value: impl Into<String>) -> Self {
+        Self::Text(value.into())
+    }
+
+    pub fn int(value: i64) -> Self {
+        Self::Int(value)
+    }
+
+    pub fn float(value: f64) -> Self {
+        Self::Float(value)
+    }
+
+    /// `enclose_string_with_quotes`: numbers bare, text quoted.
+    fn cell(&self) -> String {
+        match self {
+            Self::Text(value) => enclose_string_with_quotes(value),
+            Self::Int(value) => value.to_string(),
+            Self::Float(value) => py_repr_float(*value),
+        }
+    }
+
+    /// `format_row` in `_pack_single_community_describe` (`_op.py:549`): every
+    /// cell quoted and inner quotes doubled, comma-joined — this is the form
+    /// the truncation budget measures.
+    fn measurement(&self) -> String {
+        match self {
+            Self::Text(value) => format!("\"{}\"", value.replace('"', "\"\"")),
+            Self::Int(value) => format!("\"{value}\""),
+            Self::Float(value) => format!("\"{}\"", py_repr_float(*value).replace('"', "\"\"")),
+        }
+    }
+}
+
+/// Python `str(float)`: `6.0` prints as `6.0`, not `6`.
+pub fn py_repr_float(value: f64) -> String {
+    if value.is_finite() && value.fract() == 0.0 {
+        format!("{value:.1}")
+    } else {
+        format!("{value}")
+    }
+}
+
+fn csv_row(cells: &[CsvCell]) -> String {
+    cells
+        .iter()
+        .map(CsvCell::cell)
+        .collect::<Vec<_>>()
+        .join(",\t")
+}
+
 /// `list_of_list_to_csv` — `_utils.py:234` (`",\t"` join, `"\n"` rows).
-pub fn list_of_list_to_csv(rows: &[Vec<String>]) -> String {
+pub fn list_of_list_to_csv(rows: &[Vec<CsvCell>]) -> String {
     rows.iter()
-        .map(|row| {
-            row.iter()
-                .map(|cell| enclose_string_with_quotes(cell))
-                .collect::<Vec<_>>()
-                .join(",\t")
-        })
+        .map(|row| csv_row(row))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// `format_row` — the truncation measurement key (`_op.py:549`).
+pub fn csv_measurement_row(cells: &[CsvCell]) -> String {
+    cells
+        .iter()
+        .map(CsvCell::measurement)
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// `extract_first_complete_json` — `_utils.py:34` (brace-stack scanner).
@@ -457,14 +525,17 @@ mod tests {
 
     #[test]
     fn csv_rows_match_reference_format() {
+        // Numbers stay bare, text gets quoted — the reference's
+        // `enclose_string_with_quotes` branches on the cell type.
         let rows = vec![
-            vec!["id".to_string(), "entity".to_string()],
-            vec!["0".to_string(), "ACME".to_string()],
+            vec![CsvCell::text("id"), CsvCell::text("entity")],
+            vec![CsvCell::int(0), CsvCell::text("ACME")],
         ];
         assert_eq!(
             list_of_list_to_csv(&rows),
-            "\"id\",\t\"entity\"\n\"0\",\t\"ACME\""
+            "\"id\",\t\"entity\"\n0,\t\"ACME\""
         );
+        assert_eq!(csv_measurement_row(&rows[1]), "\"0\",\"ACME\"");
     }
 
     #[test]

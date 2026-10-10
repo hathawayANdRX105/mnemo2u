@@ -34,7 +34,7 @@
 | `_llm.py::openai_complete_if_cache` (38-64)、`gpt_4o_complete`/`gpt_4o_mini_complete` (~126-153)、`openai_embedding` (224-235) | LLM/嵌入客户端 + 缓存 | `src/llm/{openai,cache,mock}.rs` |
 | `base.py::QueryParam` (10-29)、`BaseKVStorage` (93-113)、`BaseVectorStorage` (78-89)、`BaseGraphStorage` (117-186) | 接口与默认查询参数 | `src/core/traits.rs`（已建，差集补 T1） |
 | `_storage/kv_json.py` (46)、`vdb_nanovectordb.py` (68)、`gdb_networkx.py` (268) | 三类存储参考实现 | `src/store/{turso,turso_graph,lancedb}.rs` |
-| `prompt.py`：`entity_extraction`/`entiti_continue_extraction`/`entiti_if_loop_extraction`/`summarize_entity_descriptions`/`community_report`/`local_rag_response`/`global_map_rag_points`/`global_reduce_rag_response`/`naive_rag_response`/`fail_response` | 提示词（英文，逐字保留） | `src/graph/prompts/<key>.txt`（`prompts.rs` 内 `include_str!`；由 `tools/golden/gen_prompts.py` 从参考仓抽取） |
+| `prompt.py`：`entity_extraction`/`entiti_continue_extraction`/`entiti_if_loop_extraction`/`summarize_entity_descriptions`/`community_report`/`local_rag_response`/`global_map_rag_points`/`global_reduce_rag_response`/`naive_rag_response`/`fail_response` | 提示词（英文，逐字保留） | `src/graph/prompts/<key>.txt`（`prompts.rs` 内 `include_str!`；由 `scripts/gen_prompts.py` 从参考仓抽取） |
 
 ## 2. 常量与默认值（复刻契约；改动=偏差需登记）
 
@@ -153,12 +153,13 @@
 
 | 面 | 结论 |
 |---|---|
-| 提示词 | 11 个模板 10 个逐字符相同（`claim_extraction` 是参考仓死代码——prompt.py 定义但 `grep` 全仓零调用，不移植） |
+| CSV 文本（**本次修出的真 bug**） | 参考仓 `enclose_string_with_quotes`（`_utils.py:230-238`）对 **Number 返回裸 `str(n)`**、对文本加引号；`_pack_single_community_describe` 的截断度量键 `format_row`（`_op.py:549`）则**逐格加引号并双写内层引号**。旧实现把这两种形态抹成一种（全文本化 + `row.join(",")`）→ 报告上下文字节错、预算度量错，且旧测试一个字节都没钉。已修为 `CsvCell{Text,Int,Float}` + `py_repr_float`（Python `str(6.0)="6.0"`），覆盖 4 个调用点（reports 子社区/节点/边、local 实体/关系/社区/文本、global map）。| 11 个模板 10 个逐字符相同（`claim_extraction` 是参考仓死代码——prompt.py 定义但 `grep` 全仓零调用，不移植） |
 | 查询参数 | `QueryParam` 12 个字段全部被消费（`level/top_k/response_type/*_max_token_*` 等） |
 | facade 配置 | `chunk_*/extract/merge/community/report` 全对齐；`enable_naive_rag` 早有 |
 | **缺口 1（已修）** | `enable_local` 未移植：参考仓用它同时 gate `entities_vdb` 构建与 local 查询；已补（不发实体向量 + local 报错） |
 | **缺口 2（已修）** | `embedding_batch_num` 是死配置：参考仓按 32 分批 embed，我的 store 一次性 embed；已在 pipeline upsert 处分批 |
 | 存储 | 3 接口 → turso KV / turso 图 / lancedb，均有契约测试 |
+| 已修的 gleaning parity 隐患 | `pack_user_ass_to_openai_messages` 的 user/assistant history 构造逐条对上（`_op.py:319-323`）；extraction 三个调用均无 system prompt（参考 `best_model_func` 不绑 system） |
 | 未移植 | claim_extraction（参考死代码）、bedrock/azure provider（不在 R1 范围）、huggingface tokenizer（tiktoken 口径） |
 
 ## 9. 接续记录
@@ -166,7 +167,7 @@
 - 已完成：
   - 存储后端三件齐 + 每件一份契约测试：`turso`（KV 真值，`tests/turso_kv.rs`）、`turso_graph`（图邻接表，`tests/turso_graph.rs`）、`lancedb`（向量，`tests/lancedb_vector.rs`）。
   - T1 依赖入册（`turso`/`lancedb`/`leiden-rs`/`tiktoken-rs`/`md-5`/`regex`/`tokio`/`reqwest`/`petgraph`；kuzu 已按 §8.5 移除，不再是依赖）。
-  - T2 切块器 + golden 对照（`tools/golden/gen_chunks.py`，11 chunk 逐字段相等）、T3 LLM/嵌入客户端 + 参数哈希缓存（golden 4 例）、T4 抽取管线（gleaning + 解析，golden 5 例）、T5 合并（节点/边 + 摘要三档，golden 4 例）、T7 社区检测（leiden-rs 层次社区 + schema）、T8 社区报告（预算分配 + JSON→Markdown + 并发分相）、T9 查询三模式（local/global/naive，含 `only_need_context`）、T10 管线（`src/pipeline.rs`，含提交点语义）、内存后端（KV/向量/图）。
+  - T2 切块器 + golden 对照（`scripts/gen_chunks.py`，11 chunk 逐字段相等）、T3 LLM/嵌入客户端 + 参数哈希缓存（golden 4 例）、T4 抽取管线（gleaning + 解析，golden 5 例）、T5 合并（节点/边 + 摘要三档，golden 4 例）、T7 社区检测（leiden-rs 层次社区 + schema）、T8 社区报告（预算分配 + JSON→Markdown + 并发分相）、T9 查询三模式（local/global/naive，含 `only_need_context`）、T10 管线（`src/pipeline.rs`，含提交点语义）、内存后端（KV/向量/图）。
   - T11 提交协议：`src/store/repair.rs` 修复队列（真值先提交 → 派生写失败入队 → `flush` 逐条重放 → 失败留队）+ `Limiter::{in_flight,available}` 可观测；`tests/repair_queue.rs`。
   - T12 全离线 e2e：`tests/pipeline_e2e.rs`（内存后端）+ `tests/durable_e2e.rs`（turso+lancedb+turso_graph 全耐久、跨"进程"重启、删派生库后 `rebuild_chunk_vectors` 重建→检索一致）。
   - §8.6 审计补的两个缺口：`enable_local`（gate 实体向量 + local 查询）、`embedding_batch_num`（分批 embed）。

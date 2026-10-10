@@ -13,8 +13,8 @@ use tokio::task::JoinSet;
 
 use crate::core::rag::CommunitySchema;
 use crate::core::text::{
-    convert_response_to_json, fill_template, list_of_list_to_csv, truncate_list_by_token_size,
-    Tokenizer,
+    convert_response_to_json, csv_measurement_row, fill_template, list_of_list_to_csv,
+    truncate_list_by_token_size, CsvCell, Tokenizer,
 };
 use crate::core::traits::GraphStore;
 use crate::graph::prompts::COMMUNITY_REPORT;
@@ -85,6 +85,31 @@ pub fn community_report_json_to_str(parsed: &Value) -> String {
     format!("# {title}\n\n{summary}\n\n{sections}")
 }
 
+/// `rating` as emitted by the reference: a number when present, else `-1`.
+fn rating_cell(community: &CommunitySchema) -> CsvCell {
+    match community
+        .report_json
+        .as_ref()
+        .and_then(|report| report.get("rating"))
+    {
+        Some(Value::Number(number)) => number
+            .as_i64()
+            .map(CsvCell::int)
+            .or_else(|| number.as_f64().map(CsvCell::float))
+            .unwrap_or_else(|| CsvCell::int(-1)),
+        _ => CsvCell::int(-1),
+    }
+}
+
+/// Degree/rank lives in the last cell of every row (`format_row` input).
+fn row_degree(row: &[CsvCell]) -> i64 {
+    match row.last() {
+        Some(CsvCell::Int(value)) => *value,
+        Some(CsvCell::Float(value)) => *value as i64,
+        _ => 0,
+    }
+}
+
 /// `_pack_single_community_by_sub_communities` (`_op.py:417-461`).
 fn pack_by_sub_communities(
     community: &CommunitySchema,
@@ -112,22 +137,16 @@ fn pack_by_sub_communities(
     );
 
     let sub_fields = ["id", "report", "rating", "importance"];
-    let mut rows = vec![sub_fields.iter().map(|s| s.to_string()).collect::<Vec<_>>()];
+    let mut rows = vec![sub_fields
+        .iter()
+        .map(|name| CsvCell::text(*name))
+        .collect::<Vec<_>>()];
     for (index, community) in sub_rows.iter().enumerate() {
-        let rating = community
-            .report_json
-            .as_ref()
-            .and_then(|report| report.get("rating"))
-            .map(|rating| match rating {
-                Value::Number(number) => number.to_string(),
-                other => other.to_string(),
-            })
-            .unwrap_or_else(|| "-1".to_string());
         rows.push(vec![
-            index.to_string(),
-            community.report_string.clone().unwrap_or_default(),
-            rating,
-            community.occurrence.to_string(),
+            CsvCell::int(index as i64),
+            CsvCell::text(community.report_string.clone().unwrap_or_default()),
+            rating_cell(community),
+            CsvCell::float(community.occurrence),
         ]);
     }
     let describe = list_of_list_to_csv(&rows);
@@ -208,62 +227,66 @@ pub async fn pack_single_community_describe(
         .await
         .map_err(|e| LlmError::Transport(format!("graph read: {e}")))?;
 
-    let mut node_rows: Vec<Vec<String>> = Vec::new();
+    let mut node_rows: Vec<Vec<CsvCell>> = Vec::new();
     for (index, (name, data)) in nodes_in_order.iter().zip(nodes_data.iter()).enumerate() {
         if contain_nodes.contains(name) {
             continue;
         }
         let data = data.clone().unwrap_or_else(|| json!({}));
         node_rows.push(vec![
-            index.to_string(),
-            name.clone(),
-            data.get("entity_type")
-                .and_then(Value::as_str)
-                .unwrap_or("UNKNOWN")
-                .to_string(),
-            data.get("description")
-                .and_then(Value::as_str)
-                .unwrap_or("UNKNOWN")
-                .to_string(),
-            node_degrees[index].to_string(),
+            CsvCell::int(index as i64),
+            CsvCell::text(name.clone()),
+            CsvCell::text(
+                data.get("entity_type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("UNKNOWN"),
+            ),
+            CsvCell::text(
+                data.get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or("UNKNOWN"),
+            ),
+            CsvCell::int(node_degrees[index]),
         ]);
     }
-    let mut edge_rows: Vec<Vec<String>> = Vec::new();
+    let mut edge_rows: Vec<Vec<CsvCell>> = Vec::new();
     for (index, ((src, tgt), data)) in edges_in_order.iter().zip(edges_data.iter()).enumerate() {
         if contain_edges.contains(&(src.clone(), tgt.clone())) {
             continue;
         }
         let data = data.clone().unwrap_or_else(|| json!({}));
         edge_rows.push(vec![
-            index.to_string(),
-            src.clone(),
-            tgt.clone(),
-            data.get("description")
-                .and_then(Value::as_str)
-                .unwrap_or("UNKNOWN")
-                .to_string(),
-            edge_degrees[index].to_string(),
+            CsvCell::int(index as i64),
+            CsvCell::text(src.clone()),
+            CsvCell::text(tgt.clone()),
+            CsvCell::text(
+                data.get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or("UNKNOWN"),
+            ),
+            CsvCell::int(edge_degrees[index]),
         ]);
     }
 
-    node_rows.sort_by_key(|row| std::cmp::Reverse(row[4].parse::<i64>().unwrap_or(0)));
-    edge_rows.sort_by_key(|row| std::cmp::Reverse(row[4].parse::<i64>().unwrap_or(0)));
+    node_rows.sort_by_key(|row| std::cmp::Reverse(row_degree(row)));
+    edge_rows.sort_by_key(|row| std::cmp::Reverse(row_degree(row)));
+    let format_row = |row: &Vec<CsvCell>| csv_measurement_row(row);
 
     let header_tokens = tokenizer.token_len(&format!(
         "{}\n{}",
         list_of_list_to_csv(&[vec![
-            "id".to_string(),
-            "entity".to_string(),
-            "type".to_string(),
-            "description".to_string(),
-            "degree".to_string()
+            CsvCell::text("id"),
+            CsvCell::text("entity"),
+            CsvCell::text("type"),
+            CsvCell::text("description"),
+            CsvCell::text("degree"),
         ]]),
         list_of_list_to_csv(&[vec![
-            "id".to_string(),
-            "source".to_string(),
-            "target".to_string(),
-            "description".to_string(),
-            "rank".to_string()
+            CsvCell::text("id"),
+            CsvCell::text("source"),
+            CsvCell::text("target"),
+            CsvCell::text("description"),
+            CsvCell::text("rank"),
         ]])
     ));
 
@@ -278,24 +301,23 @@ pub async fn pack_single_community_describe(
 
     let nodes_budget = (data_budget as f64 * node_ratio) as usize;
     let edges_budget = (data_budget as f64 * edge_ratio) as usize;
-    let row_text = |row: &Vec<String>| row.join(",");
-    let nodes_final = truncate_list_by_token_size(&node_rows, row_text, nodes_budget, tokenizer);
-    let edges_final = truncate_list_by_token_size(&edge_rows, row_text, edges_budget, tokenizer);
+    let nodes_final = truncate_list_by_token_size(&node_rows, format_row, nodes_budget, tokenizer);
+    let edges_final = truncate_list_by_token_size(&edge_rows, format_row, edges_budget, tokenizer);
 
     let mut entity_rows = vec![vec![
-        "id".to_string(),
-        "entity".to_string(),
-        "type".to_string(),
-        "description".to_string(),
-        "degree".to_string(),
+        CsvCell::text("id"),
+        CsvCell::text("entity"),
+        CsvCell::text("type"),
+        CsvCell::text("description"),
+        CsvCell::text("degree"),
     ]];
     entity_rows.extend(nodes_final);
     let mut relation_rows = vec![vec![
-        "id".to_string(),
-        "source".to_string(),
-        "target".to_string(),
-        "description".to_string(),
-        "rank".to_string(),
+        CsvCell::text("id"),
+        CsvCell::text("source"),
+        CsvCell::text("target"),
+        CsvCell::text("description"),
+        CsvCell::text("rank"),
     ]];
     relation_rows.extend(edges_final);
 

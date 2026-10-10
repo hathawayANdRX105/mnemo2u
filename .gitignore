@@ -3,3 +3,5 @@ todo/refs/
 .venv-ref/
 
 .codegraph/
+.ruff_cache/
+__pycache__/

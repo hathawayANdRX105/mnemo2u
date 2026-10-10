@@ -11,7 +11,7 @@ Notes on set ordering: the reference builds `source_id` by joining a Python
 records `source_id` as a *sorted list*, and the Rust test compares sets.
 
 Usage:
-    .venv-ref/bin/python tools/golden/gen_merge.py > tests/fixtures/merge_golden.json
+    .venv-ref/bin/python scripts/gen_merge.py > tests/fixtures/merge_golden.json
 """
 
 import copy

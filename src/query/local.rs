@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use serde_json::{json, Value};
 
 use crate::core::rag::{CommunitySchema, QueryParam};
-use crate::core::text::{list_of_list_to_csv, truncate_list_by_token_size, GRAPH_FIELD_SEP};
+use crate::core::text::{
+    list_of_list_to_csv, truncate_list_by_token_size, CsvCell, GRAPH_FIELD_SEP,
+};
 use crate::graph::prompts::{FAIL_RESPONSE, LOCAL_RAG_RESPONSE};
 use crate::llm::{LlmError, LlmResult, ModelOptions};
 use crate::query::QueryStores;
@@ -96,69 +98,51 @@ pub async fn build_local_query_context(
     let relations = most_related_edges(stores, &node_datas, param).await?;
 
     let mut entity_rows = vec![vec![
-        "id".to_string(),
-        "entity".to_string(),
-        "type".to_string(),
-        "description".to_string(),
-        "rank".to_string(),
+        CsvCell::text("id"),
+        CsvCell::text("entity"),
+        CsvCell::text("type"),
+        CsvCell::text("description"),
+        CsvCell::text("rank"),
     ]];
     for (index, node) in node_datas.iter().enumerate() {
         entity_rows.push(vec![
-            index.to_string(),
-            node["entity_name"]
-                .as_str()
-                .unwrap_or("UNKNOWN")
-                .to_string(),
-            node["entity_type"]
-                .as_str()
-                .unwrap_or("UNKNOWN")
-                .to_string(),
-            node["description"]
-                .as_str()
-                .unwrap_or("UNKNOWN")
-                .to_string(),
-            node["rank"].to_string(),
+            CsvCell::int(index as i64),
+            CsvCell::text(node["entity_name"].as_str().unwrap_or("UNKNOWN")),
+            CsvCell::text(node["entity_type"].as_str().unwrap_or("UNKNOWN")),
+            CsvCell::text(node["description"].as_str().unwrap_or("UNKNOWN")),
+            CsvCell::int(node["rank"].as_i64().unwrap_or_default()),
         ]);
     }
     let mut relation_rows = vec![vec![
-        "id".to_string(),
-        "source".to_string(),
-        "target".to_string(),
-        "description".to_string(),
-        "weight".to_string(),
-        "rank".to_string(),
+        CsvCell::text("id"),
+        CsvCell::text("source"),
+        CsvCell::text("target"),
+        CsvCell::text("description"),
+        CsvCell::text("weight"),
+        CsvCell::text("rank"),
     ]];
     for (index, relation) in relations.iter().enumerate() {
         relation_rows.push(vec![
-            index.to_string(),
-            relation["src_tgt"][0]
-                .as_str()
-                .unwrap_or_default()
-                .to_string(),
-            relation["src_tgt"][1]
-                .as_str()
-                .unwrap_or_default()
-                .to_string(),
-            relation["description"]
-                .as_str()
-                .unwrap_or("UNKNOWN")
-                .to_string(),
-            relation["weight"].to_string(),
-            relation["rank"].to_string(),
+            CsvCell::int(index as i64),
+            CsvCell::text(relation["src_tgt"][0].as_str().unwrap_or_default()),
+            CsvCell::text(relation["src_tgt"][1].as_str().unwrap_or_default()),
+            CsvCell::text(relation["description"].as_str().unwrap_or("UNKNOWN")),
+            CsvCell::float(relation["weight"].as_f64().unwrap_or_default()),
+            CsvCell::int(relation["rank"].as_i64().unwrap_or_default()),
         ]);
     }
-    let mut community_rows = vec![vec!["id".to_string(), "content".to_string()]];
+    let mut community_rows = vec![vec![CsvCell::text("id"), CsvCell::text("content")]];
     for (index, community) in communities.iter().enumerate() {
         community_rows.push(vec![
-            index.to_string(),
-            community.report_string.clone().unwrap_or_default(),
+            CsvCell::int(index as i64),
+            CsvCell::text(community.report_string.clone().unwrap_or_default()),
         ]);
     }
-    let mut text_rows = vec![vec!["id".to_string(), "content".to_string()]];
+    let mut text_rows = vec![vec![CsvCell::text("id"), CsvCell::text("content")]];
     for (index, unit) in text_units.iter().enumerate() {
         text_rows.push(vec![
-            index.to_string(),
-            unit["content"].as_str().unwrap_or_default().to_string(),
+            CsvCell::int(index as i64),
+            CsvCell::text(unit["content"].as_str().unwrap_or_default()),
         ]);
     }
 

@@ -6,7 +6,7 @@ imports of its own) and writes every prompt we port into
 `src/graph/prompts/<key>.txt`, preserving the text byte for byte.
 
 Usage:
-    .venv-ref/bin/python tools/golden/gen_prompts.py
+    .venv-ref/bin/python scripts/gen_prompts.py
 """
 
 import importlib.util
@@ -15,7 +15,7 @@ import pathlib
 import re
 import sys
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 REF_PROMPT = ROOT / "todo" / "refs" / "nano-graphrag" / "nano_graphrag" / "prompt.py"
 OUT_DIR = ROOT / "src" / "graph" / "prompts"
 

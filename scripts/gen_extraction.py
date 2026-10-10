@@ -8,7 +8,7 @@ The functions below are copied from
 standard library is needed, so this runs without the reference package.
 
 Usage:
-    .venv-ref/bin/python tools/golden/gen_extraction.py > tests/fixtures/extraction_golden.json
+    .venv-ref/bin/python scripts/gen_extraction.py > tests/fixtures/extraction_golden.json
 """
 
 import html
