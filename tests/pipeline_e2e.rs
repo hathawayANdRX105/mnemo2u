@@ -239,3 +239,99 @@ async fn naive_mode_is_rejected_when_disabled() {
         .await;
     assert!(result.is_err(), "naive RAG must fail loudly when disabled");
 }
+
+#[tokio::test]
+async fn local_mode_is_rejected_and_skips_entity_embeddings_when_disabled() {
+    // `enable_local: false` (`graphrag.py:58`): the reference neither builds
+    // `entities_vdb` nor allows local queries.
+    let embedder: Arc<dyn mnemo2u::core::traits::Embedder> = Arc::new(MockEmbedder::new());
+
+    let routed = Arc::new(RoutedLlm::new(
+        "mock-best",
+        vec![
+            ("identify all entities".to_string(), EXTRACTION.to_string()),
+            ("MANY entities were missed".to_string(), GLEAN.to_string()),
+            (
+                "general information discovery".to_string(),
+                REPORT.to_string(),
+            ),
+        ],
+    ));
+    let pipeline = Pipeline {
+        full_docs: Arc::new(MemoryKv::new()),
+        text_chunks: Arc::new(MemoryKv::new()),
+        community_reports: Arc::new(MemoryKv::new()),
+        graph: Arc::new(MemoryGraph::new()),
+        entities_vdb: Arc::new(MemoryVector::new(embedder.clone(), 0.2)),
+        chunks_vdb: None,
+        llm: CachedLlm::new(routed, Arc::new(MemoryKv::new())),
+        tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
+        options: PipelineOptions {
+            enable_local: false,
+            ..PipelineOptions::default()
+        },
+        repair: Arc::new(RepairQueue::new(Arc::new(MemoryKv::new()))),
+    };
+
+    let outcome = pipeline
+        .insert(vec!["ACME acquired Beta Labs in 2024.".to_string()])
+        .await
+        .expect("insert");
+    assert!(matches!(
+        outcome,
+        InsertOutcome::Inserted { entities: 2, .. }
+    ));
+
+    // The store exists but was never written: no entity was embedded.
+    let hits = pipeline.entities_vdb.query("ACME", 5).await.expect("query");
+    assert!(
+        hits.is_empty(),
+        "enable_local=false must not embed entities"
+    );
+
+    // Local queries fail like the reference's guard instead of returning
+    // something fabricated.
+    let result = pipeline
+        .query(
+            "ACME",
+            &QueryParam {
+                mode: QueryMode::Local,
+                ..QueryParam::default()
+            },
+        )
+        .await;
+    assert!(result.is_err(), "local mode must fail loudly when disabled");
+}
+
+#[tokio::test]
+async fn embedding_batch_size_one_matches_the_default_batch() {
+    // `embedding_batch_num` splits the embed calls; the result must not depend
+    // on the split (same mock embedder, same rows).
+    async fn run_with_batch(batch: usize) -> String {
+        let (mut pipeline, _) = build_pipeline(false);
+        pipeline.options.embedding_batch_num = batch;
+        pipeline
+            .insert(vec![
+                "ACME acquired Beta Labs in 2024.".to_string(),
+                "Beta Labs builds robots for ACME.".to_string(),
+            ])
+            .await
+            .expect("insert");
+        pipeline
+            .query(
+                "ACME",
+                &QueryParam {
+                    mode: QueryMode::Local,
+                    only_need_context: true,
+                    ..QueryParam::default()
+                },
+            )
+            .await
+            .expect("local query")
+    }
+
+    let default = run_with_batch(32).await;
+    let single = run_with_batch(1).await;
+    assert_eq!(default, single, "batching must not change retrieval");
+    assert!(default.contains("ACME"), "local context: {default}");
+}

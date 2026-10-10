@@ -17,7 +17,7 @@ use tracing::warn;
 
 use std::sync::Arc;
 
-use crate::core::rag::{Chunk, DocRecord, EntityRecord, QueryParam, RelationRecord};
+use crate::core::rag::{Chunk, DocRecord, EntityRecord, QueryMode, QueryParam, RelationRecord};
 use crate::core::text::{compute_mdhash_id, Tokenizer};
 use crate::core::traits::{
     GraphStore, KvStore, Result as StoreResult, StoreError, VectorRow, VectorStore,
@@ -50,6 +50,10 @@ pub struct PipelineOptions {
     pub report: ReportOptions,
     /// `enable_naive_rag` (`graphrag.py:74`, default false).
     pub enable_naive_rag: bool,
+    /// `enable_local` (`graphrag.py:58`, default true). False skips entity
+    /// embeddings entirely (`entities_vdb` is not built) and makes local queries
+    /// fail like the reference's `aquery` guard.
+    pub enable_local: bool,
     pub best_model_max_async: usize,
     pub embedding_batch_num: usize,
 }
@@ -64,6 +68,7 @@ impl Default for PipelineOptions {
             community: CommunityOptions::default(),
             report: ReportOptions::default(),
             enable_naive_rag: false,
+            enable_local: true,
             best_model_max_async: 16,
             embedding_batch_num: 32,
         }
@@ -117,6 +122,12 @@ impl Pipeline {
     }
 
     pub async fn query(&self, query: &str, param: &QueryParam) -> LlmResult<String> {
+        // Mirrors the reference's `aquery` guard (`graphrag.py:237-240`).
+        if param.mode == QueryMode::Local && !self.options.enable_local {
+            return Err(crate::llm::LlmError::Transport(
+                "enable_local is False, cannot query in local mode".to_string(),
+            ));
+        }
         self.query_stores().query(query, param).await
     }
 
@@ -174,11 +185,13 @@ impl Pipeline {
                         meta: serde_json::to_value(chunk).expect("chunk serializes"),
                     })
                     .collect();
-                if let Err(error) = chunks_vdb.upsert(rows.clone()).await {
-                    // Naive RAG is an optional arm; a failure here defers to the
-                    // repair queue instead of aborting the ingest.
-                    self.queue_vectors(RepairTarget::ChunkVector, &rows).await?;
-                    warn!(%error, rows = rows.len(), "chunk vector write deferred to repair");
+                for batch in rows.chunks(self.options.embedding_batch_num.max(1)) {
+                    if let Err(error) = chunks_vdb.upsert(batch.to_vec()).await {
+                        // Naive RAG is an optional arm; a failure here defers to
+                        // the repair queue instead of aborting the ingest.
+                        self.queue_vectors(RepairTarget::ChunkVector, batch).await?;
+                        warn!(%error, rows = batch.len(), "chunk vector write deferred to repair");
+                    }
                 }
             }
         }
@@ -230,11 +243,17 @@ impl Pipeline {
             }
         }
 
-        let vector_rows = entity_vector_rows(&merged_nodes);
-        if let Err(error) = self.entities_vdb.upsert(vector_rows.clone()).await {
-            self.queue_vectors(RepairTarget::EntityVector, &vector_rows)
-                .await?;
-            warn!(%error, rows = vector_rows.len(), "entity vector write deferred to repair");
+        // The reference only builds `entities_vdb` when `enable_local` is set
+        // (`graphrag.py:206-214`), so with it off no entity is ever embedded.
+        if self.options.enable_local {
+            let vector_rows = entity_vector_rows(&merged_nodes);
+            for batch in vector_rows.chunks(self.options.embedding_batch_num.max(1)) {
+                if let Err(error) = self.entities_vdb.upsert(batch.to_vec()).await {
+                    self.queue_vectors(RepairTarget::EntityVector, batch)
+                        .await?;
+                    warn!(%error, rows = batch.len(), "entity vector write deferred to repair");
+                }
+            }
         }
 
         let communities = detect_communities(self.graph.as_ref(), &self.options.community).await?;
