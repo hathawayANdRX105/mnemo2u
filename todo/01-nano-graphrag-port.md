@@ -128,6 +128,22 @@
 | 嵌入模型 | OpenAI `text-embedding-3-small` 1536d | fastembed 本地（bge-small 系） | 离线要求；阈值 0.2 为 OpenAI 标定，需在 R6 重标 |
 | 并发原语 | `limit_async_func_call` 自旋假信号量 | tokio `Semaphore` | 语义等价（上限控制），实现不同 |
 | 图遍历/存储 | networkx 内存图 | turso 邻接表（SQL 度数/邻接） | 语义等价（批量/度数/邻接顺序 API 对齐）；R2 需要多跳/PageRank 时可换图引擎 |
+| 抽取内嵌 entity_vdb upsert | `extract_entities` 内做 `entity_vdb.upsert` | pipeline 在 merge 循环后统一 upsert | 数据与顺序等价（仍在 clustering 前）；派生写统一走 repair 队列包装 |
+| merge 并发 | `asyncio.gather` 并发 merge 节点/边 | 顺序 merge | merge 之间有图状态依赖，顺序更可复现；抽取本身仍并发（`Limiter`） |
+
+## 8.6 端口审计（2026-10-10，codegraph + 逐函数对照）
+
+对照 `todo/refs/nano-graphrag/nano_graphrag`（`_op.py` 21 函数、`_utils.py` 16、`_llm.py` 9、`prompt.py` 11 模板、`base.py` 3 存储接口）逐项核对：
+
+| 面 | 结论 |
+|---|---|
+| 提示词 | 11 个模板 10 个逐字符相同（`claim_extraction` 是参考仓死代码——prompt.py 定义但 `grep` 全仓零调用，不移植） |
+| 查询参数 | `QueryParam` 12 个字段全部被消费（`level/top_k/response_type/*_max_token_*` 等） |
+| facade 配置 | `chunk_*/extract/merge/community/report` 全对齐；`enable_naive_rag` 早有 |
+| **缺口 1（已修）** | `enable_local` 未移植：参考仓用它同时 gate `entities_vdb` 构建与 local 查询；已补（不发实体向量 + local 报错） |
+| **缺口 2（已修）** | `embedding_batch_num` 是死配置：参考仓按 32 分批 embed，我的 store 一次性 embed；已在 pipeline upsert 处分批 |
+| 存储 | 3 接口 → turso KV / turso 图 / lancedb，均有契约测试 |
+| 未移植 | claim_extraction（参考死代码）、bedrock/azure provider（不在 R1 范围）、huggingface tokenizer（tiktoken 口径） |
 
 ## 8.5 kuzu 偏离（2026-10-10）
 
