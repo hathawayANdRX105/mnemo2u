@@ -1,9 +1,15 @@
 //! Extraction loop behaviour with a scripted LLM
-//! (`_op.py::_process_single_content`, gleaning + if-loop).
+//! (`lightrag/operate.py::extract_entities`, initial + one gleaning round).
+//!
+//! The reference runs exactly one gleaning round when `max_gleaning > 0` and
+//! skips it when system + history + continue prompt exceed
+//! `MAX_EXTRACT_INPUT_TOKENS` (`operate.py:4252-4286`). There is no yes/no
+//! loop-decision prompt: that was the nano-graphrag flow this port replaced.
 
 use std::sync::Arc;
 
 use mnemo2u::core::rag::Chunk;
+use mnemo2u::core::text::Tokenizer;
 use mnemo2u::graph::extract::{extract_entities, ExtractOptions};
 use mnemo2u::llm::cache::CachedLlm;
 use mnemo2u::llm::mock::MockLlm;
@@ -17,18 +23,21 @@ fn chunk(content: &str) -> (String, Chunk) {
             content: content.to_string(),
             chunk_order_index: 0,
             full_doc_id: "doc-1".to_string(),
+            file_path: "doc-1".to_string(),
         },
     )
 }
 
-// Real extractions end with the completion delimiter (the prompt requires it),
-// and gleaning results are appended verbatim — the mock must do the same or
-// record splitting merges both responses into one.
-const INITIAL: &str = "(\"entity\"<|>\"ACME\"<|>\"ORG\"<|>\"Acme makes things.\")<|COMPLETE|>";
-const GLEAN: &str = "(\"entity\"<|>\"BETA\"<|>\"ORG\"<|>\"Beta labs.\")<|COMPLETE|>";
+// Real extractions end with the completion delimiter (the prompt requires it).
+// The record layout is LightRAG's: no parentheses, `<|#|>` field separator,
+// entities carry 4 fields, relations carry 5 (no strength column).
+const INITIAL: &str = "entity<|#|>ACME<|#|>organization<|#|>Acme makes things.\n\
+                       relation<|#|>ACME<|#|>BETA<|#|>owns<|#|>Acme owns Beta.\n\
+                       <|COMPLETE|>";
+const GLEAN: &str = "entity<|#|>GAMMA<|#|>organization<|#|>Gamma labs.\n<|COMPLETE|>";
 
 #[tokio::test]
-async fn gleaning_runs_with_default_single_pass() {
+async fn gleaning_runs_exactly_one_round() {
     let chunks = vec![chunk("ACME acquired Beta Labs.")];
     let inner = Arc::new(MockLlm::new(
         "gpt-4o",
@@ -38,51 +47,66 @@ async fn gleaning_runs_with_default_single_pass() {
     let options = ExtractOptions {
         max_gleaning: 1,
         best_model_max_async: 4,
+        max_extract_input_tokens: 20_480,
     };
+    let tokenizer = Tokenizer::for_gpt_4o().expect("tokenizer");
 
-    let records = extract_entities(&chunks, &llm, &options)
+    let records = extract_entities(&chunks, &llm, &options, &tokenizer)
         .await
         .expect("extraction");
 
-    assert_eq!(records.nodes.len(), 2, "initial + gleaning records merge");
+    assert_eq!(records.nodes.len(), 2, "initial + gleaning entities merge");
+    assert_eq!(records.edges.len(), 1, "the initial relation is kept");
     assert_eq!(
         inner.calls(),
         2,
-        "max_gleaning=1 means one continue call and no if-loop"
+        "max_gleaning=1 means exactly one continue call, no loop decision"
     );
     let prompts = inner.sent_prompts();
     assert!(
         prompts[0].contains("ACME acquired Beta Labs."),
-        "initial prompt must embed the chunk text"
+        "the initial user prompt embeds the chunk text"
     );
     assert!(
-        prompts[1].contains("missed"),
-        "the continue prompt is sent for gleaning"
+        prompts[1].contains("missed or incorrectly formatted"),
+        "the gleaning call sends the continue prompt"
     );
+    // The relation keywords come from tuple field 3.
+    let edge = &records.edges[0].1[0];
+    assert_eq!(edge.keywords, "owns");
+    assert_eq!(edge.weight, 1.0, "LightRAG tuples carry no strength field");
 }
 
 #[tokio::test]
-async fn if_loop_answer_stops_gleaning() {
+async fn gleaning_skipped_over_the_input_budget() {
     let chunks = vec![chunk("ACME acquired Beta Labs.")];
     let inner = Arc::new(MockLlm::new(
         "gpt-4o",
-        vec![INITIAL.to_string(), GLEAN.to_string(), "No".to_string()],
+        vec![INITIAL.to_string(), GLEAN.to_string()],
     ));
     let llm = CachedLlm::new(inner.clone(), Arc::new(MemoryKv::new()));
     let options = ExtractOptions {
-        max_gleaning: 3,
+        max_gleaning: 1,
         best_model_max_async: 4,
+        // The system prompt alone is larger than this, so the precheck skips
+        // the gleaning call entirely (`operate.py:4252-4286`).
+        max_extract_input_tokens: 1,
     };
+    let tokenizer = Tokenizer::for_gpt_4o().expect("tokenizer");
 
-    let records = extract_entities(&chunks, &llm, &options)
+    let records = extract_entities(&chunks, &llm, &options, &tokenizer)
         .await
         .expect("extraction");
 
-    assert_eq!(records.nodes.len(), 2);
+    assert_eq!(
+        records.nodes.len(),
+        1,
+        "only the initial extraction is used"
+    );
     assert_eq!(
         inner.calls(),
-        3,
-        "a non-\"yes\" if-loop answer stops further gleaning"
+        1,
+        "over-budget gleaning must not reach the model"
     );
 }
 
@@ -97,13 +121,15 @@ async fn identical_chunks_hit_the_cache_across_runs() {
     let options = ExtractOptions {
         max_gleaning: 1,
         best_model_max_async: 4,
+        max_extract_input_tokens: 20_480,
     };
+    let tokenizer = Tokenizer::for_gpt_4o().expect("tokenizer");
 
-    extract_entities(&chunks, &llm, &options)
+    extract_entities(&chunks, &llm, &options, &tokenizer)
         .await
         .expect("first run");
     let after_first = inner.calls();
-    extract_entities(&chunks, &llm, &options)
+    extract_entities(&chunks, &llm, &options, &tokenizer)
         .await
         .expect("second run");
 

@@ -336,6 +336,34 @@ impl GraphStore for TursoGraph {
         conn.execute_batch("COMMIT").await.map_err(backend)
     }
 
+    async fn remove_node(&self, node_id: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "DELETE FROM graph_node WHERE scope = ?1 AND id = ?2",
+            params![self.scope.clone(), node_id.to_string()],
+        )
+        .await
+        .map_err(backend)?;
+        conn.execute(
+            "DELETE FROM graph_edge WHERE scope = ?1 AND (src = ?2 OR dst = ?2)",
+            params![self.scope.clone(), node_id.to_string()],
+        )
+        .await
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    async fn remove_edge(&self, src: &str, tgt: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "DELETE FROM graph_edge WHERE scope = ?1 AND src = ?2 AND dst = ?3",
+            params![self.scope.clone(), src.to_string(), tgt.to_string()],
+        )
+        .await
+        .map_err(backend)?;
+        Ok(())
+    }
+
     async fn snapshot(&self) -> Result<GraphSnapshot> {
         let conn = self.conn.lock().await;
         let mut node_rows = conn

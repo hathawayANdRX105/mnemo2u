@@ -207,6 +207,26 @@ impl VectorStore for LanceVector {
         Ok(hits)
     }
 
+    /// Delete rows by id (`delete` on the `id` predicate). Used by the cascade
+    /// delete path, including the reverse-direction relation rows a relation
+    /// writes under two ids.
+    async fn remove(&self, ids: &[String]) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let table = self.table_handle().await?;
+        let quoted: Vec<String> = ids
+            .iter()
+            .map(|id| {
+                let escaped = id.replace('\\', "\\\\").replace('\'', "''");
+                format!("'{escaped}'")
+            })
+            .collect();
+        let predicate = format!("id IN ({})", quoted.join(", "));
+        table.delete(&predicate).await.map_err(backend)?;
+        Ok(())
+    }
+
     async fn index_done(&self) -> Result<()> {
         Ok(())
     }

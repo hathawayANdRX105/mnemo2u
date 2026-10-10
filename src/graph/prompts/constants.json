@@ -1,29 +1,5 @@
 {
- "DEFAULT_ENTITY_TYPES": [
-  "organization",
-  "person",
-  "geo",
-  "event"
- ],
- "DEFAULT_TUPLE_DELIMITER": "<|>",
- "DEFAULT_RECORD_DELIMITER": "##",
- "DEFAULT_COMPLETION_DELIMITER": "<|COMPLETE|>",
- "default_text_separator": [
-  "\n\n",
-  "\r\n\r\n",
-  "\n",
-  "\r\n",
-  "。",
-  "．",
-  ".",
-  "！",
-  "!",
-  "？",
-  "?",
-  " ",
-  "\t",
-  "　",
-  "​"
- ],
- "graph_field_sep": "<SEP>"
+ "tuple_delimiter": "<|#|>",
+ "completion_delimiter": "<|COMPLETE|>",
+ "entity_types_guidance": "Classify each entity using one of the following types. If no type fits, use `Other`.\n\n- Person: Human individuals, real or fictional\n- Creature: Non-human living beings (animals, mythical beings, etc.)\n- Organization: Companies, institutions, government bodies, groups\n- Location: Geographic places (cities, countries, buildings, regions)\n- Event: Occurrences, incidents, ceremonies, meetings\n- Concept: Abstract ideas, theories, principles, beliefs\n- Method: Procedures, techniques, algorithms, workflows\n- Content: Creative or informational works (books, articles, films, reports)\n- Data: Quantitative or structured information (statistics, datasets, measurements)\n- Artifact: Physical or digital objects created by humans (tools, software, devices)\n- NaturalObject: Natural non-living objects (minerals, celestial bodies, chemical compounds)"
 }

@@ -16,10 +16,10 @@ use mnemo2u::store::repair::RepairQueue;
 use mnemo2u::Tokenizer;
 
 const DOC: &str = "ACME Corporation builds robots. ACME is an organization.";
-const EXTRACTION: &str = "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"ACME builds things.\")##(\"relationship\"<|>\"ACME\"<|>\"ACME\"<|>\"self\"<|>\"loop\"<|>1.0)<|COMPLETE|>";
-const GLEAN: &str =
-    "(\"entity\"<|>\"BETA LABS\"<|>\"ORGANIZATION\"<|>\"Beta exists.\")<|COMPLETE|>";
-const REPORT: &str = r#"{"title": "t", "summary": "s", "rating": 7.5, "rating_explanation": "e", "findings": [{"summary": "f", "explanation": "e"}]}"#;
+const EXTRACTION: &str = "entity<|#|>ACME<|#|>organization<|#|>ACME builds things.\n\
+relation<|#|>ACME<|#|>ACME<|#|>self<|#|>loop\n\
+<|COMPLETE|>";
+const GLEAN: &str = "entity<|#|>BETA LABS<|#|>organization<|#|>Beta exists.\n<|COMPLETE|>";
 const ANSWER: &str = "answer";
 
 /// Wraps a vector store and fails the first `upsert`, then behaves normally.
@@ -41,6 +41,10 @@ impl VectorStore for FailingOnceVector {
         self.inner.query(query, top_k).await
     }
 
+    async fn remove(&self, ids: &[String]) -> Result<()> {
+        self.inner.remove(ids).await
+    }
+
     async fn index_done(&self) -> Result<()> {
         self.inner.index_done().await
     }
@@ -50,13 +54,14 @@ fn routed_llm() -> CachedLlm {
     let routed = Arc::new(RoutedLlm::new(
         "mock-best",
         vec![
-            ("identify all entities".to_string(), EXTRACTION.to_string()),
-            ("MANY entities were missed".to_string(), GLEAN.to_string()),
             (
-                "general information discovery".to_string(),
-                REPORT.to_string(),
+                "Extract entities and relationships".to_string(),
+                EXTRACTION.to_string(),
             ),
-            ("\"points\": [".to_string(), "[\"x\"]".to_string()),
+            (
+                "missed or incorrectly formatted".to_string(),
+                GLEAN.to_string(),
+            ),
             ("Multiple Paragraphs".to_string(), ANSWER.to_string()),
         ],
     ));
@@ -74,6 +79,13 @@ fn build_pipeline(
         community_reports: Arc::new(MemoryKv::new()),
         graph: Arc::new(mnemo2u::store::memory::MemoryGraph::new()),
         entities_vdb,
+        relationships_vdb: None,
+        tracking: mnemo2u::index::tracking::TrackingStores {
+            entity_chunks: Arc::new(MemoryKv::new()),
+            relation_chunks: Arc::new(MemoryKv::new()),
+        },
+        full_entities: Arc::new(MemoryKv::new()),
+        full_relations: Arc::new(MemoryKv::new()),
         chunks_vdb: None,
         llm: routed_llm(),
         tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
@@ -139,7 +151,17 @@ async fn failed_derived_write_is_queued_and_replayed() {
         .await
         .expect("query replayed store");
     assert_eq!(replayed.len(), 1, "the non-failing replay lands");
-    assert_eq!(replayed[0].meta, json!({"entity_name": "\"BETA LABS\""}));
+    assert_eq!(
+        replayed[0].meta,
+        json!({
+            "created_at": 0,
+            "entity_name": "BETA LABS",
+            "entity_type": "organization",
+            "file_path": replayed[0].meta["file_path"].as_str().unwrap(),
+            "source_id": replayed[0].meta["source_id"].as_str().unwrap(),
+        }),
+        "the replayed row is the merged entity record, quotes stripped"
+    );
 
     // With the store healthy, flush replays the queued rows and empties the queue.
     pipeline.flush().await.expect("flush replays");
@@ -152,7 +174,10 @@ async fn failed_derived_write_is_queued_and_replayed() {
     // that failed during the insert.
     let hits = inner.query("ACME", 5).await.expect("query replayed store");
     assert_eq!(hits.len(), 1, "replayed entity vector is queryable");
-    assert_eq!(hits[0].meta, json!({"entity_name": "\"ACME\""}));
+    assert_eq!(
+        hits[0].meta["entity_name"], "ACME",
+        "the replayed row is the merged entity record"
+    );
     drop(pipeline_again);
 }
 

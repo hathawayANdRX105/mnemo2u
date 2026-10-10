@@ -1,27 +1,32 @@
-//! Golden parity: merge behaviour vs the reference implementation.
+//! Golden parity: incremental merge behaviour vs the LightRAG reference.
 //!
-//! Fixture produced by `tools/golden/gen_merge.py`. `source_id` is compared as
-//! a set: the reference joins a Python `set` whose iteration order is
-//! implementation-defined.
+//! Fixture produced by `scripts/gen_merge.py` (verbatim port of the reference
+//! merge rules with a dict-graph mock). `source_id` is compared as a set: the
+//! reference joins a Python `set`, whose iteration order is
+//! implementation-defined. Descriptions compare exactly — the reference's
+//! fragment order is deterministic (stored first, then new by
+//! (timestamp, -length)).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use mnemo2u::core::rag::{EntityRecord, RelationRecord};
+use mnemo2u::core::text::Tokenizer;
 use mnemo2u::core::traits::GraphStore;
-use mnemo2u::graph::merge::{merge_edges_then_upsert, merge_nodes_then_upsert, MergeOptions};
+use mnemo2u::index::merge::{merge_edge, merge_node, IndexMergeOptions};
 use mnemo2u::llm::cache::CachedLlm;
 use mnemo2u::llm::mock::MockLlm;
 use mnemo2u::store::memory::{MemoryGraph, MemoryKv};
-use mnemo2u::Tokenizer;
 use serde_json::Value;
 
 fn as_set(value: &str) -> BTreeSet<String> {
     value.split("<SEP>").map(|part| part.to_string()).collect()
 }
 
-fn expected_set(value: &Value, field: &str) -> BTreeSet<String> {
-    value[field]
+/// The fixture records `source_id` as a sorted list inside the expected
+/// node/edge object (the reference joins a Python `set`).
+fn expected_set(value: &Value) -> BTreeSet<String> {
+    value["source_id"]
         .as_array()
         .expect("source id array")
         .iter()
@@ -63,6 +68,8 @@ fn records_from_json(value: &Value) -> Vec<EntityRecord> {
                 .expect("description")
                 .to_string(),
             source_id: record["source_id"].as_str().expect("source").to_string(),
+            file_path: record["file_path"].as_str().expect("file path").to_string(),
+            timestamp: record["timestamp"].as_i64().expect("timestamp"),
         })
         .collect()
 }
@@ -82,6 +89,9 @@ fn edge_records_from_json(value: &Value) -> Vec<RelationRecord> {
                 .to_string(),
             source_id: record["source_id"].as_str().expect("source").to_string(),
             order: record["order"].as_i64().expect("order"),
+            keywords: record["keywords"].as_str().expect("keywords").to_string(),
+            file_path: record["file_path"].as_str().expect("file path").to_string(),
+            timestamp: record["timestamp"].as_i64().expect("timestamp"),
         })
         .collect()
 }
@@ -91,6 +101,7 @@ async fn merge_matches_python_reference() {
     let raw = std::fs::read_to_string("tests/fixtures/merge_golden.json").expect("fixture");
     let cases: Value = serde_json::from_str(&raw).expect("valid json");
     let tokenizer = Tokenizer::for_gpt_4o().expect("tokenizer");
+    let options = IndexMergeOptions::default();
 
     for case in cases.as_array().expect("array") {
         let name = case["name"].as_str().expect("case name");
@@ -99,21 +110,16 @@ async fn merge_matches_python_reference() {
             .as_str()
             .expect("summary")
             .to_string();
-        let inner = Arc::new(MockLlm::new(
-            "gpt-4o",
-            vec![summary_response.clone(), summary_response.clone()],
-        ));
+        let inner = Arc::new(MockLlm::new("gpt-4o", vec![summary_response.clone()]));
         let llm = CachedLlm::new(inner.clone(), Arc::new(MemoryKv::new()));
-        let options = MergeOptions::default();
 
         match case["kind"].as_str().expect("kind") {
             "node" => {
                 let entity = case["entity"].as_str().expect("entity");
                 let records = records_from_json(&case["records"]);
-                let merged =
-                    merge_nodes_then_upsert(entity, &records, &graph, &llm, &tokenizer, &options)
-                        .await
-                        .expect("merge node");
+                let merged = merge_node(entity, &records, &graph, &llm, &tokenizer, &options)
+                    .await
+                    .expect("merge node");
 
                 let expected = &case["expected"];
                 let want = &expected["node"];
@@ -130,11 +136,14 @@ async fn merge_matches_python_reference() {
                     "entity_name in {name}"
                 );
                 assert_eq!(
+                    merged["file_path"], want["file_path"],
+                    "file_path in {name}"
+                );
+                assert_eq!(
                     as_set(merged["source_id"].as_str().expect("source")),
-                    expected_set(expected, "source_id"),
+                    expected_set(want),
                     "source_id set in {name}"
                 );
-                // The graph must hold the same row.
                 let stored = graph.get_node(entity).await.expect("read").expect("stored");
                 assert_eq!(
                     stored["description"], merged["description"],
@@ -151,25 +160,33 @@ async fn merge_matches_python_reference() {
                 let src = case["src"].as_str().expect("src");
                 let tgt = case["tgt"].as_str().expect("tgt");
                 let records = edge_records_from_json(&case["records"]);
-                merge_edges_then_upsert(src, tgt, &records, &graph, &llm, &tokenizer, &options)
+                let edge = merge_edge(src, tgt, &records, &graph, &llm, &tokenizer, &options)
                     .await
                     .expect("merge edge");
 
                 let expected = &case["expected"];
                 let want = &expected["edge"];
-                let edge = graph.get_edge(src, tgt).await.expect("read").expect("edge");
-                assert_eq!(edge["weight"], want["weight"], "weight in {name}");
+                assert_eq!(
+                    edge["weight"].as_f64().expect("weight"),
+                    want["weight"].as_f64().expect("expected weight"),
+                    "weight in {name}"
+                );
                 assert_eq!(
                     edge["description"], want["description"],
                     "description in {name}"
                 );
-                assert_eq!(edge["order"], want["order"], "order in {name}");
+                assert_eq!(edge["keywords"], want["keywords"], "keywords in {name}");
+                assert_eq!(edge["file_path"], want["file_path"], "file_path in {name}");
                 assert_eq!(
                     as_set(edge["source_id"].as_str().expect("source")),
-                    expected_set(expected, "edge_source_id"),
+                    expected_set(want),
                     "edge source_id set in {name}"
                 );
-
+                let stored = graph.get_edge(src, tgt).await.expect("read").expect("edge");
+                assert_eq!(
+                    stored["keywords"], edge["keywords"],
+                    "stored keywords in {name}"
+                );
                 let endpoint = graph
                     .get_node("BETA")
                     .await

@@ -13,7 +13,7 @@ use mnemo2u::core::traits::Embedder;
 use mnemo2u::llm::cache::CachedLlm;
 use mnemo2u::llm::mock::MockEmbedder;
 use mnemo2u::llm::mock::RoutedLlm;
-use mnemo2u::pipeline::{InsertOutcome, Pipeline, PipelineOptions};
+use mnemo2u::pipeline::{CommunityMode, InsertOutcome, Pipeline, PipelineOptions};
 use mnemo2u::store::lancedb::LanceVector;
 use mnemo2u::store::memory::MemoryKv;
 use mnemo2u::store::repair::RepairQueue;
@@ -26,22 +26,33 @@ const DOCS: [&str; 2] = [
     "BETA LABS makes delivery drones. BETA LABS competes with ACME Corporation.",
 ];
 
-const EXTRACTION: &str = "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"ACME builds cobots.\")##(\"entity\"<|>\"BETA LABS\"<|>\"ORGANIZATION\"<|>\"BETA builds drones.\")##(\"relationship\"<|>\"ACME\"<|>\"BETA LABS\"<|>\"competes with\"<|>\"they compete\"<|>2.0)<|COMPLETE|>";
+const EXTRACTION: &str = "entity<|#|>ACME<|#|>organization<|#|>ACME builds cobots.\n\
+entity<|#|>BETA LABS<|#|>organization<|#|>BETA builds drones.\n\
+relation<|#|>ACME<|#|>BETA LABS<|#|>competes with<|#|>they compete\n\
+<|COMPLETE|>";
 const GLEAN: &str =
-    "(\"entity\"<|>\"ACME\"<|>\"ORGANIZATION\"<|>\"Acme ships cobots to warehouses.\")<|COMPLETE|>";
+    "entity<|#|>ACME<|#|>organization<|#|>Acme ships cobots to warehouses.\n<|COMPLETE|>";
+
 const REPORT: &str = r#"{"title": "t", "summary": "s", "rating": 7.5, "rating_explanation": "e", "findings": [{"summary": "f", "explanation": "e"}]}"#;
+const KEYWORDS: &str = r#"{"high_level_keywords": ["competes"], "low_level_keywords": ["ACME"]}"#;
 
 fn routed_llm() -> CachedLlm {
     let routed = Arc::new(RoutedLlm::new(
         "mock-best",
         vec![
-            ("identify all entities".to_string(), EXTRACTION.to_string()),
-            ("MANY entities were missed".to_string(), GLEAN.to_string()),
+            (
+                "Extract entities and relationships".to_string(),
+                EXTRACTION.to_string(),
+            ),
+            (
+                "missed or incorrectly formatted".to_string(),
+                GLEAN.to_string(),
+            ),
             (
                 "general information discovery".to_string(),
                 REPORT.to_string(),
             ),
-            ("\"points\": [".to_string(), "[\"x\"]".to_string()),
+            ("high_level_keywords".to_string(), KEYWORDS.to_string()),
         ],
     ));
     CachedLlm::new(routed, Arc::new(MemoryKv::new()))
@@ -82,6 +93,33 @@ async fn build(truth: &str, vectors: &str) -> Pipeline {
                 .await
                 .expect("entities_vdb"),
         ),
+        relationships_vdb: Some(Arc::new(
+            LanceVector::open(vectors, "relationships_vdb", embedder.clone(), 0.2)
+                .await
+                .expect("relationships_vdb"),
+        )),
+        tracking: mnemo2u::index::tracking::TrackingStores {
+            entity_chunks: Arc::new(
+                TursoKv::open(truth, "entity_chunks")
+                    .await
+                    .expect("entity_chunks"),
+            ),
+            relation_chunks: Arc::new(
+                TursoKv::open(truth, "relation_chunks")
+                    .await
+                    .expect("relation_chunks"),
+            ),
+        },
+        full_entities: Arc::new(
+            TursoKv::open(truth, "full_entities")
+                .await
+                .expect("full_entities"),
+        ),
+        full_relations: Arc::new(
+            TursoKv::open(truth, "full_relations")
+                .await
+                .expect("full_relations"),
+        ),
         chunks_vdb: Some(Arc::new(
             LanceVector::open(vectors, "text_chunks", embedder, 0.2)
                 .await
@@ -91,6 +129,9 @@ async fn build(truth: &str, vectors: &str) -> Pipeline {
         tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
         options: PipelineOptions {
             enable_naive_rag: true,
+            // This process asserts the durable community rows too, so it opts
+            // into the on-demand rebuild (the default policy never runs them).
+            community_mode: CommunityMode::OnDemand,
             ..PipelineOptions::default()
         },
         repair: Arc::new(RepairQueue::new(Arc::new(

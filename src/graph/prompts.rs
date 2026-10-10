@@ -1,87 +1,71 @@
-//! Prompt templates — byte-for-byte copies of the reference prompts
-//! (`refs/nano-graphrag/nano_graphrag/prompt.py`), extracted by
-//! `tools/golden/gen_prompts.py`.
+//! Prompt templates — byte-for-byte copies of the LightRAG prompts
+//! (`refs/LightRAG/lightrag/prompt.py`), extracted by `scripts/gen_prompts.py`.
 //!
 //! The text keeps the reference's `{placeholder}` syntax and doubled braces;
 //! fill them with [`crate::core::text::fill_template`].
+//!
+//! R1 ported the nano-graphrag prompts (single-user-prompt extraction,
+//! community-report global search). R2 replaced that surface with the LightRAG
+//! one: system+user extraction prompts, JSON keyword extraction, and the
+//! unified `rag_response`/`kg_query_context` rendering.
 
-pub const ENTITY_EXTRACTION: &str = include_str!("prompts/entity_extraction.txt");
-pub const ENTITI_CONTINUE_EXTRACTION: &str = include_str!("prompts/entiti_continue_extraction.txt");
-pub const ENTITI_IF_LOOP_EXTRACTION: &str = include_str!("prompts/entiti_if_loop_extraction.txt");
+pub const ENTITY_EXTRACTION_SYSTEM: &str = include_str!("prompts/entity_extraction_system.txt");
+pub const ENTITY_EXTRACTION_USER: &str = include_str!("prompts/entity_extraction_user.txt");
+pub const ENTITY_CONTINUE_EXTRACTION: &str = include_str!("prompts/entity_continue_extraction.txt");
 pub const SUMMARIZE_ENTITY_DESCRIPTIONS: &str =
     include_str!("prompts/summarize_entity_descriptions.txt");
-pub const COMMUNITY_REPORT: &str = include_str!("prompts/community_report.txt");
-pub const LOCAL_RAG_RESPONSE: &str = include_str!("prompts/local_rag_response.txt");
-pub const GLOBAL_MAP_RAG_POINTS: &str = include_str!("prompts/global_map_rag_points.txt");
-pub const GLOBAL_REDUCE_RAG_RESPONSE: &str = include_str!("prompts/global_reduce_rag_response.txt");
-pub const NAIVE_RAG_RESPONSE: &str = include_str!("prompts/naive_rag_response.txt");
+pub const KEYWORDS_EXTRACTION: &str = include_str!("prompts/keywords_extraction.txt");
+pub const RAG_RESPONSE: &str = include_str!("prompts/rag_response.txt");
 pub const FAIL_RESPONSE: &str = include_str!("prompts/fail_response.txt");
+pub const KG_QUERY_CONTEXT: &str = include_str!("prompts/kg_query_context.txt");
+pub const NAIVE_QUERY_CONTEXT: &str = include_str!("prompts/naive_query_context.txt");
+pub const NAIVE_RAG_RESPONSE: &str = include_str!("prompts/naive_rag_response.txt");
+pub const COMMUNITY_REPORT: &str = include_str!("prompts/community_report.txt");
 
-/// `prompt.py:324` — the four default entity types.
-pub const DEFAULT_ENTITY_TYPES: [&str; 4] = ["organization", "person", "geo", "event"];
-/// `prompt.py:325`.
-pub const DEFAULT_TUPLE_DELIMITER: &str = "<|>";
-/// `prompt.py:326`.
-pub const DEFAULT_RECORD_DELIMITER: &str = "##";
-/// `prompt.py:327`.
+/// `prompt.py:14` — field separator inside one record.
+pub const DEFAULT_TUPLE_DELIMITER: &str = "<|#|>";
+/// `prompt.py:15` — end-of-extraction marker.
+/// The value the `{user_prompt}` placeholder takes when the query carries no
+/// extra instructions (`utils.py:426`).
+pub const DEFAULT_USER_PROMPT_SLOT: &str = "n/a";
+
+/// `DEFAULT_SUMMARY_LANGUAGE` (`constants.py:16`) — the fallback for every
+/// prompt that renders `{language}` when no summary language is configured.
+pub const DEFAULT_SUMMARY_LANGUAGE: &str = "English";
+
 pub const DEFAULT_COMPLETION_DELIMITER: &str = "<|COMPLETE|>";
-/// `prompt.py:499` — separator hierarchy for `chunking_by_seperators`.
-pub const DEFAULT_TEXT_SEPARATOR: [&str; 15] = [
-    "\n\n", "\r\n\r\n", "\n", "\r\n", "。", "．", ".", "！", "!", "？", "?", " ", "\t", "　",
-    "\u{200b}",
-];
+/// `GRAGH_FIELD_SEP` (`constants.py:49`): the `source_id` list separator.
+pub const GRAPH_FIELD_SEP: &str = "<SEP>";
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::text::{fill_template, GRAPH_FIELD_SEP};
+/// `DEFAULT_MAX_EXTRACTION_RECORDS` (`constants.py:26`).
+pub const DEFAULT_MAX_EXTRACTION_RECORDS: usize = 100;
+/// `DEFAULT_MAX_EXTRACTION_ENTITIES` (`constants.py:27`).
+pub const DEFAULT_MAX_EXTRACTION_ENTITIES: usize = 40;
+/// `DEFAULT_MAX_EXTRACT_INPUT_TOKENS` (`constants.py:38`).
+pub const DEFAULT_MAX_EXTRACT_INPUT_TOKENS: usize = 20_480;
+/// `DEFAULT_FORCE_LLM_SUMMARY_ON_MERGE` (`constants.py:30`).
+pub const DEFAULT_FORCE_LLM_SUMMARY_ON_MERGE: usize = 8;
+/// `DEFAULT_SUMMARY_MAX_TOKENS` (`constants.py:32`).
+pub const DEFAULT_SUMMARY_MAX_TOKENS: usize = 1_200;
+/// `DEFAULT_SUMMARY_CONTEXT_SIZE` (`constants.py:36`).
+pub const DEFAULT_SUMMARY_CONTEXT_SIZE: usize = 12_000;
+/// `DEFAULT_SUMMARY_LENGTH_RECOMMENDED` (`constants.py:34`).
+pub const DEFAULT_SUMMARY_LENGTH_RECOMMENDED: usize = 600;
+/// `DEFAULT_MAX_GLEANING` — the reference runs exactly one extra round when the
+/// value is positive (`operate.py:4252-4253`).
+pub const DEFAULT_MAX_GLEANING: usize = 1;
 
-    #[test]
-    fn entity_extraction_prompt_has_reference_placeholders() {
-        for placeholder in [
-            "{tuple_delimiter}",
-            "{record_delimiter}",
-            "{completion_delimiter}",
-            "{entity_types}",
-            "{input_text}",
-        ] {
-            assert!(
-                ENTITY_EXTRACTION.contains(placeholder),
-                "missing {placeholder}"
-            );
-        }
-    }
+/// The example row block the reference feeds the system prompt
+/// (`prompt.py::entity_extraction_examples`, formatted once per run at
+/// `operate.py:4044`).
+pub const EXTRACTION_EXAMPLES: &str = "entity{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>\nrelation{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_keywords>{tuple_delimiter}<relationship_description>\n{completion_delimiter}\n";
 
-    #[test]
-    fn fill_template_substitutes_and_unmatches_doubled_braces() {
-        let filled = fill_template(
-            ENTITY_EXTRACTION,
-            &[
-                ("tuple_delimiter", DEFAULT_TUPLE_DELIMITER),
-                ("record_delimiter", DEFAULT_RECORD_DELIMITER),
-                ("completion_delimiter", DEFAULT_COMPLETION_DELIMITER),
-                ("entity_types", "organization,person,geo,event"),
-                ("input_text", "ACME acquired Beta Labs."),
-            ],
-        )
-        .expect("all placeholders supplied");
-        assert!(!filled.contains("{input_text}"));
-        assert!(!filled.contains("{tuple_delimiter}"));
-        assert!(filled.contains("ACME acquired Beta Labs."));
+/// Query-keyword output example (`prompt.py::keywords_extraction_examples`).
+pub const KEYWORDS_EXTRACTION_EXAMPLES: &str = r#"{
+  "high_level_keywords": ["<high_level_keyword>", ...],
+  "low_level_keywords": ["<low_level_keyword>", ...]
+}"#;
 
-        // Doubled braces are literals in Python format strings.
-        let filled =
-            fill_template(COMMUNITY_REPORT, &[("input_text", "X")]).expect("community report");
-        assert!(!filled.contains("{{"), "doubled braces must collapse");
-
-        // Unknown placeholders fail loudly instead of shipping a broken prompt.
-        assert!(fill_template(ENTITY_EXTRACTION, &[]).is_err());
-    }
-
-    #[test]
-    fn constants_match_reference() {
-        assert_eq!(GRAPH_FIELD_SEP, "<SEP>");
-        assert_eq!(DEFAULT_ENTITY_TYPES[0], "organization");
-        assert_eq!(DEFAULT_TEXT_SEPARATOR[1], "\r\n\r\n");
-    }
-}
+/// Entity type guidance block (`prompt.py::default_entity_types_guidance`,
+/// generated into `prompts/constants.json`).
+pub const ENTITY_TYPES_GUIDANCE: &str = include_str!("prompts/entity_types_guidance.txt");
