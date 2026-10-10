@@ -71,6 +71,7 @@ fn build_pipeline(enable_naive_rag: bool, community: CommunityMode) -> (Pipeline
         tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
         repair,
         options: PipelineOptions {
+            enable_naive_rag,
             community_mode: community,
             ..PipelineOptions::default()
         },
@@ -271,7 +272,7 @@ async fn query_modes_return_context_and_answers() {
     // naive: chunk vector search.
     let naive = pipeline
         .query(
-            "ACME robots",
+            "ACME acquired Beta Labs",
             &QueryParam {
                 mode: QueryMode::Naive,
                 only_need_context: true,
