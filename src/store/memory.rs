@@ -143,6 +143,14 @@ impl VectorStore for MemoryVector {
         Ok(hits)
     }
 
+    async fn remove(&self, ids: &[String]) -> Result<()> {
+        self.rows
+            .lock()
+            .expect("vector lock")
+            .retain(|(id, _, _)| !ids.contains(id));
+        Ok(())
+    }
+
     async fn index_done(&self) -> Result<()> {
         Ok(())
     }
@@ -340,6 +348,28 @@ impl GraphStore for MemoryGraph {
         for (src, tgt, data) in rows {
             self.upsert_edge(&src, &tgt, data).await?;
         }
+        Ok(())
+    }
+
+    async fn remove_node(&self, node_id: &str) -> Result<()> {
+        self.nodes
+            .lock()
+            .expect("graph lock")
+            .retain(|(id, _)| id != node_id);
+        self.edges
+            .lock()
+            .expect("graph lock")
+            .retain(|((src, tgt), _)| src != node_id && tgt != node_id);
+        Ok(())
+    }
+
+    async fn remove_edge(&self, src: &str, tgt: &str) -> Result<()> {
+        self.edges
+            .lock()
+            .expect("graph lock")
+            .retain(|((existing_src, existing_tgt), _)| {
+                !(existing_src == src && existing_tgt == tgt)
+            });
         Ok(())
     }
 

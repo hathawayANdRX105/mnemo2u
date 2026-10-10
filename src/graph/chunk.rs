@@ -16,6 +16,7 @@ pub const DEFAULT_CHUNK_OVERLAP_TOKEN_SIZE: usize = 100;
 pub fn chunking_by_token_size(
     tokens_list: &[Vec<u32>],
     doc_keys: &[String],
+    doc_paths: &[String],
     tok: &Tokenizer,
     overlap_token_size: usize,
     max_token_size: usize,
@@ -43,6 +44,7 @@ pub fn chunking_by_token_size(
                 content: chunk.trim().to_string(),
                 chunk_order_index: i,
                 full_doc_id: doc_keys[index].clone(),
+                file_path: doc_paths[index].clone(),
             });
         }
     }
@@ -64,8 +66,15 @@ pub fn get_chunks(
         .map(|(_, content)| tok.encode(content))
         .collect();
     let doc_keys: Vec<String> = new_docs.iter().map(|(key, _)| key.clone()).collect();
-    let chunks =
-        chunking_by_token_size(&tokens, &doc_keys, tok, overlap_token_size, max_token_size)?;
+    let doc_paths: Vec<String> = new_docs.iter().map(|(_, path)| path.clone()).collect();
+    let chunks = chunking_by_token_size(
+        &tokens,
+        &doc_keys,
+        &doc_paths,
+        tok,
+        overlap_token_size,
+        max_token_size,
+    )?;
 
     let mut order: Vec<String> = Vec::new();
     let mut by_id: HashMap<String, Chunk> = HashMap::new();

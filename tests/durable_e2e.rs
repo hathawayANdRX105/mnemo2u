@@ -82,6 +82,33 @@ async fn build(truth: &str, vectors: &str) -> Pipeline {
                 .await
                 .expect("entities_vdb"),
         ),
+        relationships_vdb: Some(Arc::new(
+            LanceVector::open(vectors, "relationships_vdb", embedder.clone(), 0.2)
+                .await
+                .expect("relationships_vdb"),
+        )),
+        tracking: mnemo2u::index::tracking::TrackingStores {
+            entity_chunks: Arc::new(
+                TursoKv::open(truth, "entity_chunks")
+                    .await
+                    .expect("entity_chunks"),
+            ),
+            relation_chunks: Arc::new(
+                TursoKv::open(truth, "relation_chunks")
+                    .await
+                    .expect("relation_chunks"),
+            ),
+        },
+        full_entities: Arc::new(
+            TursoKv::open(truth, "full_entities")
+                .await
+                .expect("full_entities"),
+        ),
+        full_relations: Arc::new(
+            TursoKv::open(truth, "full_relations")
+                .await
+                .expect("full_relations"),
+        ),
         chunks_vdb: Some(Arc::new(
             LanceVector::open(vectors, "text_chunks", embedder, 0.2)
                 .await

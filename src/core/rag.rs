@@ -20,6 +20,10 @@ pub struct Chunk {
     pub content: String,
     pub chunk_order_index: usize,
     pub full_doc_id: String,
+    /// Owning document path — LightRAG carries it on the chunk
+    /// (`operate.py:4105`) and every extraction record inherits it.
+    #[serde(default = "default_file_path")]
+    pub file_path: String,
 }
 
 /// One extracted entity (`_op.py::_handle_single_entity_extraction`, :138-156).
@@ -29,6 +33,15 @@ pub struct EntityRecord {
     pub entity_type: String,
     pub description: String,
     pub source_id: String,
+    /// LightRAG carries the owning document path on every record
+    /// (`operate.py::_handle_single_entity_extraction`, default
+    /// `"unknown_source"`); the graph node upsert writes it verbatim.
+    #[serde(default = "default_file_path")]
+    pub file_path: String,
+    /// Extraction wall-clock time (unix seconds); the graph node `created_at`
+    /// field reads it back (`operate.py:1791`).
+    #[serde(default)]
+    pub timestamp: i64,
 }
 
 /// One extracted relation (`_op.py::_handle_single_relationship_extraction`, :159-179).
@@ -41,7 +54,37 @@ pub struct RelationRecord {
     pub source_id: String,
     /// Only produced by DSPy predictions; defaults to 1 (`_op.py:261`).
     pub order: i64,
+    /// High-level keywords for this relation (LightRAG tuple field 3,
+    /// `operate.py:814-816`); joined with commas and stored on the graph edge
+    /// and in `relationships_vdb`.
+    #[serde(default)]
+    pub keywords: String,
+    /// Owning document path (`operate.py::_handle_single_relationship_extraction`).
+    #[serde(default = "default_file_path")]
+    pub file_path: String,
+    /// Extraction wall-clock time (unix seconds).
+    #[serde(default)]
+    pub timestamp: i64,
 }
+
+fn default_file_path() -> String {
+    "unknown_source".to_string()
+}
+
+/// `DEFAULT_TOP_K` (`constants.py:57`); entity arm depth.
+pub const DEFAULT_TOP_K: usize = 40;
+/// `DEFAULT_CHUNK_TOP_K` (`constants.py:58`).
+pub const DEFAULT_CHUNK_TOP_K: usize = 20;
+/// `DEFAULT_MAX_ENTITY_TOKENS` (`constants.py:59`).
+pub const DEFAULT_MAX_ENTITY_TOKENS: usize = 6_000;
+/// `DEFAULT_MAX_RELATION_TOKENS` (`constants.py:60`).
+pub const DEFAULT_MAX_RELATION_TOKENS: usize = 8_000;
+/// `DEFAULT_MAX_TOTAL_TOKENS` (`constants.py:61`).
+pub const DEFAULT_MAX_TOTAL_TOKENS: usize = 30_000;
+/// `DEFAULT_COSINE_THRESHOLD` (`constants.py:62`).
+pub const DEFAULT_COSINE_THRESHOLD: f32 = 0.2;
+/// `DEFAULT_RELATED_CHUNK_NUMBER` (`constants.py:63`).
+pub const DEFAULT_RELATED_CHUNK_NUMBER: usize = 5;
 
 /// Community record (`base.py:38-56` SingleCommunitySchema/CommunitySchema).
 /// `report_string`/`report_json` are `None` until the report pass runs.
@@ -60,12 +103,18 @@ pub struct CommunitySchema {
     pub report_json: Option<Value>,
 }
 
-/// Query mode (`base.py:11` Literal["local", "global", "naive"]).
+/// Query mode (`base.py:11` Literal["local", "global", "naive"]; LightRAG adds
+/// "hybrid"/"mix", `lightrag/base.py:93`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QueryMode {
     Local,
     Global,
     Naive,
+    /// Both keyword arms run and their results interleave (`kg_query`,
+    /// operate.py:5366-5461).
+    Hybrid,
+    /// Both arms plus the chunk vector arm; the LightRAG default.
+    Mix,
 }
 
 /// Query parameters with the reference default values (`base.py:10-29`).
@@ -84,6 +133,18 @@ pub struct QueryParam {
     pub global_min_community_rating: f64,
     pub global_max_consider_community: usize,
     pub global_max_token_for_community_report: usize,
+    /// LightRAG query budgets (`base.py:93-167`); the reference defaults are
+    /// the server-side values from `constants.py:57-61`.
+    pub chunk_top_k: usize,
+    pub max_entity_tokens: usize,
+    pub max_relation_tokens: usize,
+    pub max_total_tokens: usize,
+    /// Cosine threshold shared by both vector arms (`base.py:338`).
+    pub cosine_better_than_threshold: f32,
+    /// Rerank switch; LightRAG defaults to true (`base.py:166`), we default
+    /// off (offline-first deviation, stage doc §7).
+    pub enable_rerank: bool,
+    pub min_rerank_score: f64,
 }
 
 impl Default for QueryParam {
@@ -102,6 +163,13 @@ impl Default for QueryParam {
             global_min_community_rating: 0.0,
             global_max_consider_community: 512,
             global_max_token_for_community_report: 16_384,
+            chunk_top_k: DEFAULT_CHUNK_TOP_K,
+            max_entity_tokens: DEFAULT_MAX_ENTITY_TOKENS,
+            max_relation_tokens: DEFAULT_MAX_RELATION_TOKENS,
+            max_total_tokens: DEFAULT_MAX_TOTAL_TOKENS,
+            cosine_better_than_threshold: DEFAULT_COSINE_THRESHOLD,
+            enable_rerank: false,
+            min_rerank_score: 0.0,
         }
     }
 }

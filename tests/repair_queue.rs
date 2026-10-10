@@ -41,6 +41,10 @@ impl VectorStore for FailingOnceVector {
         self.inner.query(query, top_k).await
     }
 
+    async fn remove(&self, ids: &[String]) -> Result<()> {
+        self.inner.remove(ids).await
+    }
+
     async fn index_done(&self) -> Result<()> {
         self.inner.index_done().await
     }
@@ -74,6 +78,13 @@ fn build_pipeline(
         community_reports: Arc::new(MemoryKv::new()),
         graph: Arc::new(mnemo2u::store::memory::MemoryGraph::new()),
         entities_vdb,
+        relationships_vdb: None,
+        tracking: mnemo2u::index::tracking::TrackingStores {
+            entity_chunks: Arc::new(MemoryKv::new()),
+            relation_chunks: Arc::new(MemoryKv::new()),
+        },
+        full_entities: Arc::new(MemoryKv::new()),
+        full_relations: Arc::new(MemoryKv::new()),
         chunks_vdb: None,
         llm: routed_llm(),
         tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),

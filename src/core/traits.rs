@@ -84,6 +84,10 @@ pub trait VectorStore: Send + Sync {
     /// Cosine-thresholded ANN query (`NanoVectorDBStorage.query`,
     /// vdb_nanovectordb.py:53-64; threshold default 0.2).
     async fn query(&self, query: &str, top_k: usize) -> Result<Vec<VectorHit>>;
+    /// Drop rows by id; unknown ids are ignored. Needed by the cascade delete
+    /// path (R2): a deleted document's entity/relation/chunk vectors and the
+    /// reverse-direction relation ids go away with it.
+    async fn remove(&self, ids: &[String]) -> Result<()>;
     /// Persist pending writes (reference `index_done_callback`).
     async fn index_done(&self) -> Result<()>;
 }
@@ -108,6 +112,10 @@ pub trait GraphStore: Send + Sync {
     async fn upsert_nodes_batch(&self, rows: Vec<(String, Value)>) -> Result<()>;
     async fn upsert_edge(&self, src: &str, tgt: &str, data: Value) -> Result<()>;
     async fn upsert_edges_batch(&self, rows: Vec<(String, String, Value)>) -> Result<()>;
+    /// Drop a node and every edge that touches it (cascade delete, R2).
+    async fn remove_node(&self, node_id: &str) -> Result<()>;
+    /// Drop one directed edge (cascade delete, R2).
+    async fn remove_edge(&self, src: &str, tgt: &str) -> Result<()>;
     /// Everything, for clustering / rebuild paths.
     async fn snapshot(&self) -> Result<GraphSnapshot>;
     async fn index_done(&self) -> Result<()>;

@@ -1,0 +1,13 @@
+Classify each entity using one of the following types. If no type fits, use `Other`.
+
+- Person: Human individuals, real or fictional
+- Creature: Non-human living beings (animals, mythical beings, etc.)
+- Organization: Companies, institutions, government bodies, groups
+- Location: Geographic places (cities, countries, buildings, regions)
+- Event: Occurrences, incidents, ceremonies, meetings
+- Concept: Abstract ideas, theories, principles, beliefs
+- Method: Procedures, techniques, algorithms, workflows
+- Content: Creative or informational works (books, articles, films, reports)
+- Data: Quantitative or structured information (statistics, datasets, measurements)
+- Artifact: Physical or digital objects created by humans (tools, software, devices)
+- NaturalObject: Natural non-living objects (minerals, celestial bodies, chemical compounds)

@@ -44,6 +44,13 @@ fn build_pipeline(enable_naive_rag: bool) -> (Pipeline, Arc<RoutedLlm>) {
         community_reports: Arc::new(MemoryKv::new()),
         graph: Arc::new(MemoryGraph::new()),
         entities_vdb: Arc::new(MemoryVector::new(embedder.clone(), 0.2)),
+        relationships_vdb: None,
+        tracking: mnemo2u::index::tracking::TrackingStores {
+            entity_chunks: Arc::new(MemoryKv::new()),
+            relation_chunks: Arc::new(MemoryKv::new()),
+        },
+        full_entities: Arc::new(MemoryKv::new()),
+        full_relations: Arc::new(MemoryKv::new()),
         chunks_vdb: enable_naive_rag.then(|| {
             Arc::new(MemoryVector::new(embedder, 0.2))
                 as Arc<dyn mnemo2u::core::traits::VectorStore>
@@ -263,6 +270,13 @@ async fn local_mode_is_rejected_and_skips_entity_embeddings_when_disabled() {
         community_reports: Arc::new(MemoryKv::new()),
         graph: Arc::new(MemoryGraph::new()),
         entities_vdb: Arc::new(MemoryVector::new(embedder.clone(), 0.2)),
+        relationships_vdb: None,
+        tracking: mnemo2u::index::tracking::TrackingStores {
+            entity_chunks: Arc::new(MemoryKv::new()),
+            relation_chunks: Arc::new(MemoryKv::new()),
+        },
+        full_entities: Arc::new(MemoryKv::new()),
+        full_relations: Arc::new(MemoryKv::new()),
         chunks_vdb: None,
         llm: CachedLlm::new(routed, Arc::new(MemoryKv::new())),
         tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),

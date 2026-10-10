@@ -1,29 +1,49 @@
 #!/usr/bin/env python3
-"""Generate merge golden fixtures from the reference algorithm.
+"""Generate merge golden fixtures from the LightRAG algorithm.
 
-The functions below are copied from
-`refs/nano-graphrag/nano_graphrag/_op.py` (`_merge_nodes_then_upsert` :182-227,
-`_merge_edges_then_upsert` :230-279, `_handle_entity_relation_summary` :111-135)
-with a dict-backed graph mock standing in for the storage layer.
+The merge rules below are copied from `refs/LightRAG/lightrag/operate.py`
+(`_merge_nodes_then_upsert` :2429, `_merge_edges_then_upsert` :2782,
+`_combine_descriptions_dedup` :2384, `_handle_entity_relation_summary` :372,
+`merge_source_ids` utils.py:7183, `apply_source_ids_limit` utils.py:7244),
+with a dict-backed graph mock standing in for the storage layer and a
+word-count proxy standing in for the tokenizer.
 
-Notes on set ordering: the reference builds `source_id` by joining a Python
-`set`, whose iteration order is implementation-defined. The fixture therefore
-records `source_id` as a *sorted list*, and the Rust test compares sets.
+Notes on set ordering: the reference joins `source_id` from a Python `set`,
+whose iteration order is implementation-defined, so the fixture records
+`source_id` as a *sorted list* and the Rust test compares sets.
+
+Notes on the tokenizer: `_handle_entity_relation_summary`'s tier decision is
+token-based (tiktoken). The fixture keeps every case far from the boundaries
+(short fragments for tier 1, >1500 words for tier 2), so a whitespace word
+count — a lower bound on the token count — makes the same decision.
 
 Usage:
-    tests/.venvs/bin/python scripts/gen_merge.py > tests/fixtures/merge_golden.json
+    python3 scripts/gen_merge.py > tests/fixtures/merge_golden.json
 """
 
 import copy
 import json
 import re
 import sys
+from collections import Counter
 
 GRAPH_FIELD_SEP = "<SEP>"
+FORCE_LLM_SUMMARY_ON_MERGE = 8
+SUMMARY_MAX_TOKENS = 1200
+SUMMARY_CONTEXT_SIZE = 12000
+MAX_SOURCE_IDS_PER_ENTITY = 300
+MAX_SOURCE_IDS_PER_RELATION = 300
+SOURCE_IDS_LIMIT_METHOD = "KEEP"
+UNKNOWN_SOURCE = "unknown_source"
 
 
-def clean_str(value):
-    return value
+def sanitize_text_for_encoding(text, strip=True):
+    if strip:
+        text = text.strip()
+    if not text:
+        return text
+    text = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", text)
+    return text.strip() if strip else text
 
 
 def split_string_by_multi_markers(content, markers):
@@ -36,9 +56,7 @@ def split_string_by_multi_markers(content, markers):
 class DictGraph:
     def __init__(self, nodes=None, edges=None):
         # Deep copy: the caller's dicts are recorded verbatim as the case
-        # `seed`, and `upsert_*` mutates inner node/edge dicts in place —
-        # without the copy the fixture would capture post-merge state as the
-        # "before" state and the Rust test would seed its graph with it.
+        # `seed`, and `upsert_*` mutates inner dicts in place.
         self.nodes = copy.deepcopy(nodes or {})
         self.edges = copy.deepcopy(edges or {})
 
@@ -48,230 +66,426 @@ class DictGraph:
     def upsert_node(self, node_id, node_data):
         self.nodes.setdefault(node_id, {}).update(node_data)
 
-    def has_edge(self, src, tgt):
-        return (src, tgt) in self.edges
+    def has_node(self, node_id):
+        return node_id in self.nodes
 
     def get_edge(self, src, tgt):
         return self.edges.get((src, tgt))
 
+    def has_edge(self, src, tgt):
+        return (src, tgt) in self.edges
+
     def upsert_edge(self, src, tgt, edge_data):
         self.edges.setdefault((src, tgt), {}).update(edge_data)
 
-    def has_node(self, node_id):
-        return node_id in self.nodes
+
+def handle_entity_relation_summary(name, description_list, llm_response, calls):
+    """`_handle_entity_relation_summary` (operate.py:372) tier decision only.
+
+    Tier 1 (no LLM): fewer than 8 fragments and under 1200 tokens -> join.
+    Tier 2 (LLM): one summary call over the joined fragments.
+    """
+    joined = GRAPH_FIELD_SEP.join(description_list)
+    tokens = len(re.findall(r"\S+", joined))
+    if len(description_list) < FORCE_LLM_SUMMARY_ON_MERGE and tokens < SUMMARY_MAX_TOKENS:
+        return joined, False
+    calls.append({"name": name, "description_list": list(description_list)})
+    return llm_response, True
 
 
-def handle_entity_relation_summary(name, description, summary_max_tokens, llm_max_tokens, llm_response, calls):
-    # token counting is approximated with whitespace splitting: the fixture
-    # only needs the < threshold / >= threshold decision, and the Rust side
-    # scripts its mock with the same response.
-    tokens = re.findall(r"\S+", description)
-    if len(tokens) < summary_max_tokens:
-        return description, calls
-    calls.append({"name": name, "description_list": description.split(GRAPH_FIELD_SEP)})
-    return llm_response, calls
+def merge_source_ids(existing, incoming, limit=MAX_SOURCE_IDS_PER_ENTITY, method=SOURCE_IDS_LIMIT_METHOD):
+    merged = []
+    for source_id in list(existing) + list(incoming):
+        if source_id and source_id not in merged:
+            merged.append(source_id)
+    if limit and len(merged) > limit:
+        merged = merged[-limit:] if method == "FIFO" else merged[:limit]
+    return merged
 
 
-def merge_nodes_then_upsert(entity_name, nodes_data, graph, llm_response, calls):
-    already_entitiy_types = []
-    already_source_ids = []
-    already_description = []
+def apply_source_ids_limit(ids, limit, method):
+    if not limit or len(ids) <= limit:
+        return list(ids)
+    return ids[-limit:] if method == "FIFO" else ids[:limit]
+
+
+def combine_descriptions(already_description, new_descriptions):
+    combined, seen = [], set()
+
+    def add(descriptions):
+        for desc in descriptions:
+            sanitized = sanitize_text_for_encoding(desc)
+            if sanitized and sanitized not in seen:
+                seen.add(sanitized)
+                combined.append(sanitized)
+
+    add(already_description)
+    add(new_descriptions)
+    return combined
+
+
+def merge_nodes_then_upsert(entity_name, nodes_data, graph, llm_response, calls,
+                            file_path_limit=None):
+    already_entity_types, already_source_ids, already_description, already_file_paths = [], [], [], []
     already_node = graph.get_node(entity_name)
-    if already_node is not None:
-        already_entitiy_types.append(already_node["entity_type"])
-        already_source_ids.extend(split_string_by_multi_markers(already_node["source_id"], [GRAPH_FIELD_SEP]))
-        already_description.append(already_node["description"])
+    if already_node:
+        existing_type = already_node.get("entity_type")
+        if not isinstance(existing_type, str) or not existing_type.strip():
+            existing_type = "UNKNOWN"
+        if "," in existing_type:
+            tokens = [t.strip() for t in existing_type.split(",")]
+            non_empty = [t for t in tokens if t]
+            existing_type = non_empty[0] if non_empty else "UNKNOWN"
+        already_entity_types.append(existing_type)
+        already_source_ids.extend((already_node.get("source_id") or "").split(GRAPH_FIELD_SEP))
+        already_file_paths.extend((already_node.get("file_path") or UNKNOWN_SOURCE).split(GRAPH_FIELD_SEP))
+        existing_desc = (already_node.get("description") or "").strip()
+        if existing_desc:
+            already_description.extend(existing_desc.split(GRAPH_FIELD_SEP))
 
-    from collections import Counter
+    new_source_ids = [dp["source_id"] for dp in nodes_data if dp.get("source_id")]
+    full_source_ids = merge_source_ids(
+        [c for c in already_source_ids if c], new_source_ids, MAX_SOURCE_IDS_PER_ENTITY
+    )
+    source_ids = apply_source_ids_limit(full_source_ids, MAX_SOURCE_IDS_PER_ENTITY, SOURCE_IDS_LIMIT_METHOD)
 
-    # `max` keeps the reference's tie-break (first of the highest count).
+    if SOURCE_IDS_LIMIT_METHOD == "KEEP":
+        allowed = set(source_ids)
+        nodes_data = [
+            dp for dp in nodes_data
+            if not dp.get("source_id")
+            or dp["source_id"] in allowed
+            or dp["source_id"] in full_source_ids
+        ]
+
+    # `max` over the counter keeps the reference's tie-break: Counter preserves
+    # first-insertion order and `max` returns the first maximal element.
     entity_type = max(
-        Counter([dp["entity_type"] for dp in nodes_data] + already_entitiy_types).items(),
-        key=lambda x: x[1],
+        Counter([dp["entity_type"] for dp in nodes_data] + already_entity_types).items(),
+        key=lambda item: item[1],
     )[0]
-    description = GRAPH_FIELD_SEP.join(
-        sorted(set([dp["description"] for dp in nodes_data] + already_description))
+
+    unique_nodes = {}
+    for dp in nodes_data:
+        desc = dp.get("description")
+        if desc and desc not in unique_nodes:
+            unique_nodes[desc] = dp
+    sorted_nodes = sorted(
+        unique_nodes.values(), key=lambda x: (x.get("timestamp", 0), -len(x.get("description", "")))
     )
-    source_id = GRAPH_FIELD_SEP.join(set([dp["source_id"] for dp in nodes_data] + already_source_ids))
-    description, calls = handle_entity_relation_summary(
-        entity_name, description, 500, 32768, llm_response, calls
+    description_list = combine_descriptions(
+        already_description, [dp["description"] for dp in sorted_nodes]
     )
+    if not description_list:
+        description_list = [f"Entity {entity_name}"]
+
+    description, _llm_used = handle_entity_relation_summary(
+        entity_name, description_list, llm_response, calls
+    )
+
+    file_paths_list, seen_paths = [], set()
+    for fp in already_file_paths:
+        if fp and fp not in seen_paths:
+            file_paths_list.append(fp)
+            seen_paths.add(fp)
+    for dp in nodes_data:
+        fp = dp.get("file_path")
+        if fp and fp not in seen_paths:
+            file_paths_list.append(fp)
+            seen_paths.add(fp)
+    max_file_paths = file_path_limit if file_path_limit is not None else len(file_paths_list) + 1
+    if len(file_paths_list) > max_file_paths:
+        file_paths_list = file_paths_list[:max_file_paths]
+        file_paths_list.append(f"...TRUNCATED...({SOURCE_IDS_LIMIT_METHOD})")
+    file_path = GRAPH_FIELD_SEP.join(file_paths_list) if file_paths_list else UNKNOWN_SOURCE
+
+    truncate = "KEEP Old" if len(source_ids) < len(full_source_ids) else ""
     node_data = {
         "entity_type": entity_type,
         "description": description,
-        "source_id": source_id,
+        "source_id": GRAPH_FIELD_SEP.join(source_ids),
+        "file_path": file_path,
+        "created_at": 0,
+        "truncate": truncate,
     }
     graph.upsert_node(entity_name, node_data=node_data)
+    node_data = dict(node_data)
     node_data["entity_name"] = entity_name
-    return node_data, calls
+    return node_data
 
 
-def merge_edges_then_upsert(src_id, tgt_id, edges_data, graph, llm_response, calls):
-    already_weights = []
-    already_source_ids = []
-    already_description = []
-    already_order = []
-    if graph.has_edge(src_id, tgt_id):
-        already_edge = graph.get_edge(src_id, tgt_id)
-        already_weights.append(already_edge["weight"])
-        already_source_ids.extend(split_string_by_multi_markers(already_edge["source_id"], [GRAPH_FIELD_SEP]))
-        already_description.append(already_edge["description"])
-        already_order.append(already_edge.get("order", 1))
+def merge_edges_then_upsert(src_id, tgt_id, edges_data, graph, llm_response, calls,
+                            file_path_limit=None):
+    already_weights, already_source_ids, already_description = [], [], []
+    already_keywords, already_file_paths = [], []
+    already_edge = graph.get_edge(src_id, tgt_id) if graph.has_edge(src_id, tgt_id) else None
+    if already_edge:
+        already_weights.append(already_edge.get("weight", 1.0))
+        if already_edge.get("source_id") is not None:
+            already_source_ids.extend(already_edge["source_id"].split(GRAPH_FIELD_SEP))
+        if already_edge.get("file_path") is not None:
+            already_file_paths.extend(already_edge["file_path"].split(GRAPH_FIELD_SEP))
+        if already_edge.get("description") is not None:
+            already_description.extend(already_edge["description"].split(GRAPH_FIELD_SEP))
+        if already_edge.get("keywords") is not None:
+            already_keywords.extend(
+                split_string_by_multi_markers(already_edge["keywords"], [GRAPH_FIELD_SEP])
+            )
 
-    order = min([dp.get("order", 1) for dp in edges_data] + already_order)
-    weight = sum([dp["weight"] for dp in edges_data] + already_weights)
-    description = GRAPH_FIELD_SEP.join(
-        sorted(set([dp["description"] for dp in edges_data] + already_description))
+    new_source_ids = [dp["source_id"] for dp in edges_data if dp.get("source_id")]
+    full_source_ids = merge_source_ids(
+        [c for c in already_source_ids if c], new_source_ids, MAX_SOURCE_IDS_PER_RELATION
     )
-    source_id = GRAPH_FIELD_SEP.join(set([dp["source_id"] for dp in edges_data] + already_source_ids))
+    source_ids = apply_source_ids_limit(full_source_ids, MAX_SOURCE_IDS_PER_RELATION, SOURCE_IDS_LIMIT_METHOD)
+    source_id = GRAPH_FIELD_SEP.join(source_ids)
+
+    already_edge_source_set = set(already_source_ids)
+    weight = sum(
+        [dp["weight"] for dp in edges_data if dp.get("source_id") and dp["source_id"] not in already_edge_source_set]
+        + already_weights
+    )
+    evidence_count = len({c for c in full_source_ids if c})
+    weight = max(float(weight), float(evidence_count))
+
+    unique_edges = {}
+    for dp in edges_data:
+        desc = dp.get("description")
+        if desc and desc not in unique_edges:
+            unique_edges[desc] = dp
+    sorted_edges = sorted(
+        unique_edges.values(), key=lambda x: (x.get("timestamp", 0), -len(x.get("description", "")))
+    )
+    description_list = combine_descriptions(
+        already_description, [dp["description"] for dp in sorted_edges]
+    )
+    if not description_list:
+        description_list = [f"Relation {src_id}~{tgt_id}"]
+
+    relation_name = str((src_id, tgt_id))
+    description, _llm_used = handle_entity_relation_summary(
+        relation_name, description_list, llm_response, calls
+    )
+
+    all_keywords = set()
+    for kw_str in [already_edge.get("keywords", "")] if already_edge else []:
+        if kw_str:
+            all_keywords.update(k.strip() for k in kw_str.split(",") if k.strip())
+    for dp in edges_data:
+        if dp.get("keywords"):
+            all_keywords.update(k.strip() for k in dp["keywords"].split(",") if k.strip())
+    combined_keywords = (
+        ", ".join(sorted(all_keywords)) if all_keywords else (already_edge or {}).get("keywords", "")
+    )
+
+    file_paths_list, seen_paths = [], set()
+    for fp in already_file_paths:
+        if fp and fp not in seen_paths:
+            file_paths_list.append(fp)
+            seen_paths.add(fp)
+    for dp in edges_data:
+        fp = dp.get("file_path")
+        if fp and fp not in seen_paths:
+            file_paths_list.append(fp)
+            seen_paths.add(fp)
+    max_file_paths = file_path_limit if file_path_limit is not None else len(file_paths_list) + 1
+    if len(file_paths_list) > max_file_paths:
+        file_paths_list = file_paths_list[:max_file_paths]
+        file_paths_list.append(f"...TRUNCATED...({SOURCE_IDS_LIMIT_METHOD})")
+    file_path = GRAPH_FIELD_SEP.join(file_paths_list) if file_paths_list else UNKNOWN_SOURCE
+
     for need_insert_id in [src_id, tgt_id]:
         if not graph.has_node(need_insert_id):
             graph.upsert_node(
                 need_insert_id,
                 node_data={
+                    "entity_id": need_insert_id,
                     "source_id": source_id,
                     "description": description,
-                    "entity_type": '"UNKNOWN"',
+                    "entity_type": "UNKNOWN",
+                    "file_path": file_path,
+                    "created_at": 0,
+                    "truncate": "",
                 },
             )
-    relation_name = str((src_id, tgt_id))
-    description, calls = handle_entity_relation_summary(
-        relation_name, description, 500, 32768, llm_response, calls
-    )
+
+    truncate = "KEEP Old" if len(source_ids) < len(full_source_ids) else ""
     graph.upsert_edge(
         src_id,
         tgt_id,
         edge_data={
             "weight": weight,
             "description": description,
+            "keywords": combined_keywords,
             "source_id": source_id,
-            "order": order,
+            "file_path": file_path,
+            "created_at": 0,
+            "truncate": truncate,
         },
     )
-    return calls
+    return graph.get_edge(src_id, tgt_id)
 
 
 def normalise_source(value):
     return sorted(value.split(GRAPH_FIELD_SEP)) if value else []
 
 
+def seed_json(seed):
+    """Serialise a seed: edge keys are (src, tgt) tuples, JSON needs a string."""
+    return {
+        "nodes": seed["nodes"],
+        "edges": {f"{src}\\u0000{tgt}": edge for (src, tgt), edge in seed["edges"].items()},
+    }
+
+
+def node_case(name, seed, entity, records, summary_response):
+    graph = DictGraph(seed["nodes"], seed["edges"])
+    calls = []
+    merged = merge_nodes_then_upsert(entity, records, graph, summary_response, calls)
+    return {
+        "name": name,
+        "kind": "node",
+        "entity": entity,
+        "seed": seed_json(seed),
+        "records": records,
+        "summary_response": summary_response,
+        "expected": {
+            "node": {k: (normalise_source(v) if k == "source_id" else v) for k, v in merged.items()},
+            "summary_calls": [c["name"] for c in calls],
+        },
+    }
+
+
+def edge_case(name, seed, src, tgt, records, summary_response):
+    graph = DictGraph(seed["nodes"], seed["edges"])
+    calls = []
+    edge = merge_edges_then_upsert(src, tgt, records, graph, summary_response, calls)
+    return {
+        "name": name,
+        "kind": "edge",
+        "src": src,
+        "tgt": tgt,
+        "seed": seed_json(seed),
+        "records": records,
+        "summary_response": summary_response,
+        "expected": {
+            "edge": {k: (normalise_source(v) if k == "source_id" else v) for k, v in edge.items()},
+            "endpoint_node": graph.get_node("BETA"),
+            "summary_calls": [c["name"] for c in calls],
+        },
+    }
+
+
 def main():
     cases = []
 
-    # --- case: fresh node merge -------------------------------------------------
-    graph = DictGraph()
-    nodes = [
-        {"entity_name": "ACME", "entity_type": "ORGANIZATION", "description": "makes things", "source_id": "chunk-1"},
-        {"entity_name": "ACME", "entity_type": "ORGANIZATION", "description": "makes things", "source_id": "chunk-2"},
-        {"entity_name": "ACME", "entity_type": "PERSON", "description": "tiny", "source_id": "chunk-3"},
+    # --- fresh node merge: majority type, timestamp-ordered descriptions -----
+    records = [
+        {"entity_name": "ACME", "entity_type": "organization", "description": "makes things",
+         "source_id": "chunk-1", "file_path": "docs/a.md", "timestamp": 0},
+        {"entity_name": "ACME", "entity_type": "organization", "description": "makes things",
+         "source_id": "chunk-2", "file_path": "docs/a.md", "timestamp": 0},
+        {"entity_name": "ACME", "entity_type": "person", "description": "tiny",
+         "source_id": "chunk-3", "file_path": "docs/a.md", "timestamp": 0},
     ]
-    calls = []
-    merged, calls = merge_nodes_then_upsert("ACME", nodes, graph, "SUMMARY", calls)
-    cases.append({
-        "name": "fresh_node_majority_type_and_sorted_descriptions",
-        "kind": "node",
-        "entity": "ACME",
-        "seed": {"nodes": {}, "edges": {}},
-        "records": nodes,
-        "summary_response": "SUMMARY",
-        "expected": {
-            "node": {k: (normalise_source(v) if k == "source_id" else v) for k, v in merged.items() if k != "source_id"},
-            "source_id": normalise_source(merged["source_id"]),
-            "summary_calls": [c["name"] for c in calls],
-        },
-    })
+    cases.append(node_case(
+        "fresh_node_majority_type_and_ordered_descriptions",
+        {"nodes": {}, "edges": {}}, "ACME", records, "SUMMARY",
+    ))
 
-    # --- case: merge into an existing node -------------------------------------
+    # --- merge into an existing node -----------------------------------------
     seeded = {
         "nodes": {
             "ACME": {
-                "entity_type": "ORG",
+                "entity_type": "organization",
                 "description": "old description",
                 "source_id": f"chunk-old{GRAPH_FIELD_SEP}chunk-1",
+                "file_path": "docs/old.md",
+                "created_at": 0,
+                "truncate": "",
             }
         },
         "edges": {},
     }
-    graph = DictGraph(seeded["nodes"], seeded["edges"])
-    nodes = [
-        {"entity_name": "ACME", "entity_type": "ORG", "description": "new description", "source_id": "chunk-1"},
-        {"entity_name": "ACME", "entity_type": "ORG", "description": "new description", "source_id": "chunk-2"},
+    records = [
+        {"entity_name": "ACME", "entity_type": "organization", "description": "new description",
+         "source_id": "chunk-1", "file_path": "docs/a.md", "timestamp": 0},
+        {"entity_name": "ACME", "entity_type": "organization", "description": "new description",
+         "source_id": "chunk-2", "file_path": "docs/a.md", "timestamp": 0},
     ]
-    calls = []
-    merged, calls = merge_nodes_then_upsert("ACME", nodes, graph, "SUMMARY", calls)
-    cases.append({
-        "name": "existing_node_union_source_ids",
-        "kind": "node",
-        "entity": "ACME",
-        "seed": seeded,
-        "records": nodes,
-        "summary_response": "SUMMARY",
-        "expected": {
-            "node": {k: v for k, v in merged.items() if k != "source_id"},
-            "source_id": normalise_source(merged["source_id"]),
-            "summary_calls": [c["name"] for c in calls],
-        },
-    })
+    cases.append(node_case(
+        "existing_node_union_source_ids", seeded, "ACME", records, "SUMMARY",
+    ))
 
-    # --- case: edge merge with existing edge and unknown endpoints -------------
+    # --- tier-2 summary: long description forces the LLM call ---------------
+    long_description = " ".join(f"word{i}" for i in range(1500))
+    records = [
+        {"entity_name": "ACME", "entity_type": "organization", "description": long_description,
+         "source_id": "chunk-1", "file_path": "docs/a.md", "timestamp": 0},
+    ]
+    cases.append(node_case(
+        "long_description_forces_summary", {"nodes": {}, "edges": {}}, "ACME", records,
+        "LONG SUMMARY",
+    ))
+
+    # --- no description: the fallback fragment -------------------------------
+    records = [
+        {"entity_name": "ACME", "entity_type": "organization", "description": "",
+         "source_id": "chunk-1", "file_path": "docs/a.md", "timestamp": 0},
+    ]
+    cases.append(node_case(
+        "empty_description_uses_fallback", {"nodes": {}, "edges": {}}, "ACME", records, "SUMMARY",
+    ))
+
+    # --- file path cap --------------------------------------------------------
+    records = [
+        {"entity_name": "ACME", "entity_type": "organization", "description": "makes things",
+         "source_id": "chunk-1", "file_path": "docs/a.md", "timestamp": 0},
+        {"entity_name": "ACME", "entity_type": "organization", "description": "makes things",
+         "source_id": "chunk-2", "file_path": "docs/b.md", "timestamp": 0},
+        {"entity_name": "ACME", "entity_type": "organization", "description": "makes things",
+         "source_id": "chunk-3", "file_path": "docs/c.md", "timestamp": 0},
+    ]
+    cases.append(node_case(
+        "file_path_list_capped", {"nodes": {}, "edges": {}}, "ACME", records, "SUMMARY",
+    ))
+
+    # --- edge merge with existing edge and unknown endpoints -----------------
     seeded = {
-        "nodes": {"ACME": {"entity_type": "ORG", "description": "d", "source_id": "chunk-1"}},
+        "nodes": {"ACME": {"entity_type": "organization", "description": "d", "source_id": "chunk-1"}},
         "edges": {
             ("ACME", "BETA"): {
-                "weight": 2.0,
-                "description": "old relation",
-                "source_id": "chunk-9",
-                "order": 3,
+                "weight": 1.0,
+                "description": "edge description",
+                "keywords": "owns",
+                "source_id": "chunk-1",
+                "file_path": "docs/a.md",
+                "created_at": 0,
+                "truncate": "",
             }
         },
     }
-    graph = DictGraph(seeded["nodes"], seeded["edges"])
-    edges = [
-        {"src_id": "ACME", "tgt_id": "BETA", "weight": 1.5, "description": "new relation", "source_id": "chunk-2", "order": 1},
-        {"src_id": "ACME", "tgt_id": "BETA", "weight": 2.0, "description": "third relation", "source_id": "chunk-3", "order": 2},
+    records = [
+        {"src_id": "ACME", "tgt_id": "BETA", "weight": 1.0, "description": "edge description",
+         "source_id": "chunk-2", "order": 1, "keywords": "owns, controls", "file_path": "docs/a.md",
+         "timestamp": 0},
     ]
-    calls = []
-    calls = merge_edges_then_upsert("ACME", "BETA", edges, graph, "SHORT", calls)
-    edge = graph.get_edge("ACME", "BETA")
-    beta = graph.get_node("BETA")
-    cases.append({
-        "name": "edge_merge_weight_order_endpoint_fill",
-        "kind": "edge",
-        "src": "ACME",
-        "tgt": "BETA",
-        "seed": {
-            "nodes": seeded["nodes"],
-            "edges": {"ACME\u0000BETA": seeded["edges"][("ACME", "BETA")]},
-        },
-        "records": edges,
-        "summary_response": "SHORT",
-        "expected": {
-            "edge": {k: v for k, v in edge.items() if k != "source_id"},
-            "edge_source_id": normalise_source(edge["source_id"]),
-            "endpoint_node": beta,
-            "summary_calls": [c["name"] for c in calls],
-        },
-    })
+    cases.append(edge_case(
+        "edge_merge_keeps_evidence_weight", seeded, "ACME", "BETA", records, "SUMMARY",
+    ))
 
-    # --- case: summary threshold triggers --------------------------------------
-    long_text = " ".join(f"token{i}" for i in range(600))
-    graph = DictGraph()
-    nodes = [{"entity_name": "BIG", "entity_type": "CONCEPT", "description": long_text, "source_id": "chunk-1"}]
-    calls = []
-    merged, calls = merge_nodes_then_upsert("BIG", nodes, graph, "COMPRESSED", calls)
-    cases.append({
-        "name": "long_description_triggers_summary",
-        "kind": "node",
-        "entity": "BIG",
-        "seed": {"nodes": {}, "edges": {}},
-        "records": nodes,
-        "summary_response": "COMPRESSED",
-        "expected": {
-            "node": {k: v for k, v in merged.items() if k != "source_id"},
-            "source_id": normalise_source(merged["source_id"]),
-            "summary_calls": [c["name"] for c in calls],
-        },
-    })
+    # --- edge merge, new edge, endpoints created -----------------------------
+    records = [
+        {"src_id": "ACME", "tgt_id": "BETA", "weight": 1.0, "description": "first",
+         "source_id": "chunk-1", "order": 1, "keywords": "owns", "file_path": "docs/a.md",
+         "timestamp": 0},
+        {"src_id": "ACME", "tgt_id": "BETA", "weight": 1.0, "description": "first",
+         "source_id": "chunk-2", "order": 1, "keywords": "controls", "file_path": "docs/b.md",
+         "timestamp": 0},
+    ]
+    cases.append(edge_case(
+        "edge_merge_creates_endpoints", {"nodes": {}, "edges": {}}, "ACME", "BETA", records,
+        "SUMMARY",
+    ))
 
     json.dump(cases, sys.stdout, ensure_ascii=False, indent=1)
     sys.stdout.write("\n")

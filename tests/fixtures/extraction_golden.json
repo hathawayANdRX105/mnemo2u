@@ -2,39 +2,34 @@
  {
   "name": "reference_example_quoted",
   "chunk_key": "chunk-aaa",
-  "raw": "(\"entity\"<|>\"Alex\"<|>\"person\"<|>\"Alex is a character.\")##(\"entity\"<|>\"Taylor\"<|>\"person\"<|>\"Taylor is certain.\")##(\"relationship\"<|>\"Alex\"<|>\"Taylor\"<|>\"Alex observes Taylor.\"<|>7)##(\"entity\"<|>\"The Device\"<|>\"technology\"<|>\"Central to the story.\")<|COMPLETE|>",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"Alex\"<|#|>\"person\"<|#|>\"Alex is a character.\"\nrelation<|#|>\"Alex\"<|#|>\"Taylor\"<|#|>\"observes\"<|#|>\"Alex observes Taylor.\"\nentity<|#|>\"The Device\"<|#|>\"technology\"<|#|>\"Central to the story.\"<|COMPLETE|>",
   "expected": {
    "nodes": [
     [
-     "\"ALEX\"",
+     "Alex",
      [
       {
-       "entity_name": "\"ALEX\"",
-       "entity_type": "\"PERSON\"",
-       "description": "\"Alex is a character.\"",
-       "source_id": "chunk-aaa"
+       "entity_name": "Alex",
+       "entity_type": "person",
+       "description": "Alex is a character.",
+       "source_id": "chunk-aaa",
+       "file_path": "unknown_source",
+       "timestamp": 0
       }
      ]
     ],
     [
-     "\"TAYLOR\"",
+     "The Device",
      [
       {
-       "entity_name": "\"TAYLOR\"",
-       "entity_type": "\"PERSON\"",
-       "description": "\"Taylor is certain.\"",
-       "source_id": "chunk-aaa"
-      }
-     ]
-    ],
-    [
-     "\"THE DEVICE\"",
-     [
-      {
-       "entity_name": "\"THE DEVICE\"",
-       "entity_type": "\"TECHNOLOGY\"",
-       "description": "\"Central to the story.\"",
-       "source_id": "chunk-aaa"
+       "entity_name": "The Device",
+       "entity_type": "technology",
+       "description": "Central to the story.",
+       "source_id": "chunk-aaa",
+       "file_path": "unknown_source",
+       "timestamp": 0
       }
      ]
     ]
@@ -42,17 +37,19 @@
    "edges": [
     [
      [
-      "\"ALEX\"",
-      "\"TAYLOR\""
+      "Alex",
+      "Taylor"
      ],
      [
       {
-       "src_id": "\"ALEX\"",
-       "tgt_id": "\"TAYLOR\"",
-       "weight": 7.0,
-       "description": "\"Alex observes Taylor.\"",
+       "src_id": "Alex",
+       "tgt_id": "Taylor",
+       "weight": 1.0,
+       "description": "Alex observes Taylor.",
+       "keywords": "observes",
        "source_id": "chunk-aaa",
-       "order": 1
+       "file_path": "unknown_source",
+       "timestamp": 0
       }
      ]
     ]
@@ -62,17 +59,21 @@
  {
   "name": "unquoted_fields_and_spacing",
   "chunk_key": "chunk-bbb",
-  "raw": "( \"entity\"<|>  acme corp <|> organization <|> makes things )  ##\n(\"relationship\" <|> acme corp <|> beta labs <|> owns <|> 3.25 )",
+  "file_path": "docs/a.md",
+  "timestamp": 0,
+  "raw": "entity<|#|>  acme corp <|#|> organization <|#|> makes things\nrelation<|#|> acme corp <|#|> beta labs <|#|> owns <|#|> Acme owns Beta Labs",
   "expected": {
    "nodes": [
     [
-     "ACME CORP",
+     "acme corp",
      [
       {
-       "entity_name": "ACME CORP",
-       "entity_type": "ORGANIZATION",
+       "entity_name": "acme corp",
+       "entity_type": "organization",
        "description": "makes things",
-       "source_id": "chunk-bbb"
+       "source_id": "chunk-bbb",
+       "file_path": "docs/a.md",
+       "timestamp": 0
       }
      ]
     ]
@@ -80,17 +81,19 @@
    "edges": [
     [
      [
-      "ACME CORP",
-      "BETA LABS"
+      "acme corp",
+      "beta labs"
      ],
      [
       {
-       "src_id": "ACME CORP",
-       "tgt_id": "BETA LABS",
-       "weight": 3.25,
-       "description": "owns",
+       "src_id": "acme corp",
+       "tgt_id": "beta labs",
+       "weight": 1.0,
+       "description": "Acme owns Beta Labs",
+       "keywords": "owns",
        "source_id": "chunk-bbb",
-       "order": 1
+       "file_path": "docs/a.md",
+       "timestamp": 0
       }
      ]
     ]
@@ -100,35 +103,52 @@
  {
   "name": "malformed_and_multiline",
   "chunk_key": "chunk-ccc",
-  "raw": "(\"entity\"<|>\"A\"<|>\"B\")##(\"entity\"<|>\"  \"<|>\"B\"<|>\"d\")##(\"entity\"<|>\"C\"<|>\"D\"<|>\"first line\nsecond line\")##(\"relationship\"<|>\"C\"<|>\"D\"<|>\"desc\"<|>not-a-number)",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"A\"<|#|>\"B\"\nentity<|#|>\"  \"<|#|>\"B\"<|#|>\"d\"\nentity<|#|>\"C\"<|#|>\"D\"<|#|>\"first line\nsecond line\"\nrelation<|#|>\"C\"<|#|>\"D\"<|#|>\"relates\"<|#|>",
   "expected": {
    "nodes": [
     [
-     "\"  \"",
+     "C",
      [
       {
-       "entity_name": "\"  \"",
-       "entity_type": "\"B\"",
-       "description": "\"d\"",
-       "source_id": "chunk-ccc"
+       "entity_name": "C",
+       "entity_type": "d",
+       "description": "\"first line",
+       "source_id": "chunk-ccc",
+       "file_path": "unknown_source",
+       "timestamp": 0
       }
      ]
     ]
    ],
+   "edges": []
+  }
+ },
+ {
+  "name": "mis_prefixed_relation_row",
+  "chunk_key": "chunk-fff",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"ACME\"<|#|>\"BETA\"<|#|>\"owns\"<|#|>\"Acme owns Beta.\"",
+  "expected": {
+   "nodes": [],
    "edges": [
     [
      [
-      "\"C\"",
-      "\"D\""
+      "ACME",
+      "BETA"
      ],
      [
       {
-       "src_id": "\"C\"",
-       "tgt_id": "\"D\"",
+       "src_id": "ACME",
+       "tgt_id": "BETA",
        "weight": 1.0,
-       "description": "\"desc\"",
-       "source_id": "chunk-ccc",
-       "order": 1
+       "description": "Acme owns Beta.",
+       "keywords": "owns",
+       "source_id": "chunk-fff",
+       "file_path": "unknown_source",
+       "timestamp": 0
       }
      ]
     ]
@@ -136,19 +156,36 @@
   }
  },
  {
-  "name": "nested_parentheses",
-  "chunk_key": "chunk-ddd",
-  "raw": "(\"entity\"<|>\"X (the founder)\"<|>\"person\"<|>\"X (born 1970) leads.\")",
+  "name": "merged_rows_one_line",
+  "chunk_key": "chunk-ggg",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"ACME\"<|#|>\"organization\"<|#|>\"A company.\"<|#|>entity<|#|>\"BETA\"<|#|>\"organization\"<|#|>\"Another.\"",
   "expected": {
    "nodes": [
     [
-     "\"X (THE FOUNDER)\"",
+     "ACME",
      [
       {
-       "entity_name": "\"X (THE FOUNDER)\"",
-       "entity_type": "\"PERSON\"",
-       "description": "\"X (born 1970) leads.\"",
-       "source_id": "chunk-ddd"
+       "entity_name": "ACME",
+       "entity_type": "organization",
+       "description": "A company.",
+       "source_id": "chunk-ggg",
+       "file_path": "unknown_source",
+       "timestamp": 0
+      }
+     ]
+    ],
+    [
+     "BETA",
+     [
+      {
+       "entity_name": "BETA",
+       "entity_type": "organization",
+       "description": "Another.",
+       "source_id": "chunk-ggg",
+       "file_path": "unknown_source",
+       "timestamp": 0
       }
      ]
     ]
@@ -159,22 +196,218 @@
  {
   "name": "escaped_entities_and_controls",
   "chunk_key": "chunk-eee",
-  "raw": "(\"entity\"<|>\"A&amp;B\u0007\"<|>\"org\"<|>\"R&amp;D unit\")",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"A&amp;B\u0007\"<|#|>\"org\"<|#|>\"R&amp;D unit\"",
   "expected": {
    "nodes": [
     [
-     "\"A&B\"",
+     "A&B",
      [
       {
-       "entity_name": "\"A&B\"",
-       "entity_type": "\"ORG\"",
-       "description": "\"R&D unit\"",
-       "source_id": "chunk-eee"
+       "entity_name": "A&B",
+       "entity_type": "org",
+       "description": "R&D unit",
+       "source_id": "chunk-eee",
+       "file_path": "unknown_source",
+       "timestamp": 0
       }
      ]
     ]
    ],
    "edges": []
+  }
+ },
+ {
+  "name": "full_width_and_cjk_spacing",
+  "chunk_key": "chunk-hhh",
+  "file_path": "docs/zh.md",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"ＡＣＭＥ\"<|#|>\"组织\"<|#|>\"中文 描述 测试\"\nrelation<|#|>\"ＡＣＭＥ\"<|#|>\"ＢＥＴＡ\"<|#|>\"拥有\"<|#|>\"中文 描述 之间 的 关系\"",
+  "expected": {
+   "nodes": [
+    [
+     "ACME",
+     [
+      {
+       "entity_name": "ACME",
+       "entity_type": "组织",
+       "description": "中文描述测试",
+       "source_id": "chunk-hhh",
+       "file_path": "docs/zh.md",
+       "timestamp": 0
+      }
+     ]
+    ]
+   ],
+   "edges": [
+    [
+     [
+      "ACME",
+      "BETA"
+     ],
+     [
+      {
+       "src_id": "ACME",
+       "tgt_id": "BETA",
+       "weight": 1.0,
+       "description": "中文描述之间的关系",
+       "keywords": "拥有",
+       "source_id": "chunk-hhh",
+       "file_path": "docs/zh.md",
+       "timestamp": 0
+      }
+     ]
+    ]
+   ]
+  }
+ },
+ {
+  "name": "quoted_names_and_keywords",
+  "chunk_key": "chunk-iii",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"\"Alex\"\"<|#|>\"\"person\"\"<|#|>\"\"Quoted name.\"\"\nrelation<|#|>\"\"Alex\"\"<|#|>\"\"Taylor\"\"<|#|>\"\"observes, watches\"\"<|#|>\"\"Watches closely.\"\"",
+  "expected": {
+   "nodes": [
+    [
+     "\"\"Alex\"\"",
+     [
+      {
+       "entity_name": "\"\"Alex\"\"",
+       "entity_type": "\"\"person\"\"",
+       "description": "\"\"Quoted name.\"\"",
+       "source_id": "chunk-iii",
+       "file_path": "unknown_source",
+       "timestamp": 0
+      }
+     ]
+    ]
+   ],
+   "edges": [
+    [
+     [
+      "\"\"Alex\"\"",
+      "\"\"Taylor\"\""
+     ],
+     [
+      {
+       "src_id": "\"\"Alex\"\"",
+       "tgt_id": "\"\"Taylor\"\"",
+       "weight": 1.0,
+       "description": "\"\"Watches closely.\"\"",
+       "keywords": "\"\"observes, watches\"\"",
+       "source_id": "chunk-iii",
+       "file_path": "unknown_source",
+       "timestamp": 0
+      }
+     ]
+    ]
+   ]
+  }
+ },
+ {
+  "name": "self_relation_and_empty_description",
+  "chunk_key": "chunk-jjj",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "relation<|#|>\"ACME\"<|#|>\"ACME\"<|#|>\"self\"<|#|>\"Self relation.\"\nrelation<|#|>\"ACME\"<|#|>\"BETA\"<|#|>\"owns\"<|#|>\"   \"",
+  "expected": {
+   "nodes": [],
+   "edges": []
+  }
+ },
+ {
+  "name": "numeric_only_names",
+  "chunk_key": "chunk-kkk",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"12\"<|#|>\"data\"<|#|>\"A short number.\"\nentity<|#|>\"1.2.3\"<|#|>\"data\"<|#|>\"Dotted number.\"\nentity<|#|>\"1234\"<|#|>\"data\"<|#|>\"Long enough number.\"",
+  "expected": {
+   "nodes": [
+    [
+     "1234",
+     [
+      {
+       "entity_name": "1234",
+       "entity_type": "data",
+       "description": "Long enough number.",
+       "source_id": "chunk-kkk",
+       "file_path": "unknown_source",
+       "timestamp": 0
+      }
+     ]
+    ]
+   ],
+   "edges": []
+  }
+ },
+ {
+  "name": "book_title_and_chinese_quotes",
+  "chunk_key": "chunk-lll",
+  "file_path": "docs/zh.md",
+  "timestamp": 0,
+  "raw": "entity<|#|>\"《本书》\"<|#|>\"content\"<|#|>\"书名。\"\nentity<|#|>\"“引用”\"<|#|>\"content\"<|#|>\"引用的内容。\"",
+  "expected": {
+   "nodes": [
+    [
+     "本书",
+     [
+      {
+       "entity_name": "本书",
+       "entity_type": "content",
+       "description": "书名。",
+       "source_id": "chunk-lll",
+       "file_path": "docs/zh.md",
+       "timestamp": 0
+      }
+     ]
+    ],
+    [
+     "引用",
+     [
+      {
+       "entity_name": "引用",
+       "entity_type": "content",
+       "description": "引用的内容。",
+       "source_id": "chunk-lll",
+       "file_path": "docs/zh.md",
+       "timestamp": 0
+      }
+     ]
+    ]
+   ],
+   "edges": []
+  }
+ },
+ {
+  "name": "relationship_interchangeable_prefix",
+  "chunk_key": "chunk-mmm",
+  "file_path": "unknown_source",
+  "timestamp": 0,
+  "raw": "relationship<|#|>\"ACME\"<|#|>\"BETA\"<|#|>\"owns\"<|#|>\"Uses the long form.\"",
+  "expected": {
+   "nodes": [],
+   "edges": [
+    [
+     [
+      "ACME",
+      "BETA"
+     ],
+     [
+      {
+       "src_id": "ACME",
+       "tgt_id": "BETA",
+       "weight": 1.0,
+       "description": "Uses the long form.",
+       "keywords": "owns",
+       "source_id": "chunk-mmm",
+       "file_path": "unknown_source",
+       "timestamp": 0
+      }
+     ]
+    ]
+   ]
   }
  }
 ]

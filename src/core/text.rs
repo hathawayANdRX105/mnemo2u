@@ -503,6 +503,209 @@ impl Tokenizer {
     }
 }
 
+/// `sanitize_text_for_encoding` + `normalize_extracted_info`
+/// (LightRAG `utils.py:5838-5971`, sanitize at :5973-6022).
+///
+/// The pipeline is: HTML unescape, surrogate/control strip, then the
+/// normalisation passes below, then the outer-quote strip, then the optional
+/// inner-quote / non-breaking-space pass, then the numeric filters.
+///
+/// Deviation from the reference: the three CJK/ASCII spacing rules are written
+/// with capture groups instead of lookaround (the `regex` crate has none), and
+/// the full-width translation is an explicit `chars().map()` table rather than
+/// `str.translate` — same result, Rust-expressible.
+pub fn normalize_extracted_info(name: &str, remove_inner_quotes: bool) -> String {
+    // sanitize_text_for_encoding: unescape, drop surrogates/control chars, trim.
+    let mut text = html_unescape(name.trim());
+    text.retain(|c| !matches!(c as u32, 0x00..=0x1f | 0x7f..=0x9f));
+    let text = text.trim().to_string();
+
+    // HTML paragraph/line-break tags.
+    let text = TAG_PATTERN.replace_all(&text, "").to_string();
+
+    // Full-width letters, digits and a few symbols -> ASCII.
+    let text: String = text.chars().map(fold_full_width).collect();
+    // Chinese punctuation that the reference maps 1:1.
+    let text = text
+        .replace('－', "-")
+        .replace('＋', "+")
+        .replace('／', "/")
+        .replace('＊', "*")
+        .replace('（', "(")
+        .replace('）', ")")
+        .replace('　', " ");
+
+    // Spaces glued between CJK characters, and between CJK and ASCII/digits/
+    // symbols, are not meaningful separators in the reference's model.
+    let text = strip_cjk_spaces(&text);
+
+    // Matching outer quotes only, and only when the enclosed text has none.
+    let mut text = strip_outer_quotes(&text);
+
+    if remove_inner_quotes {
+        text = text
+            .replace(['“', '”', '‘', '’'], "")
+            .replace(['\u{00a0}', '\u{202f}'], " ");
+        // Quotes hugging CJK characters go too (reference regex pair).
+        text = strip_cjk_adjacent_quotes(&text);
+    }
+
+    let text = text.trim().to_string();
+    if text.len() < 3 && text.bytes().all(|b| b.is_ascii_digit()) {
+        return String::new();
+    }
+    if text.len() < 6 && is_dots_and_digits(&text) {
+        return String::new();
+    }
+    text
+}
+
+/// `sanitize_and_normalize_extracted_text` (`utils.py:5808`).
+pub fn sanitize_and_normalize_extracted_text(
+    input_text: &str,
+    remove_inner_quotes: bool,
+) -> String {
+    if input_text.is_empty() {
+        return String::new();
+    }
+    normalize_extracted_info(input_text, remove_inner_quotes)
+}
+
+/// `normalize_entity_name` (`utils.py:5833`): always the inner-quote pass.
+pub fn normalize_entity_name(input_text: &str) -> String {
+    sanitize_and_normalize_extracted_text(input_text, true)
+}
+
+/// `<p>`, `<br>` and their closed forms (`normalize_extracted_info` head).
+static TAG_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"(?i)</?p\s*/?>|</?br\s*/?>").expect("tag pattern compiles")
+});
+
+static CJK_CJK: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"([\u{4e00}-\u{9fa5}])\s+([\u{4e00}-\u{9fa5}])")
+        .expect("cjk pattern compiles")
+});
+
+static CJK_ASCII: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(
+        r"([\u{4e00}-\u{9fa5}])\s+([a-zA-Z0-9\(\)\[\]@#$%!&\*\-=+_])|([a-zA-Z0-9\(\)\[\]@#$%!&\*\-=+_])\s+([\u{4e00}-\u{9fa5}])",
+    )
+    .expect("cjk/ascii pattern compiles")
+});
+
+/// Full-width -> ASCII single-char table (the reference's two `str.translate`
+/// tables plus the symbol replacements it applies unconditionally).
+fn fold_full_width(c: char) -> char {
+    match c {
+        'Ａ'..='Ｚ' => char::from_u32(c as u32 - 'Ａ' as u32 + 'A' as u32).unwrap_or(c),
+        'ａ'..='ｚ' => char::from_u32(c as u32 - 'ａ' as u32 + 'a' as u32).unwrap_or(c),
+        '０'..='９' => char::from_u32(c as u32 - '０' as u32 + '0' as u32).unwrap_or(c),
+        '—' => '-',
+        _ => c,
+    }
+}
+
+/// `re.sub(r"(?<=[CJK])\s+(?=[CJK])", "", name)` and the mixed pair — the
+/// regex crate has no lookaround, so the whitespace run is captured and the
+/// rule re-applied until it stops matching (a single pass cannot see past a
+/// run of three or more spaces).
+fn strip_cjk_spaces(text: &str) -> String {
+    let mut current = text.to_string();
+    loop {
+        let collapsed = CJK_CJK.replace_all(&current, "$1$2").to_string();
+        let collapsed = CJK_ASCII
+            .replace_all(&collapsed, |caps: &regex::Captures<'_>| {
+                match (caps.get(1), caps.get(2)) {
+                    (Some(left), Some(right)) => format!("{}{}", left.as_str(), right.as_str()),
+                    _ => match (caps.get(3), caps.get(4)) {
+                        (Some(left), Some(right)) => {
+                            format!("{}{}", left.as_str(), right.as_str())
+                        }
+                        _ => caps
+                            .get(0)
+                            .map(|whole| whole.as_str().to_string())
+                            .unwrap_or_default(),
+                    },
+                }
+            })
+            .to_string();
+        if collapsed == current {
+            return current;
+        }
+        current = collapsed;
+    }
+}
+
+fn strip_outer_quotes(text: &str) -> String {
+    let mut name = text.to_string();
+    for (open, close) in [
+        ('"', '"'),
+        ('\'', '\''),
+        ('“', '”'),
+        ('‘', '’'),
+        ('《', '》'),
+    ] {
+        if name.chars().count() >= 2 && name.starts_with(open) && name.ends_with(close) {
+            let inner: String = name
+                .chars()
+                .skip(1)
+                .take(name.chars().count() - 2)
+                .collect();
+            if !inner.contains(open) && !inner.contains(close) {
+                name = inner;
+            }
+        }
+    }
+    name
+}
+
+/// The reference's two "quotes adjacent to CJK" regexes, expressed as capture
+/// groups for the same reason as `strip_cjk_spaces`.
+fn strip_cjk_adjacent_quotes(text: &str) -> String {
+    static BEFORE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r#"['\"]+([\u{4e00}-\u{9fa5}])"#).expect("quote-before pattern compiles")
+    });
+    static AFTER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r#"([\u{4e00}-\u{9fa5}])['\"]+"#).expect("quote-after pattern compiles")
+    });
+    let current = BEFORE.replace_all(text, "$1").to_string();
+    AFTER.replace_all(&current, "$1").to_string()
+}
+
+/// `should_filter_by_dots` (`utils.py:5958`): digits and dots only, with at
+/// least one dot.
+fn is_dots_and_digits(text: &str) -> bool {
+    text.contains('.') && text.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+}
+
+/// `time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))` — the reference
+/// renders `created_at` in local time. We have no timezone database, so the
+/// rendering is UTC and the caller documents the substitution (the value is
+/// display-only provenance, never compared).
+pub fn format_local_datetime(timestamp: i64) -> String {
+    let days = timestamp.div_euclid(86_400);
+    let seconds_of_day = timestamp.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}")
+}
+
+/// Howard Hinnant's `civil_from_days`.
+fn civil_from_days(days: i64) -> (i64, u64, u64) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let year = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    (year + i64::from(month <= 2), month, day)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -32,6 +32,12 @@ pub enum RepairTarget {
     EntityVector,
     /// Re-write the community report rows.
     CommunityReport,
+    /// Re-upsert one relation vector row (`relationships_vdb`).
+    RelationVector,
+    /// Re-write one entity→chunk tracking row.
+    EntityChunk,
+    /// Re-write one relation→chunk tracking row.
+    RelationChunk,
 }
 
 impl RepairTarget {
@@ -42,6 +48,9 @@ impl RepairTarget {
             Self::ChunkVector => "chunk_vector",
             Self::EntityVector => "entity_vector",
             Self::CommunityReport => "community_report",
+            Self::RelationVector => "relation_vector",
+            Self::EntityChunk => "entity_chunk",
+            Self::RelationChunk => "relation_chunk",
         }
     }
 

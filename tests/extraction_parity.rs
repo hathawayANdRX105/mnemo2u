@@ -17,7 +17,8 @@ fn extraction_parser_matches_python_reference() {
         let name = case["name"].as_str().expect("case name");
         let chunk_key = case["chunk_key"].as_str().expect("chunk key");
         let raw_text = case["raw"].as_str().expect("raw output");
-        let parsed = parse_extraction_result(raw_text, chunk_key);
+        let file_path = case["file_path"].as_str().expect("file path");
+        let parsed = parse_extraction_result(raw_text, chunk_key, file_path);
 
         let expected_nodes = case["expected"]["nodes"].as_array().expect("nodes");
         assert_eq!(
@@ -55,6 +56,10 @@ fn extraction_parser_matches_python_reference() {
                     record.source_id,
                     want_record["source_id"].as_str().expect("source")
                 );
+                assert_eq!(
+                    record.file_path,
+                    want_record["file_path"].as_str().expect("file path")
+                );
             }
         }
 
@@ -86,12 +91,20 @@ fn extraction_parser_matches_python_reference() {
                     want_record["weight"].as_f64().expect("weight")
                 );
                 assert_eq!(
+                    record.keywords,
+                    want_record["keywords"].as_str().expect("keywords")
+                );
+                assert_eq!(
                     record.description,
                     want_record["description"].as_str().expect("desc")
                 );
                 assert_eq!(
                     record.source_id,
                     want_record["source_id"].as_str().expect("source")
+                );
+                assert_eq!(
+                    record.file_path,
+                    want_record["file_path"].as_str().expect("file path")
                 );
             }
         }
