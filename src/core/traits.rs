@@ -131,13 +131,18 @@ pub trait Embedder: Send + Sync {
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>;
 }
 
-/// Fact store: the single transactional truth layer (R3+; no implementation
-/// yet, kept as the declared surface for the memory layer).
+/// Fact store: the single transactional truth layer (R3; the memory layer's
+/// only authoritative store — every recall arm re-derives from its rows).
 #[async_trait]
 pub trait FactStore: Send + Sync {
     async fn put(&self, fact: &Fact) -> Result<()>;
     async fn get(&self, scope: &ScopeKey, id: &FactId) -> Result<Option<Fact>>;
+    /// Mark `old` superseded by `new` (the bi-temporal correction path): the
+    /// old row keeps its history but leaves `search` results.
     async fn supersede(&self, old: &FactId, new: &Fact) -> Result<()>;
+    /// Scope pre-filtered recall: the predicate applies *inside* the store,
+    /// never as a post-filter over unscoped ranks (stage doc 03 contract 1).
+    /// Superseded rows never appear. Scoring is backend-defined.
     async fn search(
         &self,
         scope: &ScopeKey,
