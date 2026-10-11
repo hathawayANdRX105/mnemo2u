@@ -150,11 +150,11 @@ pub struct QueryParam {
 impl Default for QueryParam {
     fn default() -> Self {
         Self {
-            mode: QueryMode::Global,
+            mode: QueryMode::Mix,
             only_need_context: false,
             response_type: "Multiple Paragraphs".to_string(),
             level: 2,
-            top_k: 20,
+            top_k: 40,
             naive_max_token_for_text_unit: 12_000,
             local_max_token_for_text_unit: 4_000,
             local_max_token_for_local_context: 4_800,
