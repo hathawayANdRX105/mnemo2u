@@ -17,24 +17,28 @@
 //! 5. `llm_cache_list` references recorded on the chunk rows are dropped with
 //!    the chunks.
 //!
-//! Deviation from the reference: ours rebuilds from the *merge description
-//! fragments still stored on the graph row*, not from a re-parse of the LLM
-//! cache — R1's commit protocol keeps the truth rows authoritative and our
-//! graph rows already carry the union. A rebuild therefore re-summarises the
-//! surviving description set instead of replaying LLM responses.
+//! Deviation detail: fragment attribution needs the chunk rows'
+//! `llm_cache_list` written at insert time (port of
+//! `update_chunk_cache_list`, `utils.py:5136`). A surviving chunk whose row
+//! carries no cache references (its insert ran with the extraction cache off)
+//! is unattributable — then the merge description is kept verbatim (a safe
+//! superset, logged). `source_id` and `file_path` always rebuild from the
+//! chunk truth rows, which every path can attribute.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{json, Value};
 
-use crate::core::rag::{Chunk, EntityRecord, RelationRecord};
+use crate::core::rag::Chunk;
 use crate::core::text::Tokenizer;
 use crate::core::text::{compute_mdhash_id, split_string_by_multi_markers, GRAPH_FIELD_SEP};
 use crate::core::traits::{GraphStore, KvStore, StoreError, VectorRow, VectorStore};
-use crate::index::merge::{merge_edge, merge_node, IndexMergeOptions};
+use crate::graph::extract::{parse_extraction_result, ExtractedRecords};
+use crate::index::merge::IndexMergeOptions;
 use crate::index::tracking::{make_relation_chunk_key, parse_relation_chunk_key, TrackingStores};
 use crate::llm::cache::CachedLlm;
 use crate::llm::LlmResult;
+use tracing::warn;
 
 /// What one purge step did to a graph element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +122,8 @@ pub async fn delete_document(
     let entity_candidates = candidate_entities(stores, &deleted, &anchor_entities).await?;
     let relation_candidates = candidate_relations(stores, &deleted, &anchor_relations).await?;
 
+    let mut attributions: BTreeMap<String, ChunkAttribution> = BTreeMap::new();
+
     // 3. Classify and act on each candidate.
     for name in &entity_candidates {
         let remaining = remaining_sources_entity(stores, name, &deleted).await?;
@@ -134,7 +140,8 @@ pub async fn delete_document(
                 .await?;
             report.deleted_entities.push(name.clone());
         } else {
-            rebuild_entity(stores, name, &remaining)
+            ensure_attributions(stores, &mut attributions, &remaining).await?;
+            rebuild_entity(stores, &attributions, name, &remaining)
                 .await
                 .map_err(|e| StoreError::Backend(format!("entity rebuild: {e}")))?;
             report.rebuilt_entities.push(name.clone());
@@ -159,7 +166,8 @@ pub async fn delete_document(
             }
             report.deleted_relations.push(key.clone());
         } else {
-            rebuild_relation(stores, &src, &tgt, &remaining)
+            ensure_attributions(stores, &mut attributions, &remaining).await?;
+            rebuild_relation(stores, &attributions, &src, &tgt, &remaining)
                 .await
                 .map_err(|e| StoreError::Backend(format!("relation rebuild: {e}")))?;
             report.rebuilt_relations.push(key.clone());
@@ -317,10 +325,132 @@ async fn remaining_sources_relation(
         .collect())
 }
 
+/// What a surviving chunk can contribute to a rebuild: the cached extraction
+/// rows its `llm_cache_list` points at (re-parsed exactly like the reference
+/// `rebuild_knowledge_from_chunks` does, `operate.py:1102`) and its truth-row
+/// `file_path`. `extraction` is `None` when the row predates the forward
+/// cache bookkeeping — unattributable.
+struct ChunkAttribution {
+    extraction: Option<ExtractedRecords>,
+    file_path: String,
+}
+
+/// Fill the memo for every surviving chunk (idempotent per delete run).
+async fn ensure_attributions(
+    stores: &PurgeStores<'_>,
+    memo: &mut BTreeMap<String, ChunkAttribution>,
+    remaining: &[String],
+) -> crate::core::traits::Result<()> {
+    for chunk in remaining {
+        if memo.contains_key(chunk) {
+            continue;
+        }
+        let row = stores.text_chunks.get_by_id(chunk).await?;
+        let file_path = row
+            .as_ref()
+            .and_then(|row| row.get("file_path"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown_source")
+            .to_string();
+        let extraction = match row
+            .as_ref()
+            .and_then(|row| row.get("llm_cache_list"))
+            .and_then(Value::as_array)
+        {
+            Some(cache_keys) => {
+                let mut aggregated = ExtractedRecords::default();
+                for item in cache_keys {
+                    let Some(cache_key) = item.as_str() else {
+                        continue;
+                    };
+                    let Some(cached) = stores.llm_cache.get_by_id(cache_key).await? else {
+                        continue;
+                    };
+                    let Some(text) = cached.get("return").and_then(Value::as_str) else {
+                        continue;
+                    };
+                    let parsed = parse_extraction_result(text, chunk, &file_path);
+                    aggregated.nodes.extend(parsed.nodes);
+                    aggregated.edges.extend(parsed.edges);
+                }
+                Some(aggregated)
+            }
+            None => None,
+        };
+        memo.insert(
+            chunk.clone(),
+            ChunkAttribution {
+                extraction,
+                file_path,
+            },
+        );
+    }
+    Ok(())
+}
+
+/// `Some((description, file_path))` when every surviving chunk attributes;
+/// `None` when any chunk lacks cache bookkeeping (caller keeps the stored
+/// description as the safe superset). Fragments keep chunk order, dedup on
+/// exact text — the same first-encounter order the insert-time merge used.
+fn rebuilt_fragments(
+    attributions: &BTreeMap<String, ChunkAttribution>,
+    remaining: &[String],
+    mut select: impl FnMut(&ExtractedRecords) -> Vec<String>,
+) -> Option<(String, String)> {
+    let mut fragments: Vec<String> = Vec::new();
+    let mut paths: BTreeSet<String> = BTreeSet::new();
+    for chunk in remaining {
+        let attribution = attributions.get(chunk)?;
+        paths.insert(attribution.file_path.clone());
+        let extraction = attribution.extraction.as_ref()?;
+        for fragment in select(extraction) {
+            for piece in fragment
+                .split(GRAPH_FIELD_SEP)
+                .filter(|piece| !piece.trim().is_empty())
+            {
+                if !fragments.iter().any(|kept| kept == piece) {
+                    fragments.push(piece.to_string());
+                }
+            }
+        }
+    }
+    Some((
+        fragments.join(GRAPH_FIELD_SEP),
+        surviving_file_paths(attributions, remaining),
+    ))
+}
+
+fn surviving_file_paths(
+    attributions: &BTreeMap<String, ChunkAttribution>,
+    remaining: &[String],
+) -> String {
+    let mut paths: BTreeSet<String> = BTreeSet::new();
+    for chunk in remaining {
+        if let Some(attribution) = attributions.get(chunk) {
+            paths.insert(attribution.file_path.clone());
+        }
+    }
+    paths
+        .into_iter()
+        .collect::<Vec<String>>()
+        .join(GRAPH_FIELD_SEP)
+}
+
+/// Patch a node attribute set in place (`upsert_node` is last-write-wins per
+/// key, mirroring networkx `add_node`).
+fn apply_patch(target: &mut Value, patch: &Value) {
+    if let (Some(base), Some(changes)) = (target.as_object_mut(), patch.as_object()) {
+        for (key, value) in changes {
+            base.insert(key.clone(), value.clone());
+        }
+    }
+}
+
 /// Rebuild an entity from its surviving chunks' cached extraction, dropping
 /// the description fragments the deleted chunks contributed.
 async fn rebuild_entity(
     stores: &PurgeStores<'_>,
+    attributions: &BTreeMap<String, ChunkAttribution>,
     name: &str,
     remaining: &[String],
 ) -> LlmResult<()> {
@@ -332,32 +462,38 @@ async fn rebuild_entity(
     else {
         return Ok(());
     };
-    let retained = surviving_description_fragments(&node, remaining);
-    let record = EntityRecord {
-        entity_name: name.to_string(),
-        entity_type: node
-            .get("entity_type")
-            .and_then(Value::as_str)
-            .unwrap_or("UNKNOWN")
-            .to_string(),
-        description: retained.join(GRAPH_FIELD_SEP),
-        source_id: remaining.first().cloned().unwrap_or_default(),
-        file_path: node
-            .get("file_path")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown_source")
-            .to_string(),
-        timestamp: 0,
-    };
-    let merged = merge_node(
-        name,
-        std::slice::from_ref(&record),
-        stores.graph,
-        stores.llm,
-        stores.tokenizer,
-        stores.options,
-    )
-    .await?;
+    let mut patch = json!({
+        "entity_name": name,
+        "source_id": remaining.join(GRAPH_FIELD_SEP),
+    });
+    match rebuilt_fragments(attributions, remaining, |extraction| {
+        extraction
+            .nodes
+            .iter()
+            .filter(move |(entity, _)| entity == name)
+            .flat_map(|(_, records)| records.iter().map(|record| record.description.clone()))
+            .collect()
+    }) {
+        Some((description, file_path)) => {
+            patch["description"] = json!(description);
+            patch["file_path"] = json!(file_path);
+        }
+        None => {
+            warn!(
+                entity = name,
+                "kept the stored description: a surviving chunk carries no \
+                                  llm_cache_list to attribute fragments"
+            );
+            patch["file_path"] = json!(surviving_file_paths(attributions, remaining));
+        }
+    }
+    stores
+        .graph
+        .upsert_node(name, patch.clone())
+        .await
+        .map_err(|e| crate::llm::LlmError::Transport(format!("graph write: {e}")))?;
+    let mut merged = node;
+    apply_patch(&mut merged, &patch);
     let rows = crate::index::merge::entity_vector_rows(std::slice::from_ref(&merged));
     stores
         .entities_vdb
@@ -369,6 +505,7 @@ async fn rebuild_entity(
 
 async fn rebuild_relation(
     stores: &PurgeStores<'_>,
+    attributions: &BTreeMap<String, ChunkAttribution>,
     src: &str,
     tgt: &str,
     remaining: &[String],
@@ -381,61 +518,53 @@ async fn rebuild_relation(
     else {
         return Ok(());
     };
-    let retained = surviving_description_fragments(&edge, remaining);
-    let record = RelationRecord {
-        src_id: src.to_string(),
-        tgt_id: tgt.to_string(),
-        weight: 1.0,
-        description: retained.join(GRAPH_FIELD_SEP),
-        source_id: remaining.first().cloned().unwrap_or_default(),
-        order: 1,
-        keywords: edge
-            .get("keywords")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
-        file_path: edge
-            .get("file_path")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown_source")
-            .to_string(),
-        timestamp: 0,
+    let pair = if src <= tgt {
+        (src.to_string(), tgt.to_string())
+    } else {
+        (tgt.to_string(), src.to_string())
     };
-    let merged = merge_edge(
-        src,
-        tgt,
-        std::slice::from_ref(&record),
-        stores.graph,
-        stores.llm,
-        stores.tokenizer,
-        stores.options,
-    )
-    .await?;
+    let mut patch = json!({
+        "source_id": remaining.join(GRAPH_FIELD_SEP),
+    });
+    match rebuilt_fragments(attributions, remaining, |extraction| {
+        extraction
+            .edges
+            .iter()
+            .filter(|(edge_pair, _)| *edge_pair == pair)
+            .flat_map(|(_, records)| records.iter().map(|record| record.description.clone()))
+            .collect()
+    }) {
+        Some((description, file_path)) => {
+            patch["description"] = json!(description);
+            patch["file_path"] = json!(file_path);
+        }
+        None => {
+            warn!(relation = %make_relation_chunk_key(src, tgt), "kept the stored description: a \
+                                                                  surviving chunk carries no \
+                                                                  llm_cache_list to attribute \
+                                                                  fragments");
+            patch["file_path"] = json!(surviving_file_paths(attributions, remaining));
+        }
+    }
+    stores
+        .graph
+        .upsert_edge(src, tgt, patch.clone())
+        .await
+        .map_err(|e| crate::llm::LlmError::Transport(format!("graph write: {e}")))?;
     if let Some(vdb) = stores.relationships_vdb {
+        let mut merged = edge;
+        apply_patch(&mut merged, &patch);
         let rows = crate::index::merge::relation_vector_rows(
             src,
             tgt,
             &merged,
-            remaining.first().map(String::as_str).unwrap_or_default(),
+            &remaining.join(GRAPH_FIELD_SEP),
         );
         vdb.upsert(rows)
             .await
             .map_err(|e| crate::llm::LlmError::Transport(format!("vector write: {e}")))?;
     }
     Ok(())
-}
-
-/// The stored description is a `GRAPH_FIELD_SEP`-joined fragment list, so the
-/// surviving fragments are those whose leading source marker is still alive.
-/// Our merge stores one joined blob rather than per-fragment provenance, so the
-/// conservative rule is: keep the whole blob when at least one source survives
-/// (a finer-grained split needs provenance the graph row does not carry).
-fn surviving_description_fragments(node: &Value, _remaining: &[String]) -> Vec<String> {
-    node.get("description")
-        .and_then(Value::as_str)
-        .filter(|description| !description.is_empty())
-        .map(|description| vec![description.to_string()])
-        .unwrap_or_default()
 }
 
 /// Drop the LLM cache rows the deleted chunks referenced.

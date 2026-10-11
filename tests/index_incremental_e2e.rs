@@ -333,9 +333,11 @@ async fn insert_a_insert_b_delete_a_then_b_theme_queries_see_only_b() {
         "B's relation vector rows survive the delete"
     );
 
-    // 5. The shared entity survived as a rebuild: B's source leads the
-    // merged list, the stored list follows (verified merge order), and the
-    // description blob is carried over untouched.
+    // 5. The shared entity survived as a rebuild: only B's chunk remains as
+    // a source and the description keeps only the fragment B contributed —
+    // A's "river city" fragment dies with A's chunk, the cached-extraction
+    // rebuild the reference performs in `rebuild_knowledge_from_chunks`
+    // (`operate.py:1102`).
     let shared_after = pipeline
         .graph
         .get_node(SHARED)
@@ -344,11 +346,12 @@ async fn insert_a_insert_b_delete_a_then_b_theme_queries_see_only_b() {
         .expect("shared entity survives A's delete");
     assert_eq!(
         shared_after["source_id"].as_str().expect("sources"),
-        format!("{chunk_b}{GRAPH_FIELD_SEP}{chunk_a}")
+        chunk_b
     );
     assert_eq!(
-        shared_after["description"], shared_before["description"],
-        "the surviving fragment list is kept whole"
+        shared_after["description"],
+        Value::String("KOSHIRO is a port city.".to_string()),
+        "the rebuild drops the deleted chunk's description fragment"
     );
     let shared_entity = compute_mdhash_id(SHARED, "ent-");
     assert!(

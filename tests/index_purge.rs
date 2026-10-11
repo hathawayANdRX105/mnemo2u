@@ -266,8 +266,8 @@ async fn shared_entity_is_rebuilt_and_exclusive_one_is_deleted() {
         .expect("kept");
     assert_eq!(
         acme["source_id"].as_str().expect("source"),
-        "chunk-b<SEP>chunk-a",
-        "the reference merges the new source id before the stored one"
+        "chunk-b",
+        "the deleted chunk leaves the source list: a rebuild keeps only surviving sources"
     );
 
     // The relation had one source only, so it is deleted with both vector ids.
