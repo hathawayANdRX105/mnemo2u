@@ -9,6 +9,7 @@
 //! much* of them fits the budget.
 
 pub mod context;
+pub mod facts;
 pub mod fusion;
 pub mod keywords;
 pub mod kg;

@@ -7,8 +7,9 @@
 //! - [`KvStore`]     -> turso / in-memory or JSON files (tests)
 //! - [`Embedder`]    -> fastembed (local ONNX) / deterministic mock (tests)
 //!
-//! `FactStore`/`LexicalStore` describe the later memory layer (R3+); they have
-//! no implementation yet and are not wired into the R1 pipeline.
+//! `FactStore`/`LexicalStore`/`FactVectorStore`/`FactEdgeStore` describe the
+//! memory layer (R3); the read-path arms implement them, the R1 pipeline does
+//! not consume them.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -166,13 +167,34 @@ pub trait LexicalStore: Send + Sync {
     ) -> Result<Vec<(FactId, f64)>>;
 }
 
-/// Legacy fact-graph edge access used by the R3+ read path. Kept separate from
-/// [`GraphStore`] (the RAG entity graph) until the memory layer lands.
+/// Vector arm over fact embeddings (stage doc 03 T2). The embedding cache key
+/// is `hash(scope, model, text)` — scope is part of the key so an identical
+/// text never ships a vector across scopes.
+#[async_trait]
+pub trait FactVectorStore: Send + Sync {
+    async fn upsert(&self, scope: &ScopeKey, id: &FactId, embedding: &[f32]) -> Result<()>;
+    async fn remove(&self, scope: &ScopeKey, id: &FactId) -> Result<()>;
+    /// ANN top-`limit` for `query`. The scope predicate applies *inside* the
+    /// vector search (stage doc 03 contract 1), never as a post-filter over
+    /// unscoped top-k.
+    async fn search(
+        &self,
+        scope: &ScopeKey,
+        query: &[f32],
+        limit: usize,
+    ) -> Result<Vec<(FactId, f64)>>;
+}
+
+/// Fact-graph edge access for the memory-layer graph arm (stage doc 03 T4).
+/// Kept separate from [`GraphStore`] (the RAG entity graph). Every row
+/// carries the writer's scope, so traversal filters *inside* the store —
+/// an edge is only ever visible to the scope its facts live in.
 #[async_trait]
 pub trait FactEdgeStore: Send + Sync {
-    async fn upsert_edges(&self, edges: &[Edge]) -> Result<()>;
-    async fn remove_edges_from(&self, src: &FactId) -> Result<()>;
-    /// Bounded n-hop neighborhood from a set of seed fact ids.
+    async fn upsert_edges(&self, scope: &ScopeKey, edges: &[Edge]) -> Result<()>;
+    async fn remove_edges_from(&self, scope: &ScopeKey, src: &FactId) -> Result<()>;
+    /// Bounded n-hop neighborhood from `seeds`; the scope predicate applies
+    /// inside every hop's query.
     async fn neighbors(&self, seeds: &[FactId], hops: u8, scope: &ScopeKey) -> Result<Vec<Edge>>;
     async fn edges_by_rel(&self, scope: &ScopeKey, rel: RelKind) -> Result<Vec<Edge>>;
 }
@@ -187,6 +209,10 @@ pub fn rrf_fuse(rankings: &[Vec<FactId>], k: u32) -> Vec<FactId> {
         }
     }
     let mut fused: Vec<(FactId, f64)> = scores.into_iter().collect();
-    fused.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    fused.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.0 .0.cmp(&b.0 .0))
+    });
     fused.into_iter().map(|(id, _)| id).collect()
 }
