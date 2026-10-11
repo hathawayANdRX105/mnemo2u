@@ -240,13 +240,54 @@ impl Pipeline {
 
         // R2 Phase 0: the anchor rows say which graph elements this document
         // owns, so a crash mid-run is detectable and a delete can find its
-        // candidates without scanning every tracking row.
-        let (scope_entities, scope_relations) = crate::index::purge::document_scope_keys(&records);
-        let anchor = crate::index::merge::ScopeAnchor {
-            entities: scope_entities,
-            relations: scope_relations,
-        };
+        // candidates without scanning every tracking row. Anchors are exact
+        // per document — extraction records carry their chunk (`source_id`),
+        // and another batch document's records must never make its elements
+        // delete candidates (the batch-wide anchor bug TAC7 exposed).
         for (key, _) in &new_docs {
+            let doc_chunks: std::collections::BTreeSet<&str> = chunks
+                .iter()
+                .filter(|(_, chunk)| chunk.full_doc_id == *key)
+                .map(|(chunk_key, _)| chunk_key.as_str())
+                .collect();
+            let doc_records = crate::graph::extract::ExtractedRecords {
+                nodes: records
+                    .nodes
+                    .iter()
+                    .filter_map(|(name, node_records)| {
+                        let kept: Vec<_> = node_records
+                            .iter()
+                            .filter(|record| doc_chunks.contains(record.source_id.as_str()))
+                            .cloned()
+                            .collect();
+                        (!kept.is_empty()).then_some((name.clone(), kept))
+                    })
+                    .collect(),
+                edges: records
+                    .edges
+                    .iter()
+                    .filter_map(|(pair, edge_records)| {
+                        let kept: Vec<_> = edge_records
+                            .iter()
+                            .filter(|record| doc_chunks.contains(record.source_id.as_str()))
+                            .cloned()
+                            .collect();
+                        (!kept.is_empty()).then_some((pair.clone(), kept))
+                    })
+                    .collect(),
+                chunk_cache_keys: records
+                    .chunk_cache_keys
+                    .iter()
+                    .filter(|(chunk_key, _)| doc_chunks.contains(chunk_key.as_str()))
+                    .cloned()
+                    .collect(),
+            };
+            let (scope_entities, scope_relations) =
+                crate::index::purge::document_scope_keys(&doc_records);
+            let anchor = crate::index::merge::ScopeAnchor {
+                entities: scope_entities,
+                relations: scope_relations,
+            };
             if let Err(error) = crate::index::merge::write_scope_anchor(
                 self.full_entities.as_ref(),
                 self.full_relations.as_ref(),
