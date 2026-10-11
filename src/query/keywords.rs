@@ -34,7 +34,19 @@ impl QueryKeywords {
     }
 }
 
+/// How many times a failed keyword parse retries before falling back. The
+/// reference itself does not retry the parse; the count follows its
+/// transient-failure convention `safe_vdb_operation_with_exception`
+/// (`max_retries=3`, `operate.py:1825`).
+const KEYWORD_PARSE_RETRIES: usize = 3;
+
 /// Extract both keyword lists for one query (`extract_keywords_only`).
+///
+/// A response the strict parser rejects is retried against the model — the
+/// first attempt's response is cached, so replaying that cache row cannot
+/// parse any better — and only when every attempt fails does the query fall
+/// back to empty keyword lists (the reference's "no keywords" path, logged as
+/// a warning).
 pub async fn extract_keywords_only(llm: &CachedLlm, query: &str) -> LlmResult<QueryKeywords> {
     let prompt = crate::core::text::fill_template(
         KEYWORDS_EXTRACTION,
@@ -47,19 +59,44 @@ pub async fn extract_keywords_only(llm: &CachedLlm, query: &str) -> LlmResult<Qu
         ],
     )
     .map_err(|e| LlmError::Decode(format!("keywords template: {e}")))?;
+    let options = ModelOptions {
+        json_object: true,
+        ..ModelOptions::default()
+    };
+
     let (response, _) = llm
-        .complete_cached_keyed(
-            &prompt,
-            None,
-            &[],
-            &ModelOptions {
-                json_object: true,
-                ..ModelOptions::default()
-            },
-            "keywords",
-        )
+        .complete_cached_keyed(&prompt, None, &[], &options, "keywords")
         .await?;
-    Ok(parse_keywords_response(&response).unwrap_or_default())
+    if let Some(keywords) = parse_keywords_response(&response) {
+        return Ok(keywords);
+    }
+
+    // Retries bypass the cache: the cached response is the one that just
+    // failed to parse. A successful retry replaces that row, because the
+    // reference only ever caches parseable keyword payloads
+    // (`operate.py:5163-5175`); when the keyword namespace is uncached the
+    // overwrite is a no-op.
+    for _ in 0..KEYWORD_PARSE_RETRIES {
+        let retry = llm.complete_uncached(&prompt, None, &[], &options).await?;
+        if let Some(keywords) = parse_keywords_response(&retry) {
+            if llm.caches(Some("keywords")) {
+                if let Err(e) = llm
+                    .cache_put_keyed(&prompt, None, &[], "keywords", &retry)
+                    .await
+                {
+                    tracing::warn!(%e, "keyword cache overwrite after retry failed");
+                }
+            }
+            return Ok(keywords);
+        }
+    }
+
+    tracing::warn!(
+        query = %query,
+        attempts = KEYWORD_PARSE_RETRIES + 1,
+        "keyword extraction produced no parseable payload; falling back to empty keyword lists"
+    );
+    Ok(QueryKeywords::default())
 }
 
 /// Parse the keyword JSON object. The reference is strict: one object, exactly

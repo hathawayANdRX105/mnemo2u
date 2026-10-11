@@ -1,7 +1,12 @@
 //! Keyword-response parsing — the strict JSON contract
 //! (`src/query/keywords.rs`, reference `extract_keywords_only`).
 
-use mnemo2u::query::keywords::parse_keywords_response;
+use std::sync::Arc;
+
+use mnemo2u::llm::cache::CachedLlm;
+use mnemo2u::llm::mock::MockLlm;
+use mnemo2u::query::keywords::{extract_keywords_only, parse_keywords_response};
+use mnemo2u::store::memory::MemoryKv;
 
 #[test]
 fn exact_shape_parses() {
@@ -71,4 +76,68 @@ fn first_of_two_objects_is_used() {
     let text = r#"{"high_level_keywords": ["first"], "low_level_keywords": []} {"x": 1}"#;
     let parsed = parse_keywords_response(text).expect("parses");
     assert_eq!(parsed.high, vec!["first".to_string()]);
+}
+
+const GOOD: &str = r#"{"high_level_keywords": ["themes"], "low_level_keywords": ["ACME"]}"#;
+
+/// A response that fails to parse once must be retried against the model, and
+/// the retry's payload must win without falling back to empty lists
+/// (`extract_keywords_only`, retry cap per the reference's `max_retries=3`).
+#[tokio::test]
+async fn unparseable_response_is_retried_until_it_parses() {
+    let inner = Arc::new(MockLlm::new(
+        "mock",
+        vec!["just prose, no json anywhere".to_string(), GOOD.to_string()],
+    ));
+    let client = CachedLlm::new(inner.clone(), Arc::new(MemoryKv::new()));
+
+    let keywords = extract_keywords_only(&client, "who owns ACME?")
+        .await
+        .expect("keywords");
+    assert_eq!(keywords.high, vec!["themes".to_string()]);
+    assert_eq!(keywords.low, vec!["ACME".to_string()]);
+    assert_eq!(inner.calls(), 2, "first attempt plus one successful retry");
+
+    // The retry replaced the cached bad payload: the repeat query is a cache
+    // hit on the good payload and burns no model call.
+    let again = extract_keywords_only(&client, "who owns ACME?")
+        .await
+        .expect("keywords");
+    assert_eq!(again, keywords);
+    assert_eq!(
+        inner.calls(),
+        2,
+        "the replaced cache row must serve the repeat"
+    );
+}
+
+/// Every attempt unparseable: the retry cap is burned and the query falls
+/// back to empty keyword lists instead of panicking or erroring.
+#[tokio::test]
+async fn repeated_parse_failures_fall_back_to_empty_keyword_lists() {
+    // One bad response per call: first attempt + the 3-retry cap = 4. A
+    // 5th attempt would exhaust this script and fail the test.
+    let bad: Vec<String> = (0..4).map(|i| format!("still no json {i}")).collect();
+    let inner = Arc::new(MockLlm::new("mock", bad));
+    let client = CachedLlm::new(inner.clone(), Arc::new(MemoryKv::new()));
+
+    let keywords = extract_keywords_only(&client, "query")
+        .await
+        .expect("no panic, no error");
+    assert!(keywords.high.is_empty());
+    assert!(keywords.low.is_empty());
+    assert_eq!(inner.calls(), 4, "one attempt plus the retry cap, no more");
+}
+
+/// A parseable first response must never pay for a retry.
+#[tokio::test]
+async fn parseable_first_response_never_retries() {
+    let inner = Arc::new(MockLlm::new("mock", vec![GOOD.to_string()]));
+    let client = CachedLlm::new(inner.clone(), Arc::new(MemoryKv::new()));
+
+    let keywords = extract_keywords_only(&client, "query")
+        .await
+        .expect("keywords");
+    assert_eq!(keywords.high, vec!["themes".to_string()]);
+    assert_eq!(inner.calls(), 1, "a parseable payload needs no retry");
 }
