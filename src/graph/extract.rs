@@ -114,6 +114,13 @@ pub fn build_extract_prompts() -> LlmResult<ExtractPrompts> {
 pub struct ExtractedRecords {
     pub nodes: Vec<(String, Vec<EntityRecord>)>,
     pub edges: Vec<((String, String), Vec<RelationRecord>)>,
+    /// The cache rows each chunk triggered, in chunk order — the write-back the
+    /// reference records on the chunk row's `llm_cache_list`
+    /// (`update_chunk_cache_list`, `utils.py:5136`, driven by
+    /// `use_llm_func_with_cache`, :5617-5643). A chunk absent from this list
+    /// triggered no cached call: the extraction cache switch is off, so no row
+    /// was written that a delete path would have to reach.
+    pub chunk_cache_keys: Vec<(String, Vec<String>)>,
 }
 
 impl ExtractedRecords {
@@ -333,8 +340,9 @@ struct ChunkTask {
 
 impl ChunkTask {
     /// One chunk: initial extraction, one gleaning round (guarded by the input
-    /// token budget), then parsing (`operate.py:3990-4330`).
-    async fn run(&self) -> LlmResult<ExtractedRecords> {
+    /// token budget), then parsing (`operate.py:3990-4330`). Returns the
+    /// records plus the cache rows this chunk triggered, in call order.
+    async fn run(&self) -> LlmResult<(ExtractedRecords, Vec<String>)> {
         let mut user_vars: Vec<(&str, &str)> = self
             .prompts
             .user_vars
@@ -348,9 +356,9 @@ impl ChunkTask {
         let user_prompt = fill_template(&self.prompts.user_template, &user_vars)
             .map_err(|e| LlmError::Decode(format!("user template: {e}")))?;
 
-        let (mut final_result, _) = self
+        let initial = self
             .limiter
-            .run(self.llm.complete_cached_keyed(
+            .run(self.llm.complete_cached_keyed_tracked(
                 &user_prompt,
                 Some(&self.prompts.system),
                 &[],
@@ -358,10 +366,14 @@ impl ChunkTask {
                 "extract",
             ))
             .await?;
+        let mut final_result = initial.text;
         let history = vec![
             ChatMessage::user(user_prompt),
             ChatMessage::assistant(final_result.clone()),
         ];
+        // `None` entries mean the extraction cache switch is off: no row was
+        // written, so there is nothing for the delete path to reach.
+        let mut cache_keys = initial.cache_key.into_iter().collect::<Vec<String>>();
 
         // The reference runs exactly one gleaning round, and only when system +
         // history + continue prompt fits the input budget (`operate.py:4252-4286`).
@@ -380,9 +392,9 @@ impl ChunkTask {
                     "gleaning skipped: input exceeds the extract budget"
                 );
             } else {
-                let (glean_result, _) = self
+                let glean = self
                     .limiter
-                    .run(self.llm.complete_cached_keyed(
+                    .run(self.llm.complete_cached_keyed_tracked(
                         &self.prompts.continue_template,
                         Some(&self.prompts.system),
                         &history,
@@ -390,17 +402,30 @@ impl ChunkTask {
                         "extract",
                     ))
                     .await?;
-                final_result.push_str(&glean_result);
+                final_result.push_str(&glean.text);
+                cache_keys.extend(glean.cache_key);
             }
         }
 
-        Ok(parse_extraction_result(
-            &final_result,
-            &self.chunk_key,
-            &self.file_path,
+        // Stable and duplicate-free: a repeated key would grow the chunk's
+        // `llm_cache_list` on every re-run without naming a new row.
+        let mut unique: Vec<String> = Vec::with_capacity(cache_keys.len());
+        for key in cache_keys {
+            if !unique.contains(&key) {
+                unique.push(key);
+            }
+        }
+
+        Ok((
+            parse_extraction_result(&final_result, &self.chunk_key, &self.file_path),
+            unique,
         ))
     }
 }
+
+/// One chunk task's result: the parsed records plus the cache keys the
+/// chunk's LLM calls wrote (reference `llm_cache_list` bookkeeping).
+type ChunkOutcome = LlmResult<(ExtractedRecords, Vec<String>)>;
 
 /// Run extraction over a chunk set with the reference's one-round gleaning,
 /// concurrently, capped by [`ExtractOptions::best_model_max_async`].
@@ -413,7 +438,7 @@ pub async fn extract_entities(
     let prompts = build_extract_prompts()?;
     let limiter = Limiter::new(options.best_model_max_async);
 
-    let mut set: JoinSet<(usize, LlmResult<ExtractedRecords>)> = JoinSet::new();
+    let mut set: JoinSet<(usize, ChunkOutcome)> = JoinSet::new();
     for (index, (chunk_key, chunk)) in chunks.iter().enumerate() {
         let task = ChunkTask {
             chunk_key: chunk_key.clone(),
@@ -428,16 +453,20 @@ pub async fn extract_entities(
         set.spawn(async move { (index, task.run().await) });
     }
 
-    let mut ordered: Vec<Option<LlmResult<ExtractedRecords>>> =
-        (0..chunks.len()).map(|_| None).collect();
+    let mut ordered: Vec<Option<ChunkOutcome>> = (0..chunks.len()).map(|_| None).collect();
     while let Some(joined) = set.join_next().await {
         let (index, result) = joined.map_err(|e| LlmError::Transport(format!("join: {e}")))?;
         ordered[index] = Some(result);
     }
 
     let mut aggregated = ExtractedRecords::default();
-    for slot in ordered.into_iter() {
-        let records = slot.expect("every chunk task reports back")?;
+    for ((chunk_key, _), slot) in chunks.iter().zip(ordered) {
+        let (records, cache_keys) = slot.expect("every chunk task reports back")?;
+        if !cache_keys.is_empty() {
+            aggregated
+                .chunk_cache_keys
+                .push((chunk_key.clone(), cache_keys));
+        }
         for (name, mut values) in records.nodes {
             match aggregated
                 .nodes

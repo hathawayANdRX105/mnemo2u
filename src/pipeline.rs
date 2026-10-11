@@ -13,9 +13,10 @@
 //! replays it. Truth-first commits plus a replay queue means no ingest is lost
 //! to a transient derived-store error, and no derived row is silently skipped.
 
-use tracing::warn;
-
+use std::collections::HashMap;
 use std::sync::Arc;
+
+use tracing::warn;
 
 use crate::core::rag::{Chunk, DocRecord, EntityRecord, QueryMode, QueryParam, RelationRecord};
 use crate::core::text::{compute_mdhash_id, Tokenizer};
@@ -367,13 +368,22 @@ impl Pipeline {
             })
             .collect();
         self.full_docs.upsert(doc_rows).await?;
+        // Cache bookkeeping (reference `update_chunk_cache_list`,
+        // `utils.py:5136`, read back by `adelete_by_doc_id`, :7078-7103):
+        // each chunk row carries the cache rows its extraction triggered, so
+        // a document delete drops exactly those. The cache rows commit during
+        // extraction, before this commit point — a crash in between leaves
+        // orphan rows that the next run's cache hits re-attach.
+        let cache_keys: HashMap<String, Vec<String>> =
+            records.chunk_cache_keys.iter().cloned().collect();
         let chunk_rows: Vec<(String, serde_json::Value)> = chunks
             .iter()
             .map(|(key, chunk)| {
-                (
-                    key.clone(),
-                    serde_json::to_value(chunk).expect("chunk serializes"),
-                )
+                let mut row = serde_json::to_value(chunk).expect("chunk serializes");
+                if let Some(keys) = cache_keys.get(key) {
+                    row["llm_cache_list"] = serde_json::json!(keys);
+                }
+                (key.clone(), row)
             })
             .collect();
         self.text_chunks.upsert(chunk_rows).await?;

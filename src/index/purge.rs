@@ -81,14 +81,25 @@ pub async fn delete_document(
     };
     let _ = document;
 
-    // 1. The document's chunk ids — the anchor of the whole cascade.
+    // 1. The document's chunk ids — the anchor of the whole cascade — plus
+    //    the cache keys those chunks recorded on their own rows, collected
+    //    while the rows still exist (the forward path, `adelete_by_doc_id`
+    //    :7078-7103).
     let mut chunk_ids: Vec<String> = Vec::new();
+    let mut cache_refs: BTreeSet<String> = BTreeSet::new();
     for key in stores.text_chunks.all_keys().await? {
         let Some(row) = stores.text_chunks.get_by_id(&key).await? else {
             continue;
         };
         if row.get("full_doc_id").and_then(Value::as_str) == Some(doc_id) {
             chunk_ids.push(key);
+            if let Some(list) = row.get("llm_cache_list").and_then(Value::as_array) {
+                for item in list {
+                    if let Some(cache_key) = item.as_str() {
+                        cache_refs.insert(cache_key.to_string());
+                    }
+                }
+            }
         }
     }
     if chunk_ids.is_empty() {
@@ -161,8 +172,9 @@ pub async fn delete_document(
     stores.text_chunks.remove(&chunk_ids).await?;
     report.deleted_chunks = chunk_ids.len();
 
-    // 5. llm_cache_list references recorded on the chunk rows die with them.
-    drop_cached_references(stores.llm_cache, &deleted).await?;
+    // 5. The cache rows the deleted chunks referenced die with them: the
+    // forward `llm_cache_list` references plus the legacy reverse scan.
+    drop_cached_references(stores.llm_cache, &deleted, &cache_refs).await?;
 
     // 6. Anchors and the document row.
     stores.full_docs.remove(&[doc_id.to_string()]).await?;
@@ -426,13 +438,19 @@ fn surviving_description_fragments(node: &Value, _remaining: &[String]) -> Vec<S
         .unwrap_or_default()
 }
 
-/// Drop the LLM cache rows the deleted chunks referenced
-/// (`llm_cache_list`, recorded on the chunk rows at insert time).
+/// Drop the LLM cache rows the deleted chunks referenced.
+///
+/// Two passes: the forward one is the reference's — cache keys recorded on the
+/// chunk rows' `llm_cache_list` by `use_llm_func_with_cache`
+/// (`utils.py:5617-5643`), read back by `adelete_by_doc_id` (:7078-7103); the
+/// legacy reverse scan keeps rows that embed `chunk_ids` themselves, which
+/// no cache row written today does.
 async fn drop_cached_references(
     llm_cache: &dyn KvStore,
     deleted: &BTreeSet<String>,
+    chunk_cache_refs: &BTreeSet<String>,
 ) -> crate::core::traits::Result<()> {
-    let mut keys: Vec<String> = Vec::new();
+    let mut keys: BTreeSet<String> = chunk_cache_refs.clone();
     for key in llm_cache.all_keys().await? {
         let ids = llm_cache
             .get_by_id(&key)
@@ -448,11 +466,12 @@ async fn drop_cached_references(
             })
             .unwrap_or_default();
         if ids.iter().any(|id| deleted.contains(id)) {
-            keys.push(key);
+            keys.insert(key);
         }
     }
     if !keys.is_empty() {
-        llm_cache.remove(&keys).await?;
+        let removed: Vec<String> = keys.into_iter().collect();
+        llm_cache.remove(&removed).await?;
     }
     Ok(())
 }
