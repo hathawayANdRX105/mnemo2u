@@ -40,6 +40,19 @@ Parity limitation worth knowing: the report-context bytes are pinned to the
 venv is not checked in). Closing that needs the venv described below plus a
 report golden generator — tracked as the only open R1 acceptance item.
 
+R2 — LightRAG-style write path (`todo/02-lightrag-upgrade.md`) — implemented
+and audit-closed (PR #1–#3): incremental document-scope merge with no global
+recompute, relationship vectors plus hl/ll dual-keyword retrieval, cascade
+delete with rebuild, tracking rows, cost gates; five query modes with `mix`
+defaults per the maintainer ruling.
+
+R3 — hardened read path (`todo/03-retrieval.md`) — implemented and accepted
+(PR #4/#5): scope pre-filter *inside* every arm (`ScopeKey::admits`), the
+memory-layer fact store, the turso FTS lexical arm, the lancedb vector arm
+with prefiltered ANN, the turso adjacency graph arm, optional temporal
+re-ranking, RRF fusion with stable tie-breaks, and L0 delivery with
+`degraded` arm reporting; AC1–AC5 ticked with measured baselines.
+
 Why the graph lives in turso rather than a dedicated graph engine: the bundled
 static build of kuzu 0.11.3 cannot link next to `turso_core` (duplicate simsimd
 symbols, then undefined cxxbridge shim), and R1 needs exactly the `GraphStore`
