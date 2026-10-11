@@ -7,8 +7,9 @@
 //! - [`KvStore`]     -> turso / in-memory or JSON files (tests)
 //! - [`Embedder`]    -> fastembed (local ONNX) / deterministic mock (tests)
 //!
-//! `FactStore`/`LexicalStore` describe the later memory layer (R3+); they have
-//! no implementation yet and are not wired into the R1 pipeline.
+//! `FactStore`/`LexicalStore`/`FactVectorStore`/`FactEdgeStore` describe the
+//! memory layer (R3); the read-path arms implement them, the R1 pipeline does
+//! not consume them.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -163,6 +164,24 @@ pub trait LexicalStore: Send + Sync {
         scope: &ScopeKey,
         query: &str,
         top_k: usize,
+    ) -> Result<Vec<(FactId, f64)>>;
+}
+
+/// Vector arm over fact embeddings (stage doc 03 T2). The embedding cache key
+/// is `hash(scope, model, text)` — scope is part of the key so an identical
+/// text never ships a vector across scopes.
+#[async_trait]
+pub trait FactVectorStore: Send + Sync {
+    async fn upsert(&self, scope: &ScopeKey, id: &FactId, embedding: &[f32]) -> Result<()>;
+    async fn remove(&self, scope: &ScopeKey, id: &FactId) -> Result<()>;
+    /// ANN top-`limit` for `query`. The scope predicate applies *inside* the
+    /// vector search (stage doc 03 contract 1), never as a post-filter over
+    /// unscoped top-k.
+    async fn search(
+        &self,
+        scope: &ScopeKey,
+        query: &[f32],
+        limit: usize,
     ) -> Result<Vec<(FactId, f64)>>;
 }
 
