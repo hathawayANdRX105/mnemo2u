@@ -26,6 +26,26 @@ pub struct ScopeKey {
     pub task_id: Option<String>,
 }
 
+impl ScopeKey {
+    /// Whether a stored item's scope falls inside a query scope: the
+    /// workspace must match exactly, and a present session/task constraint
+    /// must match exactly too — an absent constraint admits everything under
+    /// the workspace. This is the shared pre-filter predicate every recall
+    /// arm applies *inside* its own query (stage doc 03 contract 1), so a
+    /// narrower caller never sees another scope's rows, nor even their ranks.
+    pub fn admits(&self, item: &ScopeKey) -> bool {
+        self.workspace_id == item.workspace_id
+            && self
+                .session_id
+                .as_deref()
+                .is_none_or(|session| item.session_id.as_deref() == Some(session))
+            && self
+                .task_id
+                .as_deref()
+                .is_none_or(|task| item.task_id.as_deref() == Some(task))
+    }
+}
+
 /// Trust state of a memory (trust-state machine).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TrustState {
