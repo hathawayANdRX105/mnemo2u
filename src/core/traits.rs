@@ -209,6 +209,10 @@ pub fn rrf_fuse(rankings: &[Vec<FactId>], k: u32) -> Vec<FactId> {
         }
     }
     let mut fused: Vec<(FactId, f64)> = scores.into_iter().collect();
-    fused.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    fused.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.0 .0.cmp(&b.0 .0))
+    });
     fused.into_iter().map(|(id, _)| id).collect()
 }
