@@ -185,13 +185,16 @@ pub trait FactVectorStore: Send + Sync {
     ) -> Result<Vec<(FactId, f64)>>;
 }
 
-/// Legacy fact-graph edge access used by the R3+ read path. Kept separate from
-/// [`GraphStore`] (the RAG entity graph) until the memory layer lands.
+/// Fact-graph edge access for the memory-layer graph arm (stage doc 03 T4).
+/// Kept separate from [`GraphStore`] (the RAG entity graph). Every row
+/// carries the writer's scope, so traversal filters *inside* the store —
+/// an edge is only ever visible to the scope its facts live in.
 #[async_trait]
 pub trait FactEdgeStore: Send + Sync {
-    async fn upsert_edges(&self, edges: &[Edge]) -> Result<()>;
-    async fn remove_edges_from(&self, src: &FactId) -> Result<()>;
-    /// Bounded n-hop neighborhood from a set of seed fact ids.
+    async fn upsert_edges(&self, scope: &ScopeKey, edges: &[Edge]) -> Result<()>;
+    async fn remove_edges_from(&self, scope: &ScopeKey, src: &FactId) -> Result<()>;
+    /// Bounded n-hop neighborhood from `seeds`; the scope predicate applies
+    /// inside every hop's query.
     async fn neighbors(&self, seeds: &[FactId], hops: u8, scope: &ScopeKey) -> Result<Vec<Edge>>;
     async fn edges_by_rel(&self, scope: &ScopeKey, rel: RelKind) -> Result<Vec<Edge>>;
 }
