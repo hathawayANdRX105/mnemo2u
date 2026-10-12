@@ -43,6 +43,7 @@ use crate::core::traits::{
     rrf_fuse, FactEdgeStore, FactStore, FactVectorStore, LexicalStore, Result,
 };
 use crate::core::types::{Edge, FactId, RelKind, ScopeKey, SourceRef, TrustState};
+use crate::llm::judge::{ExistsVerdict, FindRequest, JudgeClient, RerankCandidate, RerankRequest};
 
 /// Jev rerank candidate ceiling (stage doc 03 contract 4): fusion only ever
 /// sees the arms' own limits, so this fixture cap can never inflate the
@@ -63,6 +64,11 @@ const GRAPH_HOPS: u8 = 2;
 /// One day in milliseconds — the temporal arm's window grid.
 const DAY_MS: i64 = 86_400_000;
 
+/// Rerank relevance at or below this is near zero
+/// (R4 contract: a whole near-zero column is a miss,
+/// not a confident ordering).
+const RERANK_NEAR_ZERO: f64 = 0.05;
+
 /// The memory-layer recall orchestrator: one truth layer plus whichever read
 /// arms the deployment configured. Each `Option` that is `None` is an arm the
 /// process does not run — it contributes nothing and never reports
@@ -72,6 +78,10 @@ pub struct MemoryRecall {
     pub vector: Option<Arc<dyn FactVectorStore>>,
     pub lexical: Option<Arc<dyn LexicalStore>>,
     pub edges: Option<Arc<dyn FactEdgeStore>>,
+    /// R4.T4: the judgment reranker. `None` keeps the
+    /// fused order — an absent judge is an absent arm,
+    /// never a degradation.
+    pub judge: Option<Arc<dyn JudgeClient>>,
 }
 
 /// Per-call budgets.
@@ -88,22 +98,28 @@ pub struct RecallOptions {
     pub per_arm_limit: usize,
 }
 
-/// The four read arms, in fixed order. Used as the `degraded` vocabulary.
+/// The five read arms, in fixed order. Used as the `degraded` vocabulary.
 pub enum ArmName {
     Vector,
     Lexical,
     Graph,
     Temporal,
+    /// The R4 judgment stage (rerank + exists
+    /// verdict). Recorded when a judge call fails;
+    /// never an arm that finds candidates.
+    Judge,
 }
 
 impl std::fmt::Display for ArmName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
+        let name = match self {
             ArmName::Vector => "vector",
             ArmName::Lexical => "lexical",
             ArmName::Graph => "graph",
             ArmName::Temporal => "temporal",
-        })
+            ArmName::Judge => "judge",
+        };
+        write!(f, "{name}")
     }
 }
 
@@ -223,7 +239,7 @@ impl MemoryRecall {
         }
         let fused: Vec<FactId> = rrf_fuse(&rankings, opts.rrf_k);
         let scores = rrf_scores(&rankings, opts.rrf_k);
-        let exists = !fused.is_empty();
+        let mut exists = !fused.is_empty();
 
         // L0 materialization in fused order: exact-scope truth read, with
         // superseded and unseen rows dropped. The fact time rides along
@@ -255,6 +271,96 @@ impl MemoryRecall {
             });
         }
 
+        // R4.T4 — judgment stage over the fused set. The set is
+        // bounded by `JEV_CANDIDATE_CAP`, so the reranker's
+        // ≤250 limit holds by construction. A failed call
+        // degrades: the fused order stands and `Judge` joins
+        // `degraded` (once — both calls share the backend).
+        if let Some(judge) = &self.judge {
+            let ranked: Vec<RerankCandidate> = materialized
+                .iter()
+                .map(|(_, candidate)| RerankCandidate {
+                    id: candidate.fact_id.0.clone(),
+                    text: candidate.summary.clone(),
+                })
+                .collect();
+            if !ranked.is_empty() {
+                match judge
+                    .rerank(&RerankRequest {
+                        query: query_text.to_string(),
+                        candidates: ranked.clone(),
+                    })
+                    .await
+                {
+                    Ok(response) => {
+                        let relevance: HashMap<&str, f64> = response
+                            .ranked
+                            .iter()
+                            .map(|hit| (hit.id.as_str(), hit.relevance))
+                            .collect();
+                        if response
+                            .ranked
+                            .iter()
+                            .all(|hit| hit.relevance <= RERANK_NEAR_ZERO)
+                        {
+                            // 近零分整列 → 视为 miss: the
+                            // reranker found nothing relevant.
+                            materialized.clear();
+                            exists = false;
+                        } else {
+                            materialized.sort_by(|(_, left), (_, right)| {
+                                let left_score = relevance
+                                    .get(left.fact_id.0.as_str())
+                                    .copied()
+                                    .unwrap_or(0.0);
+                                let right_score = relevance
+                                    .get(right.fact_id.0.as_str())
+                                    .copied()
+                                    .unwrap_or(0.0);
+                                right_score
+                                    .partial_cmp(&left_score)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            });
+                        }
+                        // 答案判定: the verdict is the
+                        // recall's existence; 无答案不强选 —
+                        // no best is forced on an absent set.
+                        if exists {
+                            match judge
+                                .find(&FindRequest {
+                                    query: query_text.to_string(),
+                                    candidates: ranked,
+                                })
+                                .await
+                            {
+                                Ok(found) => {
+                                    if found.exists_verdict == ExistsVerdict::Absent {
+                                        materialized.clear();
+                                        exists = false;
+                                    }
+                                }
+                                Err(error) => {
+                                    tracing::warn!(
+                                        %error,
+                                        arm = %ArmName::Judge,
+                                        "judge find failed"
+                                    );
+                                    degraded.push(ArmName::Judge);
+                                }
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            %error,
+                            arm = %ArmName::Judge,
+                            "judge rerank failed"
+                        );
+                        degraded.push(ArmName::Judge);
+                    }
+                }
+            }
+        }
         let mut candidates: Vec<L0Candidate> = materialized
             .into_iter()
             .map(|(_, candidate)| candidate)

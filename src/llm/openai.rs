@@ -1,7 +1,10 @@
 //! OpenAI-compatible chat client (`_llm.py::openai_complete_if_cache`, :38-64).
 //!
-//! Retry policy mirrors the reference decorator: 5 attempts, exponential
-//! backoff between 4s and 10s, retrying on rate limits and connection errors.
+//! R4.T0: the HTTP call now runs through the shared execution
+//! [`envelope`](crate::llm::envelope) — retry with exponential backoff,
+//! deadline timeout, sanitized error classification, metering. Chat is
+//! never gated by the egress gate (R1 status quo); the reference-parity
+//! retry values (5 attempts, 4s–10s backoff) come from [`OpenAiConfig`].
 
 use std::time::Duration;
 
@@ -9,6 +12,10 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use crate::core::rag::ChatMessage;
+use crate::llm::envelope::{
+    self, retry_after_header, CallMeta, DefaultMeteringSink, EgressGate, MeteringSink, Op, Policy,
+    ProviderError, RawCallError,
+};
 use crate::llm::{build_messages, LlmClient, LlmError, LlmResult, ModelOptions};
 
 #[derive(Debug, Clone)]
@@ -42,28 +49,60 @@ impl OpenAiConfig {
 pub struct OpenAiClient {
     config: OpenAiConfig,
     http: reqwest::Client,
+    policy: Policy,
+    gate: EgressGate,
+    sink: std::sync::Arc<dyn MeteringSink>,
 }
 
 impl OpenAiClient {
     pub fn new(config: OpenAiConfig) -> Self {
         Self {
+            policy: Policy {
+                max_attempts: config.max_attempts,
+                initial_backoff: config.backoff_min,
+                max_backoff: config.backoff_max,
+                timeout: Duration::from_secs(60),
+            },
+            gate: EgressGate::new(false),
+            sink: std::sync::Arc::new(DefaultMeteringSink::new()),
             config,
             http: reqwest::Client::new(),
         }
     }
 
     pub fn with_http(config: OpenAiConfig, http: reqwest::Client) -> Self {
-        Self { config, http }
+        let mut client = Self::new(config);
+        client.http = http;
+        client
     }
 
-    fn backoff(&self, attempt: u32) -> Duration {
-        let exponential = self
-            .config
-            .backoff_min
-            .saturating_mul(1u32 << (attempt - 1).min(16));
-        exponential
-            .min(self.config.backoff_max)
-            .max(self.config.backoff_min)
+    /// Override the envelope effects (tests inject a scripted sink).
+    pub fn with_envelope(
+        mut self,
+        policy: Policy,
+        gate: EgressGate,
+        sink: std::sync::Arc<dyn MeteringSink>,
+    ) -> Self {
+        self.policy = policy;
+        self.gate = gate;
+        self.sink = sink;
+        self
+    }
+}
+/// Sanitized [`ProviderError`] → the existing [`LlmError`] surface.
+/// Upstream bodies never reach the caller.
+fn provider_to_llm(error: ProviderError) -> LlmError {
+    match error {
+        ProviderError::Timeout { .. } => LlmError::Transport("request timed out".into()),
+        ProviderError::RateLimited { .. } => LlmError::Transport("rate limited".into()),
+        ProviderError::Unavailable { .. } => LlmError::Transport("backend unavailable".into()),
+        ProviderError::AuthFailed { .. } => LlmError::Status {
+            status: 401,
+            body: "authentication failed".into(),
+        },
+        ProviderError::InvalidResponse { .. } => LlmError::Decode("invalid response".into()),
+        ProviderError::PolicyDenied => LlmError::Transport("egress policy denied".into()),
+        ProviderError::Disabled => LlmError::Transport("disabled client invoked".into()),
     }
 }
 
@@ -99,50 +138,61 @@ impl LlmClient for OpenAiClient {
             self.config.base_url.trim_end_matches('/')
         );
 
-        let mut attempt = 0u32;
-        loop {
-            attempt += 1;
-            let outcome = self
-                .http
-                .post(&url)
-                .bearer_auth(&self.config.api_key)
-                .json(&body)
-                .send()
-                .await;
-            match outcome {
-                Ok(response) => {
+        let http = self.http.clone();
+        let api_key = self.config.api_key.clone();
+        let model = self.config.model.clone();
+        let result = envelope::execute(
+            Op::Chat,
+            &self.policy,
+            &self.gate,
+            self.sink.as_ref(),
+            || {
+                let http = http.clone();
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let body = body.clone();
+                let model = model.clone();
+                async move {
+                    let response = http
+                        .post(&url)
+                        .bearer_auth(&api_key)
+                        .json(&body)
+                        .send()
+                        .await
+                        .map_err(|_| RawCallError::Transport)?;
                     let status = response.status();
+                    let retry_after = retry_after_header(response.headers());
                     let text = response.text().await.unwrap_or_default();
                     if status.is_success() {
-                        let value: Value = serde_json::from_str(&text).map_err(|e| {
-                            LlmError::Decode(format!(
-                                "{e}: {}",
-                                text.chars().take(200).collect::<String>()
-                            ))
-                        })?;
-                        return Ok(value["choices"][0]["message"]["content"]
+                        let value: Value = serde_json::from_str(&text)
+                            .map_err(|_| RawCallError::InvalidResponse)?;
+                        let content = value["choices"][0]["message"]["content"]
                             .as_str()
                             .unwrap_or_default()
-                            .to_string());
+                            .to_string();
+                        let meta = CallMeta {
+                            model,
+                            input_tokens: value["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
+                            output_tokens: value["usage"]["completion_tokens"]
+                                .as_u64()
+                                .unwrap_or(0),
+                            candidate_scale: 0,
+                            from_cache: false,
+                        };
+                        Ok((content, meta))
+                    } else {
+                        Err(RawCallError::Http {
+                            status: status.as_u16(),
+                            retry_after,
+                        })
                     }
-                    let retryable = status.as_u16() == 429 || status.is_server_error();
-                    if retryable && attempt < self.config.max_attempts {
-                        tokio::time::sleep(self.backoff(attempt)).await;
-                        continue;
-                    }
-                    return Err(LlmError::Status {
-                        status: status.as_u16(),
-                        body: text,
-                    });
                 }
-                Err(err) => {
-                    if attempt < self.config.max_attempts {
-                        tokio::time::sleep(self.backoff(attempt)).await;
-                        continue;
-                    }
-                    return Err(LlmError::Transport(err.to_string()));
-                }
-            }
+            },
+        )
+        .await;
+        match result {
+            Ok((content, _meta)) => Ok(content),
+            Err(error) => Err(provider_to_llm(error)),
         }
     }
 }
@@ -151,12 +201,13 @@ impl LlmClient for OpenAiClient {
 mod tests {
     use super::*;
 
-    /// Backoff mirrors tenacity's `wait_exponential(multiplier=1, min=4, max=10)`:
-    /// 4s, 8s, 10s, 10s …
+    /// The reference parity values survive the envelope migration:
+    /// 5 attempts, backoff growing 4s → 8s → capped at 10s.
     #[test]
-    fn backoff_sequence_matches_reference() {
+    fn config_maps_to_reference_parity_policy() {
         let client = OpenAiClient::new(OpenAiConfig::new("http://127.0.0.1:1/v1", "k", "m"));
-        let delays: Vec<u64> = (1..=4).map(|i| client.backoff(i).as_secs()).collect();
-        assert_eq!(delays, vec![4, 8, 10, 10]);
+        assert_eq!(client.policy.max_attempts, 5);
+        assert_eq!(client.policy.initial_backoff, Duration::from_secs(4));
+        assert_eq!(client.policy.max_backoff, Duration::from_secs(10));
     }
 }

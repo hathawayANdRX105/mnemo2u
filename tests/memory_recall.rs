@@ -21,6 +21,9 @@ use mnemo2u::core::traits::{
     Embedder, FactEdgeStore, FactStore, FactVectorStore, LexicalStore, Result, StoreError,
 };
 use mnemo2u::core::types::{Edge, Fact, FactId, RelKind, ScopeKey, SourceRef, TrustState};
+use mnemo2u::llm::envelope::{Op, ProviderError};
+use mnemo2u::llm::judge::{ExistsVerdict, JudgeClient, JudgeError};
+use mnemo2u::llm::judge_mock::{JudgeMock, JudgeOp, JudgeReply, ScriptedReply};
 use mnemo2u::llm::mock::MockEmbedder;
 use mnemo2u::query::facts::{L0Candidate, MemoryRecall, RecallOptions};
 use mnemo2u::store::facts::MemoryFactStore;
@@ -256,6 +259,7 @@ impl Arms {
             vector: Some(Arc::clone(&self.vectors)),
             lexical: Some(Arc::clone(&self.lexical)),
             edges: Some(Arc::clone(&self.edges)),
+            judge: None,
         }
     }
 }
@@ -376,6 +380,7 @@ async fn ac3_degraded_arm_is_named_and_empty_arms_are_not_degraded() {
         vector: Some(Arc::new(FailingVector)),
         lexical: Some(Arc::clone(&stores.lexical)),
         edges: Some(Arc::clone(&stores.edges)),
+        judge: None,
     };
     let outcome = degraded_vector
         .recall(
@@ -456,6 +461,7 @@ async fn ac3_all_arms_failed_is_ok_with_exists_false() {
         vector: Some(Arc::new(FailingVector)),
         lexical: Some(Arc::new(FailingLexical)),
         edges: Some(Arc::new(FailingEdges)),
+        judge: None,
     };
     let outcome = broken
         .recall(
@@ -507,6 +513,7 @@ async fn ac5_lexical_increment_and_rrf_k_dial() {
         vector: None,
         lexical: Some(Arc::clone(&stores.lexical)),
         edges: None,
+        judge: None,
     };
     let outcome = with_both
         .recall(&ws_a, "quartz shelf mineral", None, &opts(10, 60, 20))
@@ -524,6 +531,7 @@ async fn ac5_lexical_increment_and_rrf_k_dial() {
         vector: None,
         lexical: None,
         edges: None,
+        judge: None,
     };
     let outcome = lexical_removed
         .recall(&ws_a, "quartz shelf mineral", None, &opts(10, 60, 20))
@@ -860,6 +868,7 @@ async fn ac1_exact_identifier_wins_only_with_the_lexical_arm() {
         vector: Some(Arc::clone(&vectors)),
         lexical: None,
         edges: None,
+        judge: None,
     };
     let alone = vector_only
         .recall(&ws_a, query_text, Some(&query_vec), &opts(10, 60, 20))
@@ -878,6 +887,7 @@ async fn ac1_exact_identifier_wins_only_with_the_lexical_arm() {
         vector: Some(Arc::clone(&vectors)),
         lexical: Some(Arc::new(lexical)),
         edges: None,
+        judge: None,
     };
     let together = fused
         .recall(&ws_a, query_text, Some(&query_vec), &opts(10, 60, 20))
@@ -1062,6 +1072,7 @@ async fn t7_exists_false_yields_no_candidates() {
         vector: None,
         lexical: Some(Arc::clone(&stores.lexical)),
         edges: Some(Arc::clone(&stores.edges)),
+        judge: None,
     };
     let outcome = recall
         .recall(&ws_a, "xylophone zinnwald quetzal", None, &opts(20, 60, 20))
@@ -1115,6 +1126,7 @@ async fn t6_temporal_arm_reorders_without_injecting() {
         vector: None,
         lexical: Some(Arc::clone(&stores.lexical)),
         edges: None,
+        judge: None,
     };
 
     // Identical lexical rows tie on score, so the fused order is the fact_id
@@ -1258,4 +1270,136 @@ async fn ac4_ten_thousand_row_recall_latency() {
         "P95 = {}µs exceeds the 500ms local budget",
         p95
     );
+}
+
+// --- R4.T4: the judgment stage (rerank + exists verdict). ---
+
+/// Seeds two lexical-only facts and returns a recall over them with
+/// the given judge attached.
+async fn judged_recall(
+    dir: &std::path::Path,
+    judge: Arc<dyn JudgeClient>,
+) -> (MemoryRecall, ScopeKey) {
+    let stores = arms(dir).await;
+    let ws_a = scope("ws-a", None, None);
+    let rows = [
+        ("f-hit", "kelpite shelf quantum zebra 9177"),
+        ("f-spoke", "kelpite marble quarry plumbite 4421"),
+    ];
+    for (fact_id, text) in rows {
+        stores
+            .facts
+            .put(&fact(fact_id, &ws_a, text))
+            .await
+            .expect("put");
+        stores
+            .lexical
+            .index(&ws_a, &id(fact_id), text)
+            .await
+            .expect("index");
+    }
+    let recall = MemoryRecall {
+        facts: Arc::clone(&stores.facts),
+        vector: None,
+        lexical: Some(Arc::clone(&stores.lexical)),
+        edges: None,
+        judge: Some(judge),
+    };
+    (recall, ws_a)
+}
+
+/// Rerank re-orders the fused set by judged relevance; an
+/// `Answered` verdict keeps the recall alive.
+#[tokio::test]
+async fn judge_rerank_reorders_and_answered_keeps_the_recall() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let judge = Arc::new(JudgeMock::new(
+        "judge-mock",
+        vec![
+            JudgeMock::rerank_ranked(&[("f-spoke", 0.9), ("f-hit", 0.4)]),
+            JudgeMock::find(Some(("f-spoke", 0.9)), ExistsVerdict::Answered),
+        ],
+    ));
+    let (recall, ws_a) = judged_recall(dir.path(), judge).await;
+    let outcome = recall
+        .recall(&ws_a, "kelpite", None, &opts(10, 60, 20))
+        .await
+        .expect("recall");
+
+    assert!(outcome.exists);
+    assert_eq!(ids(&outcome.candidates), vec!["f-spoke", "f-hit"]);
+    assert!(degraded_names(&outcome).is_empty());
+}
+
+/// A whole near-zero rerank column is a miss, not a confident
+/// ordering (R4 contract).
+#[tokio::test]
+async fn judge_near_zero_column_is_a_miss() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let judge = Arc::new(JudgeMock::new(
+        "judge-mock",
+        vec![JudgeMock::rerank_ranked(&[
+            ("f-hit", 0.0),
+            ("f-spoke", 0.05),
+        ])],
+    ));
+    let (recall, ws_a) = judged_recall(dir.path(), judge).await;
+    let outcome = recall
+        .recall(&ws_a, "kelpite", None, &opts(10, 60, 20))
+        .await
+        .expect("recall");
+
+    assert!(!outcome.exists, "a near-zero column is a miss");
+    assert!(outcome.candidates.is_empty());
+}
+
+/// `find`'s `Absent` verdict clears the recall even when the
+/// rerank found relevance; no best is forced on an absent set.
+#[tokio::test]
+async fn judge_find_absent_clears_the_recall() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let judge = Arc::new(JudgeMock::new(
+        "judge-mock",
+        vec![
+            JudgeMock::rerank_ranked(&[("f-hit", 0.9), ("f-spoke", 0.4)]),
+            JudgeMock::find(None, ExistsVerdict::Absent),
+        ],
+    ));
+    let (recall, ws_a) = judged_recall(dir.path(), judge).await;
+    let outcome = recall
+        .recall(&ws_a, "kelpite", None, &opts(10, 60, 20))
+        .await
+        .expect("recall");
+
+    assert!(!outcome.exists);
+    assert!(outcome.candidates.is_empty());
+}
+
+/// A failed judge call degrades: the fused order stands and `Judge`
+/// names the stage — recall still succeeds.
+#[tokio::test]
+async fn judge_failure_degrades_to_the_fused_order() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let judge = Arc::new(JudgeMock::new(
+        "judge-mock",
+        vec![ScriptedReply {
+            op: JudgeOp::Rerank,
+            reply: JudgeReply::Fail(JudgeError::Backend(ProviderError::Unavailable {
+                op: Op::Judge,
+            })),
+        }],
+    ));
+    let (recall, ws_a) = judged_recall(dir.path(), judge).await;
+    let outcome = recall
+        .recall(&ws_a, "kelpite", None, &opts(10, 60, 20))
+        .await
+        .expect("recall survives a failed judge call");
+
+    assert!(outcome.exists);
+    assert_eq!(
+        BTreeSet::from_iter(ids(&outcome.candidates)),
+        BTreeSet::from_iter(vec![String::from("f-hit"), String::from("f-spoke")]),
+        "the fused order stands"
+    );
+    assert_eq!(degraded_names(&outcome), vec!["judge"]);
 }
