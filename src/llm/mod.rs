@@ -6,6 +6,11 @@
 //! Embeddings: `fastembed` (ONNX, local; model id feeds the vector cache key).
 
 pub mod cache;
+pub mod envelope;
+pub mod judge;
+pub mod judge_cache;
+pub mod judge_jev;
+pub mod judge_mock;
 pub mod mock;
 pub mod openai;
 

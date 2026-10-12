@@ -9,12 +9,17 @@
 
 pub mod cost;
 pub mod ingest;
+pub mod judge;
 pub mod merge;
 pub mod purge;
 pub mod tracking;
 
 pub use cost::{ChunkValueScorer, ChunkVerdict, CostLedger, CostOptions, CostStage};
 pub use ingest::{OrganizedThrough, SessionIngest, SessionTurn, Turn};
+pub use judge::{
+    judge_write_candidates, ComparePassage, CompareResult, FactCandidate, JudgedCandidate,
+    WRITE_CLASSIFY_CATALOG, WRITE_EXTRACT_FIELDS,
+};
 pub use tracking::{
     apply_source_ids_limit, make_relation_chunk_key, merge_source_ids, parse_relation_chunk_key,
     TrackingStores, LIMIT_FIFO, LIMIT_KEEP,
