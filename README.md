@@ -53,6 +53,22 @@ with prefiltered ANN, the turso adjacency graph arm, optional temporal
 re-ranking, RRF fusion with stable tie-breaks, and L0 delivery with
 `degraded` arm reporting; AC1–AC5 ticked with measured baselines.
 
+R4 — judgment capability (`todo/04-jev-integration.md`) — implemented
+and merged (PR #7): a `JudgeClient` capability trait
+(classify/compare/extract/rerank/find) behind a shared execution
+envelope (`llm/envelope.rs`: retry on 408/409/429/5xx, deadline
+timeout, sanitized provider errors, metering rows, egress gate) that
+now also carries the chat path; backends are the jev-compatible
+endpoint (first), `DisabledJudge` (default, zero calls until the
+workspace opts in) and `JudgeMock` (fixtures + fault injection).
+Write path: `index::judge::judge_write_candidates` as a pure function
+(gateway wiring lands with the C01/C06 governance write gateway).
+Read path: a judge arm after fusion — rerank (≤250 candidates,
+all-near-zero treated as a miss) plus a find-style exists verdict;
+failures mark `degraded: [judge]` and keep the fused order. Dedup
+cache keyed `judge:{op}:{hash(model, request)}`; jev vocabulary
+lives only in the backend's private wire layer.
+
 Why the graph lives in turso rather than a dedicated graph engine: the bundled
 static build of kuzu 0.11.3 cannot link next to `turso_core` (duplicate simsimd
 symbols, then undefined cxxbridge shim), and R1 needs exactly the `GraphStore`
