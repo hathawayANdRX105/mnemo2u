@@ -47,15 +47,21 @@ async fn exact_identifiers_are_recalled_over_distractors() {
     let result = run(&case, "identifier").await;
     assert!(result.passed(), "identifier failed: {result:#?}");
     assert_eq!(result.quality.recall_at_k, 1.0);
-    // Four queries, each answering with its own identifier: the forbidden
-    // markers must never surface.
-    assert_eq!(result.queries.len(), 4);
+    // Five queries, each answering with its own identifier: the forbidden
+    // markers must never surface, and the right identifier must come back
+    // first rather than merely somewhere in the top-k.
+    assert_eq!(result.queries.len(), 5);
     assert!(
         result
             .queries
             .iter()
             .all(|query| query.wrong_evidence.is_empty()),
         "wrong evidence: {:#?}",
+        result.queries
+    );
+    assert!(
+        result.queries.iter().all(|query| query.top_hit),
+        "top-ranked candidate missed the expected marker: {:#?}",
         result.queries
     );
 }
@@ -129,5 +135,56 @@ async fn snapshots_are_stable_and_corpus_edits_change_them() {
     assert_ne!(
         first.snapshot_id, scale_one.snapshot_id,
         "a different scale is a different corpus"
+    );
+
+    // A corpus edit: one turn's text changes, so the effective corpus does.
+    // `snapshot_id` is computed when a case is *built*, so the edited case is
+    // rebuilt the way a case-set source edit would be — that is the path the
+    // freeze ordering audits.
+    let mut edited = first.clone();
+    edited.turns[0].content = "a different opening turn".into();
+    edited.snapshot_id = mnemo2u::eval::snapshot_id(
+        &edited.case_id,
+        &edited.turns,
+        &edited.queries,
+        edited.distractor_sessions,
+        &edited.conditions,
+    );
+    assert_ne!(
+        first.snapshot_id, edited.snapshot_id,
+        "editing a turn must rotate the snapshot"
+    );
+
+    // A query edit.
+    let mut edited = first.clone();
+    edited.queries[0].text = "a different query".into();
+    edited.snapshot_id = mnemo2u::eval::snapshot_id(
+        &edited.case_id,
+        &edited.turns,
+        &edited.queries,
+        edited.distractor_sessions,
+        &edited.conditions,
+    );
+    assert_ne!(
+        first.snapshot_id, edited.snapshot_id,
+        "editing a query must rotate the snapshot"
+    );
+
+    // A threshold edit. Without the conditions in the hash payload this is
+    // the silent criteria change the freeze ordering exists to catch:
+    // loosening `min_recall` would leave the snapshot byte-identical while
+    // the gate read the new, weaker bar.
+    let mut loosened = first.clone();
+    loosened.conditions.min_recall = 0.5;
+    loosened.snapshot_id = mnemo2u::eval::snapshot_id(
+        &loosened.case_id,
+        &loosened.turns,
+        &loosened.queries,
+        loosened.distractor_sessions,
+        &loosened.conditions,
+    );
+    assert_ne!(
+        first.snapshot_id, loosened.snapshot_id,
+        "loosening a frozen threshold must rotate the snapshot"
     );
 }

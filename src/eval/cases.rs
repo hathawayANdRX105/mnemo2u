@@ -51,6 +51,18 @@ pub fn focus_switch_case(scale: usize) -> Case {
             content: "the migration needs a rollback plan for the pinned arrow version".into(),
             timestamp: 1_102,
         },
+        // A near-miss for the query below: it shares `rotation`, `policy`
+        // and `vault` but not `secret`, `manager`, `ninety` or `days`, so
+        // AND-of-tokens correctly excludes it. A regression to OR matching
+        // would pull it into the top-k and the `arrow version pin` marker
+        // would land in a candidate — which is what makes the forbidden
+        // assertion able to fail rather than decorative.
+        Turn {
+            turn_id: "b3".into(),
+            role: "assistant".into(),
+            content: "the arrow version pin was settled while drafting the rotation policy for the vault".into(),
+            timestamp: 1_103,
+        },
         // --- Return to A: ask about the early decision again. ---
         Turn {
             turn_id: "a3".into(),
@@ -79,21 +91,23 @@ pub fn focus_switch_case(scale: usize) -> Case {
         session_id: None,
         task_id: None,
     };
+    let conditions = Conditions {
+        top_k: 5,
+        min_recall: 1.0,
+        forbid_wrong_evidence: true,
+        expect_top_hit: false,
+    };
     Case {
         case_id: "focus-switch-aba".into(),
         set: "focus-switch".into(),
-        snapshot_id: snapshot_id("focus-switch-aba", &turns, &queries, scale),
+        snapshot_id: snapshot_id("focus-switch-aba", &turns, &queries, scale, &conditions),
         scope,
         conversation_id: "conv-focus".into(),
         turns,
         distractor_sessions: scale,
         queries,
         repetitions: 3,
-        conditions: Conditions {
-            top_k: 5,
-            min_recall: 1.0,
-            forbid_wrong_evidence: true,
-        },
+        conditions,
     }
 }
 
@@ -139,6 +153,15 @@ pub fn identifier_case(scale: usize) -> Case {
             content: "the turso facts table keys rows by workspace session and task before the fact id".into(),
             timestamp: 2_005,
         },
+        // A near-miss for the multi-word query below: shares `chunk` and
+        // `vector` but not `rebuild`, `entry` or `point`, so AND-of-tokens
+        // excludes it and only OR matching would surface it.
+        Turn {
+            turn_id: "i6".into(),
+            role: "user".into(),
+            content: "the ERR-4041 failure surfaced while replaying the repair queue for the chunk vector write".into(),
+            timestamp: 2_006,
+        },
     ];
     let queries = vec![
         CaseQuery {
@@ -161,27 +184,43 @@ pub fn identifier_case(scale: usize) -> Case {
             expected: vec!["config.toml".into()],
             forbidden: vec![],
         },
+        CaseQuery {
+            // Multi-word on purpose. A single-phrase query (`src/pipeline.rs`)
+            // cannot have a load-bearing forbidden marker: under AND-of-tokens
+            // a fact either contains the whole phrase or none of it, so there
+            // is no strict subset to exclude, and AND and OR behave
+            // identically for one token. With several tokens a near-miss fact
+            // can share some of them, which is what lets this negative fail
+            // if the matching semantics regress.
+            text: "chunk vector rebuild entry point".into(),
+            expected: vec!["src/pipeline.rs".into()],
+            forbidden: vec!["ERR-4041".into()],
+        },
     ];
     let scope = super::super::ScopeKey {
         workspace_id: "eval-ws".into(),
         session_id: None,
         task_id: None,
     };
+    let conditions = Conditions {
+        top_k: 3,
+        min_recall: 1.0,
+        forbid_wrong_evidence: true,
+        // This set's claim is a ranking claim — an exact identifier must
+        // come back first, not merely somewhere in the top-k.
+        expect_top_hit: true,
+    };
     Case {
         case_id: "identifier-exact".into(),
         set: "identifier".into(),
-        snapshot_id: snapshot_id("identifier-exact", &turns, &queries, scale),
+        snapshot_id: snapshot_id("identifier-exact", &turns, &queries, scale, &conditions),
         scope,
         conversation_id: "conv-ident".into(),
         turns,
         distractor_sessions: scale,
         queries,
         repetitions: 2,
-        conditions: Conditions {
-            top_k: 3,
-            min_recall: 1.0,
-            forbid_wrong_evidence: true,
-        },
+        conditions,
     }
 }
 

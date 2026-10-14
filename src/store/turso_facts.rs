@@ -34,13 +34,17 @@ use turso::{params, Builder, Connection, Value as TursoValue};
 use crate::core::traits::{FactStore, Result, StoreError};
 use crate::core::types::{Fact, FactId, ScopeKey};
 
-/// `session_id` / `task_id` are optional scope components; SQL `NULL` is the
-/// absent case, so the column is nullable and the exact-match rule below
-/// still holds (`NULL` never equals a bound value).
+/// `session_id` / `task_id` are optional scope components, normalised to the
+/// empty string so no PK column is ever NULL: SQLite does not enforce
+/// uniqueness on a composite key containing NULL (`NULL != NULL`), so a
+/// scope with any absent component would silently accumulate duplicate rows
+/// under repeated `INSERT OR REPLACE` and break the idempotent-upsert
+/// recovery protocol. The empty string is unrepresentable as a real
+/// component (ids are non-empty), so it is a safe sentinel.
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS facts (
     workspace_id TEXT NOT NULL,
-    session_id TEXT,
-    task_id TEXT,
+    session_id TEXT NOT NULL,
+    task_id TEXT NOT NULL,
     fact_id TEXT NOT NULL,
     body TEXT NOT NULL,
     superseded_by TEXT,
@@ -52,17 +56,16 @@ fn backend(error: impl std::fmt::Display) -> StoreError {
     StoreError::Backend(error.to_string())
 }
 
+/// An absent optional scope component, normalised to the empty string so no
+/// PK column is ever NULL (see [`SCHEMA`]).
+fn norm(component: &Option<String>) -> String {
+    component.clone().unwrap_or_default()
+}
+
 fn text(value: TursoValue) -> String {
     match value {
         TursoValue::Text(text) => text,
         other => format!("{other:?}"),
-    }
-}
-
-fn integer(value: TursoValue) -> i64 {
-    match value {
-        TursoValue::Integer(number) => number,
-        _ => 0,
     }
 }
 
@@ -93,27 +96,24 @@ impl TursoFactStore {
     /// numbers starting at `start` so callers can place their own values
     /// before the clause.
     ///
-    /// An absent optional scope component is written as the literal
-    /// `IS NULL` rather than compared against a bound parameter: the driver's
-    /// null-aware operator with a parameter did not match a NULL column, so
-    /// the clause is generated from the values instead of relying on the
-    /// engine to compare them. A present component is `= ?N`.
+    /// Every component is compared with plain `= ?N` because an absent
+    /// optional is normalised to the empty string on write. An earlier
+    /// version emitted `IS NULL` for the absent case and did not normalise
+    /// the write, which made the PK (and therefore `INSERT OR REPLACE`)
+    /// ineffective for those scopes; see [`SCHEMA`].
     fn scope_clause(scope: &ScopeKey, start: usize) -> (String, Vec<TursoValue>) {
         let mut conditions = vec![format!("workspace_id = ?{start}")];
         let mut params = vec![TursoValue::Text(scope.workspace_id.clone())];
-        let mut index = start + 1;
-        for (column, value) in [
-            ("session_id", &scope.session_id),
-            ("task_id", &scope.task_id),
-        ] {
-            match value {
-                Some(bound) => {
-                    conditions.push(format!("{column} = ?{index}"));
-                    params.push(TursoValue::Text(bound.clone()));
-                    index += 1;
-                }
-                None => conditions.push(format!("{column} IS NULL")),
-            }
+        for (offset, (column, value)) in [
+            ("session_id", norm(&scope.session_id)),
+            ("task_id", norm(&scope.task_id)),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let index = start + 1 + offset;
+            conditions.push(format!("{column} = ?{index}"));
+            params.push(TursoValue::Text(value));
         }
         (conditions.join(" AND "), params)
     }
@@ -129,8 +129,8 @@ impl FactStore for TursoFactStore {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 fact.scope.workspace_id.clone(),
-                fact.scope.session_id.clone(),
-                fact.scope.task_id.clone(),
+                norm(&fact.scope.session_id),
+                norm(&fact.scope.task_id),
                 fact.id.0.clone(),
                 serde_json::to_string(fact).map_err(backend)?,
                 fact.superseded_by.clone().map(|id| id.0),
@@ -171,21 +171,29 @@ impl FactStore for TursoFactStore {
         // Locate the row by its own scope: the caller supplies the fact id,
         // and the correction must land on the row that actually holds it
         // (the memory backend searches every scope for the id too).
-        let mut located = conn
-            .query(
-                "SELECT body FROM facts WHERE fact_id = ?1",
-                params![old.0.clone()],
-            )
-            .await
-            .map_err(backend)?;
-        let row = located.next().await.map_err(backend)?;
-        let Some(row) = row else {
-            return Err(StoreError::NotFound(old.0.clone()));
+        //
+        // The scan is scoped so its result set is dropped before anything
+        // else runs on the connection: the driver holds an exclusive
+        // operation for an open row stream, and a live one makes the next
+        // statement fail with "connection is busy with another operation".
+        let located = {
+            let mut located = conn
+                .query(
+                    "SELECT body FROM facts WHERE fact_id = ?1",
+                    params![old.0.clone()],
+                )
+                .await
+                .map_err(backend)?;
+            let row = located.next().await.map_err(backend)?;
+            let Some(row) = row else {
+                return Err(StoreError::NotFound(old.0.clone()));
+            };
+            text(column(&row, 0)?)
         };
         // Readers decode the row's `body` JSON, not the typed columns, so a
         // correction must rewrite the body too — otherwise `get` hands back
         // the pre-correction record even though the columns updated.
-        let mut previous: Fact = serde_json::from_str(&text(column(&row, 0)?))
+        let mut previous: Fact = serde_json::from_str(&located)
             .map_err(|error| backend(format!("decoding fact: {error}")))?;
         previous.superseded_by = Some(new.id.clone());
         previous.revision += 1;
@@ -202,32 +210,48 @@ impl FactStore for TursoFactStore {
         ];
         update_params.extend(scope_params);
         update_params.push(TursoValue::Text(old.0.clone()));
-        conn.execute(
-            &format!(
-                "UPDATE facts SET superseded_by = ?1, revision = ?2, body = ?3 \
-                 WHERE {clause} AND fact_id = ?{id_index}"
-            ),
-            update_params,
-        )
-        .await
-        .map_err(backend)?;
-
-        conn.execute(
-            "INSERT OR REPLACE INTO facts
-                (workspace_id, session_id, task_id, fact_id, body, superseded_by, revision)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![
-                new.scope.workspace_id.clone(),
-                new.scope.session_id.clone(),
-                new.scope.task_id.clone(),
-                new.id.0.clone(),
-                serde_json::to_string(new).map_err(backend)?,
-                new.superseded_by.clone().map(|id| id.0),
-                new.revision
-            ],
-        )
-        .await
-        .map_err(backend)?;
+        // Both statements land together or neither does: a crash between the
+        // UPDATE and the INSERT would leave the old row pointing at a fact id
+        // that does not exist — superseded out of search, with the new fact
+        // absent and the Supersedes edge dangling at it. The repo already
+        // wraps multi-statement writes this way (`TursoKv::upsert`).
+        conn.execute_batch("BEGIN").await.map_err(backend)?;
+        let updated = conn
+            .execute(
+                &format!(
+                    "UPDATE facts SET superseded_by = ?1, revision = ?2, body = ?3 \
+                     WHERE {clause} AND fact_id = ?{id_index}"
+                ),
+                update_params,
+            )
+            .await;
+        let inserted = match updated {
+            Ok(_) => {
+                conn.execute(
+                    "INSERT OR REPLACE INTO facts
+                        (workspace_id, session_id, task_id, fact_id, body, superseded_by, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        new.scope.workspace_id.clone(),
+                        norm(&new.scope.session_id),
+                        norm(&new.scope.task_id),
+                        new.id.0.clone(),
+                        serde_json::to_string(new).map_err(backend)?,
+                        new.superseded_by.clone().map(|id| id.0),
+                        new.revision
+                    ],
+                )
+                .await
+            }
+            Err(error) => Err(error),
+        };
+        match inserted {
+            Ok(_) => conn.execute_batch("COMMIT").await.map_err(backend)?,
+            Err(error) => {
+                let _ = conn.execute_batch("ROLLBACK").await;
+                return Err(backend(error));
+            }
+        }
         Ok(())
     }
 
@@ -250,6 +274,10 @@ impl FactStore for TursoFactStore {
             ("session_id", &scope.session_id),
             ("task_id", &scope.task_id),
         ] {
+            // `ScopeKey::admits`: an absent query constraint admits every
+            // row under the workspace, so it contributes no condition; a
+            // present one is compared for equality against the normalised
+            // stored value.
             if let Some(bound) = value {
                 conditions.push(format!("{column} = ?{index}"));
                 binds.push(TursoValue::Text(bound.clone()));
@@ -301,17 +329,4 @@ impl FactStore for TursoFactStore {
         .map_err(backend)?;
         Ok(())
     }
-}
-
-/// The store's own document count, for `admin status`-style reporting.
-pub async fn count(store: &TursoFactStore) -> Result<usize> {
-    let conn = store.conn.lock().await;
-    let mut rows = conn
-        .query("SELECT COUNT(*) FROM facts", ())
-        .await
-        .map_err(backend)?;
-    let row = rows.next().await.map_err(backend)?;
-    Ok(row
-        .map(|row| row.get_value(0).map(integer).unwrap_or(0) as usize)
-        .unwrap_or(0))
 }

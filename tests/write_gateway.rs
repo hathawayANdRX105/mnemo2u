@@ -320,6 +320,28 @@ async fn superseded_facts_are_not_resurrected_by_replay() {
         "the old deploy key never rotates — instead it is rotated on a schedule by the secret manager",
         1_000,
     )];
+    // The seed's whole job is to be a neighbour, so pin that it actually is
+    // one: without this, a cosine that drifts under the compare floor fails
+    // later as an opaque judge-script mismatch instead of a clear cause.
+    let probe = mnemo2u::llm::mock::MockEmbedder::new()
+        .embed(std::slice::from_ref(&turns[0].turn.content))
+        .await
+        .expect("embed turn")
+        .remove(0);
+    let neighbours = harness
+        .vector
+        .search(&key, &probe, 5)
+        .await
+        .expect("vector search");
+    let (nearest, similarity) = neighbours
+        .into_iter()
+        .find(|(id, _)| id == &FactId("fact-old".into()))
+        .expect("the seeded fact is a neighbour of the turn");
+    assert!(
+        // The gateway's default `compare_min_cosine` (gateway.rs).
+        similarity >= 0.85,
+        "cosine {similarity} clears the compare floor, got {nearest:?}"
+    );
     let outcome = harness
         .gateway
         .commit_turns("conv-1", &turns)

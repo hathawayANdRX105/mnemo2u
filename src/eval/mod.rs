@@ -57,8 +57,9 @@ pub struct Case {
     pub case_id: String,
     /// Which case set this belongs to (`focus-switch` | `identifier`).
     pub set: String,
-    /// Hash over the effective corpus + queries + scale. Editing any of them
-    /// changes this, which is how a silent criteria edit is caught.
+    /// Hash over the effective corpus, queries, scale and frozen
+    /// thresholds. Editing any of them changes this, which is how a silent
+    /// criteria edit is caught.
     pub snapshot_id: String,
     /// The scope the corpus is written and recalled under.
     pub scope: ScopeKey,
@@ -97,6 +98,11 @@ pub struct Conditions {
     pub min_recall: f64,
     /// Whether any `forbidden` marker appearing is an immediate failure.
     pub forbid_wrong_evidence: bool,
+    /// Whether the **top-ranked** candidate must carry an expected marker.
+    /// Distinct from `min_recall`: recall is satisfied by any top-k slot, so
+    /// without this a correct fact demoted from rank 1 by a fusion or
+    /// per-arm-limit change still passes.
+    pub expect_top_hit: bool,
 }
 
 impl Default for Conditions {
@@ -105,6 +111,7 @@ impl Default for Conditions {
             top_k: 5,
             min_recall: 1.0,
             forbid_wrong_evidence: true,
+            expect_top_hit: false,
         }
     }
 }
@@ -121,6 +128,8 @@ pub struct QueryResult {
     pub wrong_evidence: Vec<String>,
     /// The fact ids the recall returned, in rank order.
     pub returned_ids: Vec<FactId>,
+    /// Whether the top-ranked candidate carried an expected marker.
+    pub top_hit: bool,
 }
 
 /// Quality axis (stage doc 06 §三轴报告 1).
@@ -167,6 +176,8 @@ pub enum Failure {
     WrongEvidence { query: String, found: Vec<String> },
     /// Recall returned nothing at all.
     NoCandidates { query: String },
+    /// The top-ranked candidate carried no expected marker.
+    NotTopRanked { query: String, top: String },
 }
 
 /// The full result of running one case.
@@ -252,14 +263,22 @@ fn now_seconds() -> i64 {
         .unwrap_or(0)
 }
 
-/// The snapshot id: a hash over everything that defines the effective
-/// corpus, so a silent corpus edit cannot pass a frozen expectation.
-pub fn snapshot_id(case_id: &str, turns: &[Turn], queries: &[CaseQuery], scale: usize) -> String {
+/// The snapshot id: a hash over everything that defines the effective run —
+/// corpus, queries, scale *and* the frozen thresholds — so neither a silent
+/// corpus edit nor a loosened criterion can pass a frozen expectation.
+pub fn snapshot_id(
+    case_id: &str,
+    turns: &[Turn],
+    queries: &[CaseQuery],
+    scale: usize,
+    conditions: &Conditions,
+) -> String {
     let payload = serde_json::json!({
         "case_id": case_id,
         "turns": turns,
         "queries": queries,
         "distractor_sessions": scale,
+        "conditions": conditions,
     });
     crate::core::text::compute_mdhash_id(&payload.to_string(), "snap-")
 }
@@ -287,7 +306,12 @@ fn distractor_turns(scale: usize) -> Vec<SessionTurn> {
             turns.push(SessionTurn {
                 conversation_id: format!("distractor-{session}"),
                 turn: Turn {
-                    turn_id: format!("d{index}"),
+                    // Globally unique, not just unique within a session: the
+                    // gateway derives a fact id from the *batch's*
+                    // conversation id plus this turn id, so a per-session id
+                    // would collapse every session's turns onto the same four
+                    // facts and the scale axis would stop growing.
+                    turn_id: format!("d{session}-{index}"),
                     role: if index % 2 == 0 { "user" } else { "assistant" }.to_string(),
                     content: format!(
                         "the {glyph} ledger records the {other} reconciliation for quarter {}",
@@ -379,14 +403,15 @@ pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, Strin
             },
         })
         .collect();
+    // Only the query embeds below are real work: the gateway's embed is
+    // gated on a wired vector store and this harness runs the arm off, so
+    // counting a call per ingest batch would overstate the cost axis.
     let mut embed_calls = 0usize;
     let mut embedded_texts = 0usize;
     for (conversation, turns) in [
         (case.conversation_id.as_str(), content),
         ("distractors", distractor_turns(case.distractor_sessions)),
     ] {
-        embed_calls += 1;
-        embedded_texts += turns.len();
         gateway
             .commit_turns(conversation, &turns)
             .await
@@ -461,6 +486,13 @@ pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, Strin
         } else {
             (query.expected.len() - missing.len()) as f64 / query.expected.len() as f64
         };
+        // Rank, not membership: the top-ranked candidate's summary, or the
+        // empty string when nothing was returned.
+        let top_text = texts.first().cloned().unwrap_or_default();
+        let top_hit = query
+            .expected
+            .iter()
+            .any(|marker| top_text.contains(marker.as_str()));
 
         if outcome.candidates.is_empty() {
             failures.push(Failure::NoCandidates {
@@ -479,6 +511,12 @@ pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, Strin
                 found: wrong.clone(),
             });
         }
+        if !top_hit && case.conditions.expect_top_hit {
+            failures.push(Failure::NotTopRanked {
+                query: query.text.clone(),
+                top: top_text.clone(),
+            });
+        }
 
         results.push(QueryResult {
             text: query.text.clone(),
@@ -486,6 +524,7 @@ pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, Strin
             missing,
             wrong_evidence: wrong,
             returned_ids,
+            top_hit,
         });
     }
 

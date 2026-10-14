@@ -172,6 +172,7 @@ impl FactWriteGateway {
             return Ok(GatewayOutcome {
                 considered: 0,
                 skipped_known: 0,
+                skipped_superseded: 0,
                 skipped_low_value: 0,
                 deduplicated: 0,
                 corrections: 0,
@@ -183,21 +184,25 @@ impl FactWriteGateway {
         // 1. Derive — one candidate per turn, deterministic id.
         let mut pending: Vec<Pending> = Vec::with_capacity(fresh.len());
         let mut skipped_known = 0usize;
+        let mut skipped_superseded = 0usize;
         for turn in &fresh {
             let text = turn.turn.content.trim();
             if text.is_empty() {
                 continue;
             }
             let id = FactId(fact_id(conversation_id, &turn.turn));
-            // Idempotency: a fact already present for this turn is not
-            // re-judged, re-embedded or re-written. A **superseded** row is
-            // skipped too — re-writing it would resurrect a correction,
-            // which is the R5 "correction survives rebuild" trap.
             match self.facts.get(&self.options.scope, &id).await? {
+                // Idempotency: a fact already present for this turn is not
+                // re-judged, re-embedded or re-written. A **superseded** row
+                // is skipped too — re-writing it would resurrect a
+                // correction, which is the R5 "correction survives rebuild"
+                // trap. The two cases are counted apart because they mean
+                // different things to an operator: one is a replay, the
+                // other is a suppressed resurrection.
                 Some(existing) if existing.superseded_by.is_none() && existing.text == text => {
                     skipped_known += 1;
                 }
-                Some(_) => skipped_known += 1,
+                Some(_) => skipped_superseded += 1,
                 None => pending.push(Pending {
                     id,
                     conversation_id: conversation_id.to_string(),
@@ -217,25 +222,33 @@ impl FactWriteGateway {
                     0,
                     0,
                     0,
-                    skipped_known,
+                    0,
+                    0,
                     watermark,
                 )
                 .await;
         }
 
         // 2. Embed the batch once: the vectors serve both the neighbour
-        // search and the derived vector upsert.
+        // search and the derived vector upsert. Both consumers live inside
+        // `if let Some(store) = &self.vector`, so without a vector store the
+        // embed has no consumer at all — skip it rather than burn a batch of
+        // embed calls the cost axis would have to report.
         let texts: Vec<String> = pending.iter().map(|item| item.text.clone()).collect();
-        let embeddings = self.embedder.embed(&texts).await?;
+        let embeddings = if self.vector.is_some() {
+            self.embedder.embed(&texts).await?
+        } else {
+            Vec::new()
+        };
 
         // 3. Neighbours, read from the truth layer so the judge compares real
         // text. Self and already-superseded rows never become neighbours.
         let mut neighbours: Vec<Vec<ComparePassage>> = Vec::with_capacity(pending.len());
         let mut neighbour_corpus: Vec<String> = Vec::new();
         for (index, item) in pending.iter().enumerate() {
-            let embedding = &embeddings[index];
             let mut passages = Vec::new();
             if let Some(store) = &self.vector {
+                let embedding = &embeddings[index];
                 let hits = store
                     .search(&self.options.scope, embedding, self.options.neighbors)
                     .await?;
@@ -348,7 +361,6 @@ impl FactWriteGateway {
                 continue;
             }
 
-            let embedding = &embeddings[*survivor_index];
             let source_refs = vec![self.source_ref_for(&item.conversation_id, &item.turn)];
             let fact = Fact {
                 id: item.id.clone(),
@@ -375,6 +387,7 @@ impl FactWriteGateway {
             // protocol): a crash between them leaves invisible derived rows,
             // never a watermark that claims data that is not there.
             if let Some(store) = &self.vector {
+                let embedding = &embeddings[*survivor_index];
                 store
                     .upsert(&self.options.scope, &item.id, embedding)
                     .await?;
@@ -429,6 +442,7 @@ impl FactWriteGateway {
             &fresh,
             fresh.len(),
             skipped_known,
+            skipped_superseded,
             skipped_low_value,
             deduplicated,
             corrections,
@@ -447,40 +461,62 @@ impl FactWriteGateway {
         _fresh: &[&SessionTurn],
         considered: usize,
         skipped_known: usize,
+        skipped_superseded: usize,
         skipped_low_value: usize,
         deduplicated: usize,
         corrections: usize,
         written: usize,
         previous: Option<OrganizedThrough>,
     ) -> Result<GatewayOutcome, GatewayError> {
-        // The batch's own last turn is the marker, the same convention
-        // `SessionIngest::commit_turns` uses for the RAG pipeline.
+        // Nothing to mark: writing a `{"", 0}` row would overwrite a real
+        // ledger with an empty one and make the next run replay everything.
+        if turns.is_empty() {
+            return Ok(GatewayOutcome {
+                considered,
+                skipped_known,
+                skipped_superseded,
+                skipped_low_value,
+                deduplicated,
+                corrections,
+                written,
+                watermark: previous,
+            });
+        }
+        // The marker is the batch's *latest* turn, not its last array
+        // element: `covered` treats `timestamp <= last_timestamp` as done,
+        // so a marker taken from an out-of-order tail would regress the
+        // ledger and re-drive an already-committed range on the next run.
+        // The watermark therefore only ever moves forward.
+        let latest = turns.iter().max_by_key(|turn| turn.turn.timestamp);
         let watermark = OrganizedThrough {
-            last_turn_id: turns
-                .last()
+            last_turn_id: latest
                 .map(|turn| turn.turn.turn_id.clone())
                 .unwrap_or_default(),
-            last_timestamp: turns
-                .last()
-                .map(|turn| turn.turn.timestamp)
-                .unwrap_or_default(),
+            last_timestamp: latest.map(|turn| turn.turn.timestamp).unwrap_or_default(),
         };
-        if Some(&watermark) != previous.as_ref() {
+        let advanced = match &previous {
+            Some(previous) if previous.last_timestamp >= watermark.last_timestamp => {
+                previous.clone()
+            }
+            _ => watermark,
+        };
+        if Some(&advanced) != previous.as_ref() {
             self.watermarks
                 .upsert(vec![(
                     conversation_id.to_string(),
-                    serde_json::to_value(&watermark).expect("watermark serializes"),
+                    serde_json::to_value(&advanced).expect("watermark serializes"),
                 )])
                 .await?;
         }
         Ok(GatewayOutcome {
             considered,
             skipped_known,
+            skipped_superseded,
             skipped_low_value,
             deduplicated,
             corrections,
             written,
-            watermark: Some(watermark),
+            watermark: Some(advanced),
         })
     }
 
@@ -589,6 +625,9 @@ pub struct GatewayOutcome {
     /// Turns whose fact already exists (replay, or a superseded row that
     /// must not be resurrected).
     pub skipped_known: usize,
+    /// Turns whose existing row is superseded (or whose text drifted under
+    /// the same id): skipped so a correction is never resurrected.
+    pub skipped_superseded: usize,
     /// Turns dropped by the value gate — these cost zero judge calls.
     pub skipped_low_value: usize,
     /// Turns the judge called duplicates of existing facts.
