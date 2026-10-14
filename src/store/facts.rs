@@ -66,7 +66,10 @@ fn tokenize(text: &str) -> HashSet<String> {
 
 /// Deterministic lexical score: distinct shared tokens over distinct query
 /// tokens. A query with no tokens, or a fact sharing none, scores 0.
-fn score(query: &str, text: &str) -> f64 {
+///
+/// Shared with the durable backend (`store/turso_facts.rs`) so the two
+/// fact stores rank identically and the recall tests can swap backends.
+pub(crate) fn score(query: &str, text: &str) -> f64 {
     let query_tokens = tokenize(query);
     if query_tokens.is_empty() {
         return 0.0;
