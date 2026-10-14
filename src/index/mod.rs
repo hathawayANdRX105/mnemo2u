@@ -8,6 +8,7 @@
 //! queue. Nothing here opens a second truth layer.
 
 pub mod cost;
+pub mod gateway;
 pub mod ingest;
 pub mod judge;
 pub mod merge;
@@ -15,6 +16,7 @@ pub mod purge;
 pub mod tracking;
 
 pub use cost::{ChunkValueScorer, ChunkVerdict, CostLedger, CostOptions, CostStage};
+pub use gateway::{FactWriteGateway, GatewayError, GatewayOptions, GatewayOutcome, DEFAULT_KIND};
 pub use ingest::{OrganizedThrough, SessionIngest, SessionTurn, Turn};
 pub use judge::{
     judge_write_candidates, ComparePassage, CompareResult, FactCandidate, JudgedCandidate,
