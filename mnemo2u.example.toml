@@ -1,0 +1,54 @@
+# mnemo2u configuration — copy to `mnemo2u.toml` and edit.
+#
+# Secrets never live in this file: `llm.api_key_env` NAMES an environment
+# variable, read at startup. A missing variable fails fast, not mid-insert.
+#
+#   export OPENAI_API_KEY=sk-...
+#   mnemo2u insert notes.md
+#   mnemo2u query "what did we decide about X?"
+
+[store]
+# One workspace = one directory. Moving or deleting it moves or deletes the
+# whole workspace (turso truth file + lancedb vector tables live inside).
+data_dir = "./mnemo2u-data"
+# Namespace prefix for every table in that directory, so two workspaces can
+# share one directory without mixing rows.
+namespace = "default"
+graph_scope = "default"
+
+[llm]
+# Any OpenAI-compatible chat endpoint (base URL including /v1).
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+model = "gpt-4o-mini"
+# Response cache (`openai_complete_if_cache` parity key). Turn off to force
+# fresh model calls; the cache lives in the truth layer and is safe to keep.
+cache = true
+
+[embedding]
+# Local ONNX model — never egresses. fastembed model name; downloaded once
+# into the fastembed cache on first use.
+# 384 dims: BAAI/bge-small-en-v1.5 (default) · 1024: BAAI/bge-m3
+model = "BAAI/bge-small-en-v1.5"
+
+[pipeline]
+# The LightRAG/nano reference flags, with the port's defaults.
+enable_naive_rag = false      # chunk vector arm + naive query mode
+enable_local = false          # entity vectors for the local keyword arm
+enable_llm_cache = true
+enable_llm_cache_for_extract = true
+# "off" never runs community detection during insert (LightRAG has none);
+# "on_demand" rebuilds reports when asked.
+community_mode = "off"
+# Chunking (the reference's effective values).
+chunk_token_size = 1200
+chunk_overlap_token_size = 100
+# Concurrency: the reference's three 16-wide semaphores.
+best_model_max_async = 16
+embedding_batch_num = 32
+
+[query]
+# local | global | naive | hybrid | mix (mix = the LightRAG default).
+mode = "mix"
+top_k = 40
+cosine_better_than_threshold = 0.2
