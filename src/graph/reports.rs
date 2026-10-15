@@ -79,14 +79,17 @@ pub fn community_report_json_to_str(parsed: &Value) -> String {
 
 /// One field of a finding **object**, as the reference's f-string renders it.
 ///
-/// `finding_summary`/`finding_explanation` are bare `finding.get(key)` calls
-/// with no default (`_op.py:609-617`), so a missing key — or an explicit
-/// `null` — yields Python `None`, which interpolates as the word `None`:
-/// `## Bare\n\nNone`. Rendering the empty string instead (what
-/// `unwrap_or_default` did) drifts from the reference by those five bytes in a
-/// string that is stored verbatim and handed to the parent level's prompt, so
-/// the golden fixture pins the reference's own bytes. A non-string value
-/// cannot come from the report prompt's schema; it keeps the empty fallback.
+/// `finding_summary` (`_op.py:609-612`) and `finding_explanation`
+/// (`_op.py:614-617`) are bare `finding.get(key)` calls with no default, so a
+/// missing key — or an explicit `null` — yields Python `None`, which the
+/// f-string at `_op.py:620` interpolates as the word `None`: a bare finding
+/// prints `## Bare`, a blank line, then `None`. Rendering the empty string
+/// instead (what `unwrap_or_default` did) drifts from the reference by those
+/// four bytes, in a string that is stored verbatim in
+/// `community_reports.report_string` and re-fed to the next level's prompt, so
+/// the `missing_explanation_key` golden case pins the reference's own bytes. A
+/// non-string value cannot come from the report prompt's schema; it keeps the
+/// empty fallback.
 fn finding_field(finding: &Value, key: &str) -> String {
     match finding.get(key) {
         None | Some(Value::Null) => "None".to_string(),
