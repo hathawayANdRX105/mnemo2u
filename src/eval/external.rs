@@ -655,11 +655,11 @@ fn turn_content(turns: &[Turn], turn_id: &str, what: &str) -> Result<String, Str
 /// The address is resolved through the slice's own session list, so an
 /// out-of-range index names the session it was meant for instead of silently
 /// landing on a turn of another session.
-fn addressed_message(
-    slice: &LongmemEvalSlice,
+fn addressed_message<'a>(
+    slice: &'a LongmemEvalSlice,
     reference: &EvidenceRef,
     what: &str,
-) -> Result<&SessionMessage, String> {
+) -> Result<&'a SessionMessage, String> {
     let session = slice
         .sessions
         .iter()
