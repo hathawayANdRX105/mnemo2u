@@ -8,8 +8,7 @@
 //! (`query::keywords::answer_cache_inputs`) must fold the two new fields in
 //! or distinct filters would share a context. No LLM/vector backend is
 //! needed, so the suite is deterministic and offline.
-
-use serde_json::{json, Value};
+use serde_json::json;
 
 use mnemo2u::core::rag::{QueryMode, QueryParam, TimeWindow};
 use mnemo2u::core::traits::VectorHit;
@@ -239,13 +238,14 @@ fn query_param_new_fields_have_defaults() {
     assert_eq!(legacy.conversation_id, None);
     assert_eq!(legacy.time_window, None);
 
-    // A payload that does set them round-trips.
-    let rich: QueryParam = serde_json::from_value(json!({
-        "mode": "mix",
-        "conversation_id": "A",
-        "time_window": {"since_ms": 1, "until_ms": 2}
-    }))
-    .expect("rich payload parses");
+    // A payload that does set them round-trips. Build on the serialized
+    // default (only these two fields are being exercised; the rest of the
+    // wire shape has no `serde(default)`, so a hand-written object would
+    // pin every required field).
+    let mut rich_value = serde_json::to_value(QueryParam::default()).expect("default serializes");
+    rich_value["conversation_id"] = json!("A");
+    rich_value["time_window"] = json!({"since_ms": 1, "until_ms": 2});
+    let rich: QueryParam = serde_json::from_value(rich_value).expect("rich payload parses");
     assert_eq!(rich.conversation_id.as_deref(), Some("A"));
     assert_eq!(
         rich.time_window,
