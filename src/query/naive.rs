@@ -4,8 +4,10 @@ use serde_json::Value;
 
 use crate::core::rag::QueryParam;
 use crate::core::text::truncate_list_by_token_size;
+use crate::core::traits::VectorHit;
 use crate::graph::prompts::{DEFAULT_USER_PROMPT_SLOT, FAIL_RESPONSE, NAIVE_RAG_RESPONSE};
 use crate::llm::{LlmError, LlmResult, ModelOptions};
+use crate::query::kg::chunk_hit_admits;
 use crate::query::QueryStores;
 
 pub async fn naive_query(
@@ -20,6 +22,14 @@ pub async fn naive_query(
         .query(query, param.top_k)
         .await
         .map_err(|e| LlmError::Transport(format!("chunk search: {e}")))?;
+    // Post-retrieval conversation/time filter, before the chunk rows
+    // are materialised: the carrier (vector-row metadata) is only
+    // available on the hit, so the filter must run here, not on the
+    // `Value` rows.
+    let hits: Vec<VectorHit> = hits
+        .into_iter()
+        .filter(|hit| chunk_hit_admits(hit, param))
+        .collect();
     if hits.is_empty() {
         return Ok(FAIL_RESPONSE.to_string());
     }

@@ -145,6 +145,14 @@ pub struct QueryParam {
     /// off (offline-first deviation, stage doc §7).
     pub enable_rerank: bool,
     pub min_rerank_score: f64,
+    /// Only keep records belonging to this conversation (chunk conversation
+    /// dimension). `None` = no filter.
+    #[serde(default)]
+    pub conversation_id: Option<String>,
+    /// Only keep records inside this time window (records carrying a
+    /// timestamp). `None` = no filter.
+    #[serde(default)]
+    pub time_window: Option<TimeWindow>,
 }
 
 impl Default for QueryParam {
@@ -170,7 +178,37 @@ impl Default for QueryParam {
             cosine_better_than_threshold: DEFAULT_COSINE_THRESHOLD,
             enable_rerank: false,
             min_rerank_score: 0.0,
+            conversation_id: None,
+            time_window: None,
         }
+    }
+}
+
+/// Inclusive time window for post-retrieval filtering of `QueryParam`.
+/// Both bounds are optional; `None` = unbounded on that side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct TimeWindow {
+    pub since_ms: Option<i64>,
+    pub until_ms: Option<i64>,
+}
+
+impl TimeWindow {
+    /// Whether a record carrying `timestamp_ms` falls inside this window.
+    /// Both bounds are inclusive; `None` on a side is unbounded there.
+    /// An empty window (`since > until`) admits nothing — a contradictory
+    /// filter is not an error, it simply yields no record.
+    pub fn admits(&self, timestamp_ms: i64) -> bool {
+        if let Some(since) = self.since_ms {
+            if timestamp_ms < since {
+                return false;
+            }
+        }
+        if let Some(until) = self.until_ms {
+            if timestamp_ms > until {
+                return false;
+            }
+        }
+        true
     }
 }
 

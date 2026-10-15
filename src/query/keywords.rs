@@ -165,6 +165,15 @@ fn locate_json_object(text: &str) -> Option<String> {
 /// response type, the token budgets and both keyword lists
 /// (`operate.py:4858-4891`).
 pub fn answer_cache_inputs(param: &crate::core::rag::QueryParam) -> Vec<String> {
+    let conversation_id = param.conversation_id.clone().unwrap_or_default();
+    let time_window = match &param.time_window {
+        Some(window) => format!(
+            "since={};until={}",
+            window.since_ms.map(|v| v.to_string()).unwrap_or_default(),
+            window.until_ms.map(|v| v.to_string()).unwrap_or_default()
+        ),
+        None => "none".to_string(),
+    };
     vec![
         param.mode.as_str().to_string(),
         param.top_k.to_string(),
@@ -173,6 +182,8 @@ pub fn answer_cache_inputs(param: &crate::core::rag::QueryParam) -> Vec<String> 
         param.max_relation_tokens.to_string(),
         param.max_total_tokens.to_string(),
         param.enable_rerank.to_string(),
+        conversation_id,
+        time_window,
     ]
 }
 
