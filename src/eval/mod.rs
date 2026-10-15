@@ -25,12 +25,14 @@
 //! `tests/vector_arm_scope.rs` and the latency baseline in
 //! `tests/memory_recall.rs` (AC4).
 //!
-//! MTRAG (T2) and LongMemEval (T3) are deliberately out of this slice: the
-//! stage doc marks their licences "verify before use" and the MTRAG corpus
-//! is a 206 MB sparse checkout. They land as a follow-up once the licence
-//! question is settled, and the same runner drives them.
+//! MTRAG (T2) and LongMemEval (T3) arrive through [`external`], whose fixtures
+//! carry the slice's source and licence in the file: small labelled slices of
+//! the two published shapes, mapped onto the same [`Case`] contract and driven
+//! by the same runner. Neither dataset is committed wholesale — only the
+//! slices the gate replays.
 
 pub mod cases;
+pub mod external;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
