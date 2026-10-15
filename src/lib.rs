@@ -12,6 +12,7 @@
 //! - [`query`] — read path: arms → fusion → rerank (R3)
 
 pub mod core;
+pub mod eval;
 pub mod graph;
 pub mod index;
 pub mod llm;

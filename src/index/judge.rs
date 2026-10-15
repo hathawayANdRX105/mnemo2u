@@ -56,6 +56,11 @@ pub struct CompareResult {
 pub struct JudgedCandidate {
     pub candidate: FactCandidate,
     pub classify: Verdict,
+    /// The catalog class the judge picked, `Some` exactly when `classify` is
+    /// [`Verdict::Yes`]. `Review` (unresolved) carries `None`, because a
+    /// non-decision must not be laundered into a type — the caller keeps its
+    /// own default and marks the row unverified.
+    pub class_id: Option<String>,
     pub compare: Vec<CompareResult>,
     pub extract: BTreeMap<String, ExtractResult>,
 }
@@ -194,6 +199,13 @@ pub async fn judge_write_candidates(
         judged.push(JudgedCandidate {
             candidate: candidate.clone(),
             classify: classify[i].verdict,
+            // Only a settled verdict names a class; the id is dropped for
+            // `Review`/`No` so the caller cannot mistake a non-decision for
+            // a classification.
+            class_id: match classify[i].verdict {
+                Verdict::Yes => Some(classify[i].class_id.clone()),
+                _ => None,
+            },
             compare,
             extract,
         });
