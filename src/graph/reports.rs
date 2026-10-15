@@ -65,16 +65,8 @@ pub fn community_report_json_to_str(parsed: &Value) -> String {
             let (summary, explanation) = match finding {
                 Value::String(text) => (text.clone(), String::new()),
                 other => (
-                    other
-                        .get("summary")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                    other
-                        .get("explanation")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
+                    finding_field(other, "summary"),
+                    finding_field(other, "explanation"),
                 ),
             };
             format!("## {summary}\n\n{explanation}")
@@ -83,6 +75,24 @@ pub fn community_report_json_to_str(parsed: &Value) -> String {
         .join("\n\n");
 
     format!("# {title}\n\n{summary}\n\n{sections}")
+}
+
+/// One field of a finding **object**, as the reference's f-string renders it.
+///
+/// `finding_summary`/`finding_explanation` are bare `finding.get(key)` calls
+/// with no default (`_op.py:609-617`), so a missing key — or an explicit
+/// `null` — yields Python `None`, which interpolates as the word `None`:
+/// `## Bare\n\nNone`. Rendering the empty string instead (what
+/// `unwrap_or_default` did) drifts from the reference by those five bytes in a
+/// string that is stored verbatim and handed to the parent level's prompt, so
+/// the golden fixture pins the reference's own bytes. A non-string value
+/// cannot come from the report prompt's schema; it keeps the empty fallback.
+fn finding_field(finding: &Value, key: &str) -> String {
+    match finding.get(key) {
+        None | Some(Value::Null) => "None".to_string(),
+        Some(Value::String(text)) => text.clone(),
+        Some(_) => String::new(),
+    }
 }
 
 /// `rating` as emitted by the reference: a number when present, else `-1`.

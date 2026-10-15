@@ -1,0 +1,362 @@
+{
+ "generator": "tests/.venvs/bin/python scripts/gen_report.py > tests/fixtures/report_golden.json",
+ "reference": {
+  "module": "nano_graphrag/_op.py",
+  "functions": [
+   "_community_report_json_to_str (603-622)",
+   "_pack_single_community_describe (464-600)",
+   "_pack_single_community_by_sub_communities (417-461)"
+  ],
+  "helpers": [
+   "_utils.py::list_of_list_to_csv (241)",
+   "_utils.py::enclose_string_with_quotes (232)",
+   "_utils.py::truncate_list_by_token_size (169)"
+  ],
+  "encoding": "o200k_base"
+ },
+ "cases": [
+  {
+   "name": "multiple_findings",
+   "kind": "json_to_str",
+   "note": "Several object findings join with a blank line.",
+   "input": {
+    "title": "Community",
+    "summary": "Two clusters linked.",
+    "findings": [
+     {
+      "summary": "Bridge",
+      "explanation": "A1 and B1 talk."
+     },
+     {
+      "summary": "Churn",
+      "explanation": "Both clusters lose members."
+     }
+    ],
+    "rating": 6
+   },
+   "expected": "# Community\n\nTwo clusters linked.\n\n## Bridge\n\nA1 and B1 talk.\n\n## Churn\n\nBoth clusters lose members."
+  },
+  {
+   "name": "string_findings",
+   "kind": "json_to_str",
+   "note": "A string finding renders its explanation as the empty string.",
+   "input": {
+    "title": "Community",
+    "summary": "Findings are plain strings.",
+    "findings": [
+     "plain string finding",
+     "another \"quoted\" one"
+    ],
+    "rating": 2
+   },
+   "expected": "# Community\n\nFindings are plain strings.\n\n## plain string finding\n\n\n\n## another \"quoted\" one\n\n"
+  },
+  {
+   "name": "quote_and_rating_boundaries",
+   "kind": "json_to_str",
+   "note": "Quotes, newlines and a trailing space survive; `rating` never reaches the markdown.",
+   "input": {
+    "title": "The \"bridge\" community",
+    "summary": "ACME and BETA \"compete\" for the same accounts. ",
+    "findings": [
+     {
+      "summary": "Headline with \"quotes\"",
+      "explanation": "Line one.\nLine two."
+     },
+     {
+      "summary": "Plain",
+      "explanation": ""
+     }
+    ],
+    "rating": 7.5,
+    "rating_explanation": "Because it matters."
+   },
+   "expected": "# The \"bridge\" community\n\nACME and BETA \"compete\" for the same accounts. \n\n## Headline with \"quotes\"\n\nLine one.\nLine two.\n\n## Plain\n\n"
+  },
+  {
+   "name": "missing_explanation_key",
+   "kind": "json_to_str",
+   "note": "`finding.get('explanation')` has no default, so a finding object without the key renders the word `None`.",
+   "input": {
+    "title": "Malformed finding",
+    "summary": "The LLM dropped a key.",
+    "findings": [
+     {
+      "summary": "Only a summary",
+      "explanation": "Present."
+     },
+     {
+      "summary": "Bare"
+     }
+    ],
+    "rating": 1
+   },
+   "expected": "# Malformed finding\n\nThe LLM dropped a key.\n\n## Only a summary\n\nPresent.\n\n## Bare\n\nNone"
+  },
+  {
+   "name": "describe_orders_entities_and_relationships_by_degree",
+   "kind": "describe",
+   "note": "Rows sort by descending degree (stable), not by input order; the id column keeps the sorted position the row had before the sort.",
+   "community": {
+    "level": 1,
+    "title": "Alpine robotics",
+    "nodes": [
+     "ZURICH",
+     "BETA",
+     "ACME",
+     "GENEVA",
+     "OMEGA"
+    ],
+    "edges": [
+     [
+      "BETA",
+      "ZURICH"
+     ],
+     [
+      "ACME",
+      "BETA"
+     ],
+     [
+      "ZURICH",
+      "ACME"
+     ],
+     [
+      "BETA",
+      "GENEVA"
+     ]
+    ],
+    "chunk_ids": [
+     "chunk-1"
+    ],
+    "occurrence": 12.0,
+    "sub_communities": []
+   },
+   "graph": {
+    "nodes": {
+     "ACME": {
+      "entity_type": "ORGANIZATION",
+      "description": "Acme Corporation designs and assembles collaborative warehouse robots for mid sized distribution centres across the alpine region, and it maintains a dedicated research group focused on safe motion planning."
+     },
+     "BETA": {
+      "entity_type": "ORGANIZATION",
+      "description": "Beta Labs builds small autonomous delivery drones that navigate urban corridors without a permanent flight corridor, and it publishes its trajectory planner under a permissive licence for academic reuse."
+     },
+     "GENEVA": {
+      "entity_type": "LOCATION",
+      "description": "Geneva hosts both companies inside its industrial district, and the local university runs the safety certification programme that both of them depend on for cross border shipments of their assembled units."
+     },
+     "ZURICH": {
+      "entity_type": "LOCATION",
+      "description": "Zurich supplies the precision actuators that both assembly lines fit into their joints, and the supplier audits every batch against the tolerance table before it ships the parts to the two assembly plants."
+     },
+     "OMEGA": {
+      "entity_type": "CONCEPT",
+      "description": "\"Pinned\" quotes"
+     },
+     "UNKNOWN_NODE": {}
+    },
+    "edges": {
+     "ACME\u0000BETA": {
+      "description": "Acme Corporation and Beta Labs compete for the same mid sized warehouse accounts, and the contest has narrowed twice in the last eighteen months after each of them cut its list price on the flagship cobot class."
+     },
+     "BETA\u0000GENEVA": {
+      "description": "Beta Labs certifies its drones with the Geneva programme before any unit may leave the district, which adds six weeks to every delivery season and has kept the two rivals out of each other's certified corridors."
+     },
+     "ZURICH\u0000ACME": {
+      "description": "supplies \"actuators\", batch audited"
+     },
+     "BETA\u0000ZURICH": {
+      "description": "sources actuators"
+     }
+    }
+   },
+   "max_token_size": 12000,
+   "force_to_use_sub_communities": false,
+   "already_reports": {},
+   "expected": "-----Reports-----\n```csv\n\n```\n-----Entities-----\n```csv\n\"id\",\t\"entity\",\t\"type\",\t\"description\",\t\"degree\"\n1,\t\"BETA\",\t\"ORGANIZATION\",\t\"Beta Labs builds small autonomous delivery drones that navigate urban corridors without a permanent flight corridor, and it publishes its trajectory planner under a permissive licence for academic reuse.\",\t3\n0,\t\"ACME\",\t\"ORGANIZATION\",\t\"Acme Corporation designs and assembles collaborative warehouse robots for mid sized distribution centres across the alpine region, and it maintains a dedicated research group focused on safe motion planning.\",\t2\n4,\t\"ZURICH\",\t\"LOCATION\",\t\"Zurich supplies the precision actuators that both assembly lines fit into their joints, and the supplier audits every batch against the tolerance table before it ships the parts to the two assembly plants.\",\t2\n2,\t\"GENEVA\",\t\"LOCATION\",\t\"Geneva hosts both companies inside its industrial district, and the local university runs the safety certification programme that both of them depend on for cross border shipments of their assembled units.\",\t1\n3,\t\"OMEGA\",\t\"CONCEPT\",\t\"Pinned\" quotes\",\t0\n```\n-----Relationships-----\n```csv\n\"id\",\t\"source\",\t\"target\",\t\"description\",\t\"rank\"\n0,\t\"ACME\",\t\"BETA\",\t\"Acme Corporation and Beta Labs compete for the same mid sized warehouse accounts, and the contest has narrowed twice in the last eighteen months after each of them cut its list price on the flagship cobot class.\",\t5\n2,\t\"BETA\",\t\"ZURICH\",\t\"sources actuators\",\t5\n1,\t\"BETA\",\t\"GENEVA\",\t\"Beta Labs certifies its drones with the Geneva programme before any unit may leave the district, which adds six weeks to every delivery season and has kept the two rivals out of each other's certified corridors.\",\t4\n3,\t\"ZURICH\",\t\"ACME\",\t\"supplies \"actuators\", batch audited\",\t4\n```"
+  },
+  {
+   "name": "describe_uses_sub_community_reports",
+   "kind": "describe",
+   "note": "The covered node/edge leave the entity and relationship CSVs.",
+   "community": {
+    "level": 1,
+    "title": "Alpine robotics, coarse",
+    "nodes": [
+     "ZURICH",
+     "BETA",
+     "ACME",
+     "GENEVA",
+     "OMEGA",
+     "UNKNOWN_NODE"
+    ],
+    "edges": [
+     [
+      "ACME",
+      "BETA"
+     ],
+     [
+      "BETA",
+      "ZURICH"
+     ]
+    ],
+    "chunk_ids": [
+     "chunk-1",
+     "chunk-2"
+    ],
+    "occurrence": 3.0,
+    "sub_communities": [
+     "0"
+    ]
+   },
+   "graph": {
+    "nodes": {
+     "ACME": {
+      "entity_type": "ORGANIZATION",
+      "description": "Acme Corporation designs and assembles collaborative warehouse robots for mid sized distribution centres across the alpine region, and it maintains a dedicated research group focused on safe motion planning."
+     },
+     "BETA": {
+      "entity_type": "ORGANIZATION",
+      "description": "Beta Labs builds small autonomous delivery drones that navigate urban corridors without a permanent flight corridor, and it publishes its trajectory planner under a permissive licence for academic reuse."
+     },
+     "GENEVA": {
+      "entity_type": "LOCATION",
+      "description": "Geneva hosts both companies inside its industrial district, and the local university runs the safety certification programme that both of them depend on for cross border shipments of their assembled units."
+     },
+     "ZURICH": {
+      "entity_type": "LOCATION",
+      "description": "Zurich supplies the precision actuators that both assembly lines fit into their joints, and the supplier audits every batch against the tolerance table before it ships the parts to the two assembly plants."
+     },
+     "OMEGA": {
+      "entity_type": "CONCEPT",
+      "description": "\"Pinned\" quotes"
+     },
+     "UNKNOWN_NODE": {}
+    },
+    "edges": {
+     "ACME\u0000BETA": {
+      "description": "Acme Corporation and Beta Labs compete for the same mid sized warehouse accounts, and the contest has narrowed twice in the last eighteen months after each of them cut its list price on the flagship cobot class."
+     },
+     "BETA\u0000GENEVA": {
+      "description": "Beta Labs certifies its drones with the Geneva programme before any unit may leave the district, which adds six weeks to every delivery season and has kept the two rivals out of each other's certified corridors."
+     },
+     "ZURICH\u0000ACME": {
+      "description": "supplies \"actuators\", batch audited"
+     },
+     "BETA\u0000ZURICH": {
+      "description": "sources actuators"
+     }
+    }
+   },
+   "max_token_size": 12000,
+   "force_to_use_sub_communities": true,
+   "already_reports": {
+    "0": {
+     "level": 0,
+     "title": "Beta cluster",
+     "nodes": [
+      "BETA"
+     ],
+     "edges": [
+      [
+       "BETA",
+       "ZURICH"
+      ]
+     ],
+     "chunk_ids": [
+      "chunk-1"
+     ],
+     "occurrence": 4.0,
+     "sub_communities": [],
+     "report_string": "# Beta \"cluster\"\n\nBeta sources actuators.",
+     "report_json": {
+      "rating": 7.5
+     }
+    }
+   },
+   "expected": "-----Reports-----\n```csv\n\"id\",\t\"report\",\t\"rating\",\t\"importance\"\n0,\t\"# Beta \"cluster\"\n\nBeta sources actuators.\",\t7.5,\t4.0\n```\n-----Entities-----\n```csv\n\"id\",\t\"entity\",\t\"type\",\t\"description\",\t\"degree\"\n0,\t\"ACME\",\t\"ORGANIZATION\",\t\"Acme Corporation designs and assembles collaborative warehouse robots for mid sized distribution centres across the alpine region, and it maintains a dedicated research group focused on safe motion planning.\",\t2\n5,\t\"ZURICH\",\t\"LOCATION\",\t\"Zurich supplies the precision actuators that both assembly lines fit into their joints, and the supplier audits every batch against the tolerance table before it ships the parts to the two assembly plants.\",\t2\n2,\t\"GENEVA\",\t\"LOCATION\",\t\"Geneva hosts both companies inside its industrial district, and the local university runs the safety certification programme that both of them depend on for cross border shipments of their assembled units.\",\t1\n3,\t\"OMEGA\",\t\"CONCEPT\",\t\"Pinned\" quotes\",\t0\n4,\t\"UNKNOWN_NODE\",\t\"UNKNOWN\",\t\"UNKNOWN\",\t0\n```\n-----Relationships-----\n```csv\n\"id\",\t\"source\",\t\"target\",\t\"description\",\t\"rank\"\n0,\t\"ACME\",\t\"BETA\",\t\"Acme Corporation and Beta Labs compete for the same mid sized warehouse accounts, and the contest has narrowed twice in the last eighteen months after each of them cut its list price on the flagship cobot class.\",\t5\n```"
+  },
+  {
+   "name": "describe_truncates_to_the_token_budget",
+   "kind": "describe",
+   "note": "The budget lands mid-plateau, so a couple of tokens of tokenizer drift cannot change which rows fit: node rows measure 45/45/48 tokens (91 kept, 140 rejected, budget 115) and edge rows 52/16/51 (69 kept, 120 rejected, budget 92).",
+   "community": {
+    "level": 1,
+    "title": "Alpine robotics",
+    "nodes": [
+     "ZURICH",
+     "BETA",
+     "ACME",
+     "GENEVA",
+     "OMEGA"
+    ],
+    "edges": [
+     [
+      "BETA",
+      "ZURICH"
+     ],
+     [
+      "ACME",
+      "BETA"
+     ],
+     [
+      "ZURICH",
+      "ACME"
+     ],
+     [
+      "BETA",
+      "GENEVA"
+     ]
+    ],
+    "chunk_ids": [
+     "chunk-1"
+    ],
+    "occurrence": 12.0,
+    "sub_communities": []
+   },
+   "graph": {
+    "nodes": {
+     "ACME": {
+      "entity_type": "ORGANIZATION",
+      "description": "Acme Corporation designs and assembles collaborative warehouse robots for mid sized distribution centres across the alpine region, and it maintains a dedicated research group focused on safe motion planning."
+     },
+     "BETA": {
+      "entity_type": "ORGANIZATION",
+      "description": "Beta Labs builds small autonomous delivery drones that navigate urban corridors without a permanent flight corridor, and it publishes its trajectory planner under a permissive licence for academic reuse."
+     },
+     "GENEVA": {
+      "entity_type": "LOCATION",
+      "description": "Geneva hosts both companies inside its industrial district, and the local university runs the safety certification programme that both of them depend on for cross border shipments of their assembled units."
+     },
+     "ZURICH": {
+      "entity_type": "LOCATION",
+      "description": "Zurich supplies the precision actuators that both assembly lines fit into their joints, and the supplier audits every batch against the tolerance table before it ships the parts to the two assembly plants."
+     },
+     "OMEGA": {
+      "entity_type": "CONCEPT",
+      "description": "\"Pinned\" quotes"
+     },
+     "UNKNOWN_NODE": {}
+    },
+    "edges": {
+     "ACME\u0000BETA": {
+      "description": "Acme Corporation and Beta Labs compete for the same mid sized warehouse accounts, and the contest has narrowed twice in the last eighteen months after each of them cut its list price on the flagship cobot class."
+     },
+     "BETA\u0000GENEVA": {
+      "description": "Beta Labs certifies its drones with the Geneva programme before any unit may leave the district, which adds six weeks to every delivery season and has kept the two rivals out of each other's certified corridors."
+     },
+     "ZURICH\u0000ACME": {
+      "description": "supplies \"actuators\", batch audited"
+     },
+     "BETA\u0000ZURICH": {
+      "description": "sources actuators"
+     }
+    }
+   },
+   "max_token_size": 263,
+   "force_to_use_sub_communities": false,
+   "already_reports": {},
+   "expected": "-----Reports-----\n```csv\n\n```\n-----Entities-----\n```csv\n\"id\",\t\"entity\",\t\"type\",\t\"description\",\t\"degree\"\n1,\t\"BETA\",\t\"ORGANIZATION\",\t\"Beta Labs builds small autonomous delivery drones that navigate urban corridors without a permanent flight corridor, and it publishes its trajectory planner under a permissive licence for academic reuse.\",\t3\n0,\t\"ACME\",\t\"ORGANIZATION\",\t\"Acme Corporation designs and assembles collaborative warehouse robots for mid sized distribution centres across the alpine region, and it maintains a dedicated research group focused on safe motion planning.\",\t2\n```\n-----Relationships-----\n```csv\n\"id\",\t\"source\",\t\"target\",\t\"description\",\t\"rank\"\n0,\t\"ACME\",\t\"BETA\",\t\"Acme Corporation and Beta Labs compete for the same mid sized warehouse accounts, and the contest has narrowed twice in the last eighteen months after each of them cut its list price on the flagship cobot class.\",\t5\n2,\t\"BETA\",\t\"ZURICH\",\t\"sources actuators\",\t5\n```"
+  }
+ ]
+}

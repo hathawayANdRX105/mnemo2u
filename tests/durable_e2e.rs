@@ -227,4 +227,40 @@ async fn durable_ingest_restart_and_rebuild() {
         naive, restored,
         "rebuild from truth restores the same retrieval"
     );
+
+    // Entity vectors are derived from the graph exactly as the chunk index is
+    // derived from `text_chunks`, so losing them has to be recoverable the
+    // same way — and the rebuilt rows have to be the rows an ingest would
+    // have written, which is only true if the rebuild reuses
+    // `entity_vector_rows` instead of re-deriving them its own way.
+    let entities = third.graph.snapshot().await.expect("snapshot").nodes;
+    let rebuilt_entities = third
+        .rebuild_entity_vectors()
+        .await
+        .expect("rebuild entity vectors");
+    assert_eq!(
+        rebuilt_entities,
+        entities.len(),
+        "every graph node gets exactly one entity vector row"
+    );
+
+    let local_restored = third
+        .query("ACME", &context_param(QueryMode::Local))
+        .await
+        .expect("local query after entity rebuild");
+    assert_eq!(
+        local, local_restored,
+        "rebuilding entity vectors restores the same local retrieval"
+    );
+
+    // The entity rebuild owns the entity namespace only: the naive arm must
+    // still answer from the chunk rows written one step earlier, untouched.
+    let naive_after_entities = third
+        .query("ACME cobots", &context_param(QueryMode::Naive))
+        .await
+        .expect("naive query after entity rebuild");
+    assert_eq!(
+        restored, naive_after_entities,
+        "rebuilding entity vectors must not disturb the chunk namespace"
+    );
 }

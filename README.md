@@ -106,11 +106,14 @@ tests/.venvs/bin/python scripts/gen_chunks.py > tests/fixtures/chunk_golden.json
 tests/.venvs/bin/python scripts/gen_extraction.py > tests/fixtures/extraction_golden.json
 tests/.venvs/bin/python scripts/gen_hash.py > tests/fixtures/hash_golden.json
 tests/.venvs/bin/python scripts/gen_merge.py > tests/fixtures/merge_golden.json
+tests/.venvs/bin/python scripts/gen_report.py > tests/fixtures/report_golden.json
 tests/.venvs/bin/python scripts/gen_prompts.py   # src/graph/prompts/*.txt
 ```
 
-Only `gen_chunks.py` needs the venv (it must tokenize with the real BPE); the
-other four are stdlib-only and run with any `python3`.
+Only `gen_chunks.py` and `gen_report.py` need the venv: both measure their
+expected output in tokens, so they must run against the real BPE (the report
+context's budget splits between entity and relationship rows). The other four
+are stdlib-only and run with any `python3`.
 
 ## License
 

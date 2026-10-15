@@ -515,6 +515,54 @@ impl Pipeline {
         Ok(written)
     }
 
+    /// Rebuild the entity vector index from the truth layer.
+    ///
+    /// The entity graph owns the entity rows, so `entities_vdb` is fully
+    /// derivable: deleting the derived table and re-running this restores
+    /// identical local retrieval, exactly as [`Self::rebuild_chunk_vectors`]
+    /// does for the naive-RAG arm. The rows come from
+    /// [`crate::index::merge::entity_vector_rows`] — the same function the
+    /// insert path uses (`pipeline.rs:373-382`) — so a rebuilt row is
+    /// byte-identical to the one an ingest would have written.
+    /// Returns the number of rows written.
+    ///
+    /// `enable_local = false` leaves the entities_vdb unwritten by design
+    /// (`graphrag.py:206-214`), so rebuilding it would publish rows local
+    /// search can never read. The refusal mirrors
+    /// [`Self::rebuild_chunk_vectors`]'s `chunks_vdb: None` case: a disabled
+    /// arm reports [`StoreError::NotFound`] rather than quietly returning 0.
+    pub async fn rebuild_entity_vectors(&self) -> StoreResult<usize> {
+        if !self.options.enable_local {
+            return Err(StoreError::NotFound("local retrieval disabled".into()));
+        }
+        let mut nodes = self.graph.snapshot().await?.nodes;
+        // The in-memory backend iterates a hash map and the durable one has no
+        // ORDER BY, so the snapshot order is not reproducible across backends.
+        // Sort by node name so a rebuild writes the same rows in the same order
+        // whatever it ran against.
+        nodes.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut merged_nodes = Vec::with_capacity(nodes.len());
+        for (name, props) in nodes {
+            // The graph key is the entity name and is authoritative: a row
+            // merged before `entity_name` was stamped onto the props would
+            // otherwise hash to the id of an empty name.
+            let mut node = props;
+            node["entity_name"] = serde_json::Value::String(name);
+            merged_nodes.push(node);
+        }
+        let vector_rows = crate::index::merge::entity_vector_rows(&merged_nodes);
+        let written = vector_rows.len();
+        crate::index::merge::upsert_entity_vectors(
+            self.entities_vdb.as_ref(),
+            &vector_rows,
+            self.options.embedding_batch_num,
+            &self.repair,
+        )
+        .await?;
+        self.entities_vdb.index_done().await?;
+        Ok(written)
+    }
+
     /// Replay queued derived writes (T11). A replay that fails again stays in
     /// the queue: the next `flush` retries it, so a persistent failure is
     /// visible as a non-empty queue instead of dropping the row.
