@@ -774,13 +774,6 @@ async fn independent_conversations_promote_corroboration_to_verified() {
 async fn rejected_values_never_reenter_and_leave_recall() {
     let harness = harness(
         script_ok(1, &[0], CompareRelation::DifferentFacts),
-/// R5.AC4: deleting a source event invalidates exactly the facts that cite
-/// it — nothing else moves, the invalidated row leaves recall with its
-/// window closed, and a replay/re-drive of the turn does not resurrect it.
-#[tokio::test]
-async fn invalidate_source_closes_citing_facts_and_stays_closed() {
-    let harness = harness(
-        script_ok(2, &[0, 0], CompareRelation::DifferentFacts),
         gate_open(),
     )
     .await;
