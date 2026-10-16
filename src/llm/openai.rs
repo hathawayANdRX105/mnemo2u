@@ -66,7 +66,14 @@ impl OpenAiClient {
             gate: EgressGate::new(false),
             sink: std::sync::Arc::new(DefaultMeteringSink::new()),
             config,
-            http: reqwest::Client::new(),
+            // A User-Agent is not optional in practice: `reqwest`'s default
+            // sends none, and Cloudflare-fronted gateways answer a
+            // UA-less request with `405 Method Not Allowed` (observed
+            // against the local wildtoken gateway during the real smoke).
+            http: reqwest::Client::builder()
+                .user_agent(concat!("mnemo2u/", env!("CARGO_PKG_VERSION")))
+                .build()
+                .expect("default HTTP client"),
         }
     }
 
@@ -200,6 +207,58 @@ impl LlmClient for OpenAiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The default client must send a User-Agent: Cloudflare-fronted
+    /// gateways answer UA-less requests with `405 Method Not Allowed`
+    /// (observed against the wildtoken gateway during the real smoke).
+    #[tokio::test]
+    async fn default_client_sends_a_user_agent() {
+        use std::io::{BufRead, BufReader, Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept");
+            let mut reader = BufReader::new(stream.try_clone().expect("clone"));
+            let mut request = String::new();
+            let mut content_length = 0usize;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).expect("read line");
+                if line == "\r\n" || line.is_empty() {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    content_length = value.trim().parse().unwrap_or(0);
+                }
+                request.push_str(&line);
+            }
+            let mut body = vec![0u8; content_length];
+            reader.read_exact(&mut body).expect("read body");
+            let mut stream = stream;
+            let payload = r#"{"choices":[{"message":{"content":"ok"}}]}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                payload.len(),
+                payload
+            );
+            stream.write_all(response.as_bytes()).expect("write");
+            request
+        });
+
+        let client = OpenAiClient::new(OpenAiConfig::new(format!("http://{addr}/v1"), "k", "m"));
+        let answer = client
+            .complete("hi", None, &[], &ModelOptions::default())
+            .await
+            .expect("complete");
+        assert_eq!(answer, "ok");
+        let request = server.join().expect("server thread");
+        assert!(
+            request.to_lowercase().contains("user-agent: mnemo2u/"),
+            "request headers: {request}"
+        );
+    }
 
     /// The reference parity values survive the envelope migration:
     /// 5 attempts, backoff growing 4s → 8s → capped at 10s.
