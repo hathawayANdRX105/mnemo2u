@@ -90,7 +90,7 @@ mod wire {
     }
 
     #[derive(Serialize, Clone)]
-    #[serde(tag = "type")]
+    #[serde(tag = "type", rename_all = "lowercase")]
     pub enum JevQuestion {
         Noul {
             instructions: Value,
@@ -1114,6 +1114,37 @@ fn extract_local_result(
 mod tests {
     use super::*;
     use crate::llm::judge::ExtractField;
+
+    /// The wire spells the question type tag in lowercase (`noul`/`choice`/
+    /// `score`); a real SystemOne server answers a PascalCase tag with
+    /// `405 Method Not Allowed`, which the envelope maps to a decode error.
+    /// The mock endpoints never checked the casing, so this pins it.
+    #[test]
+    fn question_type_tags_are_the_lowercase_wire_names() {
+        let noul = serde_json::to_string(&wire::JevQuestion::Noul {
+            instructions: serde_json::json!("q"),
+            criteria: wire::NoulCriteria {
+                true_description: None,
+                false_description: None,
+            },
+        })
+        .expect("serialize");
+        assert!(noul.contains("\"type\":\"noul\""), "{noul}");
+
+        let choice = serde_json::to_string(&wire::JevQuestion::Choice {
+            instructions: serde_json::json!("q"),
+            criteria: BTreeMap::new(),
+        })
+        .expect("serialize");
+        assert!(choice.contains("\"type\":\"choice\""), "{choice}");
+
+        let score = serde_json::to_string(&wire::JevQuestion::Score {
+            instructions: serde_json::json!("q"),
+            criteria: Vec::new(),
+        })
+        .expect("serialize");
+        assert!(score.contains("\"type\":\"score\""), "{score}");
+    }
 
     fn field(id: &str, pattern: &str) -> ExtractField {
         ExtractField {
