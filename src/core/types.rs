@@ -76,6 +76,15 @@ pub struct Fact {
     pub revision: u64,
 }
 
+impl Fact {
+    /// Whether the row belongs to the current view: neither superseded nor
+    /// closed by `valid_to`. One predicate shared by both fact stores and
+    /// the recall paths (R5 contract v2) — readers must never re-derive it.
+    pub fn is_current(&self) -> bool {
+        self.superseded_by.is_none() && self.valid_to.is_none()
+    }
+}
+
 /// Relation carried on graph edges.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RelKind {

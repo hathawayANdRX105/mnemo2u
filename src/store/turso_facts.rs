@@ -9,11 +9,13 @@
 //! - `get` matches the scope **exactly** — a foreign or merely narrower
 //!   request gets `None`, never another scope's row;
 //! - `search` applies [`ScopeKey::admits`] *inside* the store (stage doc 03
-//!   contract 1), drops superseded rows, and scores by the same
+//!   contract 1), drops non-current rows (`Fact::is_current`: superseded or
+//!   `valid_to`-closed), and scores by the same
 //!   deterministic lexical overlap the memory backend uses, so the two
 //!   backends are interchangeable in the recall tests;
 //! - `supersede` is the bi-temporal correction path: the old row survives
-//!   with `superseded_by` set and `revision` bumped, and leaves `search`.
+//!   with `superseded_by` set, `valid_to` closed at the correction's
+//!   application time and `revision` bumped, and leaves `search`.
 //!
 //! The scope predicate is one shared SQL `WHERE` clause rather than a Rust
 //! post-filter: the stage doc's contract is that the filter applies inside
@@ -196,6 +198,7 @@ impl FactStore for TursoFactStore {
         let mut previous: Fact = serde_json::from_str(&located)
             .map_err(|error| backend(format!("decoding fact: {error}")))?;
         previous.superseded_by = Some(new.id.clone());
+        previous.valid_to = Some(new.created_at);
         previous.revision += 1;
         let body = serde_json::to_string(&previous).map_err(backend)?;
 
@@ -292,6 +295,12 @@ impl FactStore for TursoFactStore {
             let body = text(column(&row, 0)?);
             let fact: Fact = serde_json::from_str(&body)
                 .map_err(|error| backend(format!("decoding fact: {error}")))?;
+            // `valid_to` lives inside the body, so the temporal half of
+            // `Fact::is_current` is enforced here; the superseded half is
+            // already filtered in SQL.
+            if !fact.is_current() {
+                continue;
+            }
             hits.push((
                 fact.id.clone(),
                 crate::store::facts::score(query, &fact.text),

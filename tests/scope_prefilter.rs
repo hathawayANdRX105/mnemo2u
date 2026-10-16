@@ -195,7 +195,8 @@ async fn supersede_retires_old_and_keeps_marked_row() {
     let mut old = fact("f-old", &scope, "gadget registry default timeout");
     old.revision = 5;
     store.put(&old).await.expect("put old");
-    let new = fact("f-new", &scope, "gadget registry explicit timeout");
+    let mut new = fact("f-new", &scope, "gadget registry explicit timeout");
+    new.created_at = 1_700;
 
     store.supersede(&old.id, &new).await.expect("supersede");
 
@@ -215,6 +216,11 @@ async fn supersede_retires_old_and_keeps_marked_row() {
         .expect("old row");
     assert_eq!(marked.superseded_by, Some(FactId("f-new".to_string())));
     assert_eq!(marked.revision, 6);
+    assert_eq!(
+        marked.valid_to,
+        Some(new.created_at),
+        "the correction closes the validity window"
+    );
     assert_eq!(marked.text, old.text, "the row keeps its history");
 
     // A missing old id errors and stores nothing.
@@ -235,6 +241,38 @@ async fn supersede_retires_old_and_keeps_marked_row() {
         .expect("search");
     let hit_ids: Vec<String> = hits.iter().map(|(id, _)| id.0.clone()).collect();
     assert!(!hit_ids.contains(&ghost.id.0));
+}
+
+/// A row closed only by `valid_to` (an invalidation without a replacement)
+/// leaves search exactly like a superseded one — the temporal half of
+/// `Fact::is_current`; closure is not deletion.
+#[tokio::test]
+async fn valid_to_closed_rows_leave_search() {
+    let store = MemoryFactStore::new();
+    let scope = scope("ws-v", None, None);
+
+    let live = fact("v-live", &scope, "gadget registry default timeout");
+    let closed = {
+        let mut row = fact("v-closed", &scope, "gadget registry default timeout closed");
+        row.valid_to = Some(999);
+        row
+    };
+    store.put(&live).await.expect("put live");
+    store.put(&closed).await.expect("put closed");
+
+    let hits = store
+        .search(&scope, "gadget registry timeout", 10)
+        .await
+        .expect("search");
+    let hit_ids: Vec<String> = hits.iter().map(|(id, _)| id.0.clone()).collect();
+    assert_eq!(hit_ids, vec!["v-live".to_string()]);
+
+    let row = store
+        .get(&scope, &closed.id)
+        .await
+        .expect("get")
+        .expect("row");
+    assert!(!row.is_current());
 }
 
 /// 6. `limit` truncates the low-score tail; ties keep a stable
