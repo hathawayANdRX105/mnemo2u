@@ -85,6 +85,7 @@ struct Harness {
     lexical: Arc<TursoLexical>,
     edges: Arc<TursoFactEdges>,
     watermarks: Arc<MemoryKv>,
+    tombstones: Arc<MemoryKv>,
     judge: Arc<JudgeMock>,
 }
 
@@ -117,6 +118,7 @@ async fn harness(script: Vec<ScriptedReply>, options: GatewayOptions) -> Harness
             .expect("edges"),
     );
     let watermarks = Arc::new(MemoryKv::new());
+    let tombstones = Arc::new(MemoryKv::new());
     let judge = Arc::new(JudgeMock::new("judge-mock", script));
 
     let gateway = FactWriteGateway::new(
@@ -129,6 +131,7 @@ async fn harness(script: Vec<ScriptedReply>, options: GatewayOptions) -> Harness
             embedder: Arc::new(mnemo2u::llm::mock::MockEmbedder::new()),
             judge: Some(judge.clone()),
             watermarks: watermarks.clone(),
+            tombstones: tombstones.clone(),
             tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
         },
     );
@@ -140,6 +143,7 @@ async fn harness(script: Vec<ScriptedReply>, options: GatewayOptions) -> Harness
         lexical,
         edges,
         watermarks,
+        tombstones,
         judge,
     }
 }
@@ -459,6 +463,7 @@ async fn zero_llm_capture_writes_without_a_judge() {
             embedder: Arc::new(mnemo2u::llm::mock::MockEmbedder::new()),
             judge: None,
             watermarks,
+            tombstones: Arc::new(MemoryKv::new()),
             tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
         },
     );
@@ -757,6 +762,86 @@ async fn independent_conversations_promote_corroboration_to_verified() {
     assert_eq!(
         after.trust_state,
         mnemo2u::core::types::TrustState::Verified
+    );
+}
+
+/// R5.AC3: a value the host rejected never re-enters memory — the screen
+/// runs before any judge call, so 100 re-extraction attempts (across
+/// casing/whitespace variants, proving the canonical key) burn zero model
+/// attention and write zero rows; the rejected row itself leaves recall
+/// while keeping its history.
+#[tokio::test]
+async fn rejected_values_never_reenter_and_leave_recall() {
+    let harness = harness(
+        script_ok(1, &[0], CompareRelation::DifferentFacts),
+        gate_open(),
+    )
+    .await;
+    let key = scope();
+    let text =
+        "the vault holds the rotating deploy key material that the deployment pipeline reads";
+
+    let first = harness
+        .gateway
+        .commit_turns("conv-1", &[turn("t1", text, 1_000)])
+        .await
+        .expect("commit");
+    assert_eq!(first.written, 1);
+    let rejected_id = fact_id("conv-1", "t1");
+
+    harness
+        .gateway
+        .reject(&rejected_id, "the host explicitly rejected this value")
+        .await
+        .expect("reject");
+    let row = harness
+        .facts
+        .get(&key, &rejected_id)
+        .await
+        .expect("get")
+        .expect("row");
+    assert_eq!(row.trust_state, mnemo2u::core::types::TrustState::Rejected);
+    assert!(!row.is_current(), "a rejected row leaves the current view");
+    assert_eq!(
+        harness
+            .facts
+            .search(&key, "vault rotating deploy key material", 10)
+            .await
+            .expect("search")
+            .len(),
+        0,
+        "a rejected row must not surface in recall"
+    );
+    assert_eq!(
+        harness.tombstones.all_keys().await.expect("keys").len(),
+        1,
+        "the rejection is a durable ledger entry"
+    );
+
+    // 100 re-extraction attempts: the same value in casing and whitespace
+    // variants — every one canonicalises onto the same tombstone.
+    let calls_before = harness.judge.calls();
+    let attempts: Vec<SessionTurn> = (0..100)
+        .map(|index| {
+            let variant = match index % 3 {
+                0 => text.to_string(),
+                1 => text.to_uppercase(),
+                _ => text.replace(' ', "  "),
+            };
+            turn_in("conv-2", &format!("r{index}"), &variant, 2_000 + index)
+        })
+        .collect();
+    let outcome = harness
+        .gateway
+        .commit_turns("conv-2", &attempts)
+        .await
+        .expect("commit attempts");
+    assert_eq!(outcome.tombstoned, 100, "every attempt hits the ledger");
+    assert_eq!(outcome.written, 0, "zero resurrection");
+    assert_eq!(
+        harness.judge.calls(),
+        calls_before,
+        "the screen runs before any judge call"
     );
 }
 
