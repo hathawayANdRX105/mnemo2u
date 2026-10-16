@@ -25,7 +25,7 @@ use mnemo2u::llm::envelope::{Op, ProviderError};
 use mnemo2u::llm::judge::{ExistsVerdict, JudgeClient, JudgeError};
 use mnemo2u::llm::judge_mock::{JudgeMock, JudgeOp, JudgeReply, ScriptedReply};
 use mnemo2u::llm::mock::MockEmbedder;
-use mnemo2u::query::facts::{L0Candidate, MemoryRecall, RecallOptions};
+use mnemo2u::query::facts::{L0Candidate, MemoryRecall, RecallOptions, StaleRule};
 use mnemo2u::store::facts::MemoryFactStore;
 use mnemo2u::store::lance_facts::LanceFactVector;
 use mnemo2u::store::turso_edges::TursoFactEdges;
@@ -106,7 +106,99 @@ fn opts(top_k: usize, rrf_k: u32, per_arm_limit: usize) -> RecallOptions {
         top_k,
         rrf_k,
         per_arm_limit,
+        staleness: None,
     }
+}
+
+/// R5.AC6: staleness is derived at read time — an old, under-corroborated
+/// row is withheld under a rule; a second independent session revalidates it
+/// with no storage write; and a `valid_to`-closed row never reaches L0 even
+/// when an arm finds it.
+#[tokio::test]
+async fn ac6_staleness_is_read_time_and_revalidates_on_corroboration() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let stores = arms(dir.path()).await;
+    let ws_a = scope("ws-a", None, None);
+
+    let mut old = fact("f-old", &ws_a, "alpha beta gamma");
+    old.created_at = 1_000;
+    stores.facts.put(&old).await.expect("put old");
+    let mut fresh = fact("f-fresh", &ws_a, "alpha beta gamma");
+    fresh.created_at = 99_000;
+    stores.facts.put(&fresh).await.expect("put fresh");
+    let mut closed = fact("f-closed", &ws_a, "alpha beta gamma");
+    closed.valid_to = Some(5_000);
+    stores.facts.put(&closed).await.expect("put closed");
+    for fact_id in ["f-old", "f-fresh", "f-closed"] {
+        stores
+            .vectors
+            .upsert(&ws_a, &id(fact_id), &vec8(fact_id))
+            .await
+            .expect("upsert");
+        stores
+            .lexical
+            .index(&ws_a, &id(fact_id), "alpha beta gamma")
+            .await
+            .expect("index");
+    }
+
+    let recall = stores.all_arms();
+    let base = opts(20, 60, 20);
+    let stale_opts = RecallOptions {
+        staleness: Some(StaleRule {
+            max_age_secs: 10_000,
+            min_sessions: 2,
+            now_secs: 100_000,
+        }),
+        ..base.clone()
+    };
+
+    // Without a rule: current rows pass; the closed row never does, even
+    // though both arms still rank it (the read-side half of `is_current`).
+    let none = recall
+        .recall(&ws_a, "alpha beta gamma", Some(&vec8("query")), &base)
+        .await
+        .expect("recall");
+    let got = BTreeSet::from_iter(ids(&none.candidates));
+    assert!(got.contains("f-old") && got.contains("f-fresh"));
+    assert!(
+        !got.contains("f-closed"),
+        "a valid_to-closed row reached L0 via the arms"
+    );
+
+    // With the rule: the old single-session row is withheld.
+    let filtered = recall
+        .recall(&ws_a, "alpha beta gamma", Some(&vec8("query")), &stale_opts)
+        .await
+        .expect("recall");
+    let got = BTreeSet::from_iter(ids(&filtered.candidates));
+    assert!(
+        !got.contains("f-old"),
+        "an under-corroborated stale row reached L0"
+    );
+    assert!(got.contains("f-fresh"), "a fresh row must pass the rule");
+
+    // Revalidate: a second independent session on the same row — no state
+    // transition, staleness simply stops being derivable.
+    let mut corroborated = old.clone();
+    corroborated.source_refs.push(SourceRef {
+        session_id: "s2".to_string(),
+        ..source_ref()
+    });
+    stores
+        .facts
+        .put(&corroborated)
+        .await
+        .expect("put corroborated");
+    let revalidated = recall
+        .recall(&ws_a, "alpha beta gamma", Some(&vec8("query")), &stale_opts)
+        .await
+        .expect("recall");
+    let got = BTreeSet::from_iter(ids(&revalidated.candidates));
+    assert!(
+        got.contains("f-old"),
+        "corroboration must revalidate the stale row"
+    );
 }
 
 /// Deterministic 8-dim embedding for `seed`: eight bytes of its md5 spread
