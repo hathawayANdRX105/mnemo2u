@@ -168,6 +168,10 @@ impl FactStore for FaultyFactPut {
         self.inner.search(key, query, limit).await
     }
 
+    async fn scan(&self, key: &ScopeKey) -> StoreResult<Vec<mnemo2u::core::types::Fact>> {
+        self.inner.scan(key).await
+    }
+
     async fn append_audit(&self, op: &str, payload_hash: &str) -> StoreResult<()> {
         self.inner.append_audit(op, payload_hash).await
     }
@@ -297,6 +301,7 @@ async fn harness(fail_puts: usize, fail_watermarks: usize) -> Harness {
             embedder: Arc::new(MockEmbedder::new()),
             judge: None,
             watermarks: watermarks.clone(),
+            tombstones: Arc::new(MemoryKv::new()),
             tokenizer: Tokenizer::for_gpt_4o().expect("tokenizer"),
         },
     );
