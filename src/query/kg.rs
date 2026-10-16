@@ -14,10 +14,11 @@ use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use crate::core::rag::{QueryMode, QueryParam};
+use crate::core::rag::{QueryMode, QueryParam, TimeWindow};
 use crate::core::text::{truncate_list_by_token_size, GRAPH_FIELD_SEP};
-use crate::core::traits::VectorStore;
+use crate::core::traits::{VectorHit, VectorStore};
 use crate::graph::prompts::{DEFAULT_USER_PROMPT_SLOT, FAIL_RESPONSE, RAG_RESPONSE};
+use crate::index::ingest::{META_CONVERSATION_ID, META_TIMESTAMP};
 use crate::llm::{LlmError, LlmResult, ModelOptions};
 use crate::query::context::{
     assign_chunk_ids, format_created_at, reference_list, ChunkRow, EntityRow, QueryContext,
@@ -82,6 +83,15 @@ pub async fn kg_query(
             .to_string()
     });
     let mut relations = round_robin(local_relations, global_relations, relation_key);
+
+    // Post-retrieval time filter (`QueryParam::time_window`), applied
+    // before token truncation so the budget measures the narrowed set.
+    // The carrier is the graph record's `created_at`; a `None` window
+    // passes every record through (current behaviour, byte-identical).
+    if let Some(window) = &param.time_window {
+        entities.retain(|row| record_admits_time(row, window));
+        relations.retain(|row| record_admits_time(row, window));
+    }
 
     // Stage 2: token truncation. `created_at`/`file_path` are excluded from the
     // measured text, exactly like the reference.
@@ -445,6 +455,13 @@ async fn chunk_hits(
         .query(query, param.chunk_top_k)
         .await
         .map_err(|e| LlmError::Transport(format!("chunk search: {e}")))?;
+    // Post-retrieval conversation/time filter, before the chunk rows are
+    // materialised: the carrier (vector-row metadata) is only available on
+    // the hit, so the filter must run here, not on the `ChunkRow`s.
+    let hits: Vec<VectorHit> = hits
+        .into_iter()
+        .filter(|hit| chunk_hit_admits(hit, param))
+        .collect();
     let ids: Vec<String> = hits.iter().map(|hit| hit.id.clone()).collect();
     if ids.is_empty() {
         return Ok(Vec::new());
@@ -473,6 +490,51 @@ async fn chunk_hits(
         });
     }
     Ok(out)
+}
+
+/// Post-retrieval conversation/time filter for chunk vector hits
+/// (`QueryParam::conversation_id` / `QueryParam::time_window`).
+///
+/// The carrier for both dimensions is the chunk's vector-row metadata
+/// (`index::ingest::META_CONVERSATION_ID` / `META_TIMESTAMP`), which
+/// session/turn ingestion merges into the row (`session_chunk_meta`).
+/// The R1 doc path writes the bare `Chunk` as that metadata, so a doc
+/// chunk carries neither field and is dropped under an active filter —
+/// 宁缺勿假: a row of uncertain provenance never enters a narrowed
+/// result. `None` filters pass every hit through (current behaviour,
+/// byte-identical).
+pub fn chunk_hit_admits(hit: &VectorHit, param: &QueryParam) -> bool {
+    if let Some(conversation_id) = &param.conversation_id {
+        match hit.meta.get(META_CONVERSATION_ID).and_then(Value::as_str) {
+            Some(id) if id == conversation_id => {}
+            _ => return false,
+        }
+    }
+    if let Some(window) = &param.time_window {
+        match hit.meta.get(META_TIMESTAMP).and_then(Value::as_i64) {
+            // `META_TIMESTAMP` is unix seconds; `TimeWindow` bounds are
+            // milliseconds, so the carrier is scaled before comparison.
+            Some(secs) if secs > 0 => {
+                if !window.admits(secs.saturating_mul(1000)) {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Time-window filter for graph records (entity/relation `Value`s).
+/// The carrier is the node/edge `created_at` field (unix seconds,
+/// `graph/merge.rs`); a record with no positive `created_at` is dropped
+/// under an active window (宁缺勿假). `None` window passes every record
+/// through.
+fn record_admits_time(row: &Value, window: &TimeWindow) -> bool {
+    match row.get("created_at").and_then(Value::as_i64) {
+        Some(secs) if secs > 0 => window.admits(secs.saturating_mul(1000)),
+        _ => false,
+    }
 }
 
 fn build_context(entities: &[Value], relations: &[Value], chunks: &[ChunkRow]) -> QueryContext {

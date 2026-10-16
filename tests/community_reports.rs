@@ -1,17 +1,122 @@
-//! Community detection + report generation over the in-memory graph.
+//! Community detection + report generation over the in-memory graph, plus
+//! byte-level golden parity against the reference implementation
+//! (`tests/fixtures/report_golden.json`, produced by `scripts/gen_report.py`).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use mnemo2u::core::rag::CommunitySchema;
 use mnemo2u::core::traits::GraphStore;
 use mnemo2u::graph::community::{detect_communities, CommunityOptions};
 use mnemo2u::graph::reports::{
-    community_report_json_to_str, generate_community_report, ReportOptions,
+    community_report_json_to_str, generate_community_report, pack_single_community_describe,
+    ReportOptions,
 };
 use mnemo2u::llm::cache::CachedLlm;
 use mnemo2u::llm::mock::RoutedLlm;
 use mnemo2u::store::memory::{MemoryGraph, MemoryKv};
 use mnemo2u::Tokenizer;
-use serde_json::json;
+use serde_json::{json, Value};
+
+/// The reference joins a tuple edge key with `\x00` in JSON (the same encoding
+/// `seed_json` uses in `scripts/gen_merge.py`); split it back into endpoints.
+fn edge_key(key: &str) -> (String, String) {
+    let (src, tgt) = key
+        .split_once('\u{0}')
+        .expect("edge key carries the separator");
+    (src.to_string(), tgt.to_string())
+}
+
+/// The fixture's graph, loaded into the in-memory backend the rest of the suite
+/// uses. Degrees are read from the backend itself, so the ported
+/// `node_degrees_batch`/`edge_degrees_batch` see real data rather than numbers
+/// copied out of the golden.
+async fn golden_graph(case: &Value) -> MemoryGraph {
+    let graph = MemoryGraph::new();
+    for (name, node) in case["graph"]["nodes"].as_object().expect("fixture nodes") {
+        graph
+            .upsert_node(name, node.clone())
+            .await
+            .expect("seed node");
+    }
+    for (key, edge) in case["graph"]["edges"].as_object().expect("fixture edges") {
+        let (src, tgt) = edge_key(key);
+        graph
+            .upsert_edge(&src, &tgt, edge.clone())
+            .await
+            .expect("seed edge");
+    }
+    graph
+}
+
+/// Sub-community reports, keyed the way `generate_community_report` keys them.
+fn golden_sub_reports(case: &Value) -> BTreeMap<i64, CommunitySchema> {
+    case["already_reports"]
+        .as_object()
+        .expect("already_reports")
+        .iter()
+        .filter_map(|(key, value)| {
+            let id = key.parse::<i64>().ok()?;
+            Some((
+                id,
+                serde_json::from_value::<CommunitySchema>(value.clone()).expect("sub community"),
+            ))
+        })
+        .collect()
+}
+
+/// Dual-end **byte** parity with the reference, case by case.
+///
+/// The report string and the context block both land verbatim in
+/// `community_reports`, and the context block is what the report LLM reads. A
+/// quote, a newline, a separator or a float printed as `6` instead of `6.0`
+/// silently changes what the reference would have sent — no assertion on
+/// substrings or row counts can see that. The three `json_to_str` cases are
+/// the FAC6 spot-check (`todo/01-nano-graphrag-port.md` §6) turned into
+/// machine-checked fixtures: multiple findings, a plain-string finding, and
+/// the quote/rating boundary.
+#[tokio::test]
+async fn report_context_matches_python_reference() {
+    let raw = std::fs::read_to_string("tests/fixtures/report_golden.json").expect("fixture");
+    let golden: Value = serde_json::from_str(&raw).expect("valid json");
+    let tokenizer = Tokenizer::for_gpt_4o().expect("tokenizer");
+    let cases = golden["cases"].as_array().expect("cases");
+    assert!(!cases.is_empty(), "fixture carries cases");
+
+    for case in cases {
+        let name = case["name"].as_str().expect("case name");
+        let expected = case["expected"].as_str().expect("expected text");
+
+        match case["kind"].as_str().expect("kind") {
+            "json_to_str" => {
+                assert_eq!(
+                    community_report_json_to_str(&case["input"]),
+                    expected,
+                    "report markdown drifted from the reference: {name}"
+                );
+            }
+            "describe" => {
+                let graph = golden_graph(case).await;
+                let community: CommunitySchema =
+                    serde_json::from_value(case["community"].clone()).expect("community");
+                let actual = pack_single_community_describe(
+                    &graph,
+                    &community,
+                    &tokenizer,
+                    case["max_token_size"].as_u64().expect("budget") as usize,
+                    &golden_sub_reports(case),
+                    case["force_to_use_sub_communities"]
+                        .as_bool()
+                        .expect("force flag"),
+                )
+                .await
+                .expect("describe");
+                assert_eq!(actual, expected, "report context drifted: {name}");
+            }
+            other => panic!("unknown fixture kind: {other}"),
+        }
+    }
+}
 
 const REPORT: &str = r#"{"title": "Community", "summary": "Two clusters linked.", "findings": [{"summary": "Bridge", "explanation": "A1 and B1 talk."}], "rating": 6}"#;
 

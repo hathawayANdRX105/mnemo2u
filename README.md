@@ -22,8 +22,8 @@ R1 — port of [nano-graphrag](https://github.com/gusye1234/nano-graphrag)
 - entity/relation extraction with the gleaning loop (`graph/extract.rs`)
 - merge with the reference's summary thresholds (`graph/merge.rs`)
 - hierarchical community detection via `leiden-rs` (`graph/community.rs`)
-- community reports (`graph/reports.rs`) — CSV context is byte-pinned against
-  the reference's quoting rules (numbers bare, `format_row` fully quoted)
+- community reports (`graph/reports.rs`) — report markdown and CSV context
+  byte-pinned against the reference (`tests/fixtures/report_golden.json`)
 - query paths: local / global / naive (`query/`)
 - insert & query facade with the reference commit order (`pipeline.rs`)
 - LLM clients: OpenAI-compatible HTTP, cache with reference-parity args hash,
@@ -35,10 +35,12 @@ R1 — port of [nano-graphrag](https://github.com/gusye1234/nano-graphrag)
 - durable end-to-end smoke: ingest → restart over the same files → drop the
   vector index → rebuild it from truth → identical retrieval (`tests/durable_e2e.rs`)
 
-Parity limitation worth knowing: the report-context bytes are pinned to the
-*rules* read out of the reference, not to a live double-run (the regeneration
-venv is not checked in). Closing that needs the venv described below plus a
-report golden generator — tracked as the only open R1 acceptance item.
+Report parity comes from running the reference Python, not from restating its
+rules: `scripts/gen_report.py` drives `_community_report_json_to_str` and
+`_pack_single_community_describe` from the local clone of
+`nano-graphrag`, and every expected byte in `tests/fixtures/report_golden.json`
+comes out of that run. The generator needs the venv described below, which is
+not checked in — hence the committed fixture.
 
 R2 — LightRAG-style write path (`todo/02-lightrag-upgrade.md`) — implemented
 and audit-closed (PR #1–#3): incremental document-scope merge with no global
@@ -106,11 +108,14 @@ tests/.venvs/bin/python scripts/gen_chunks.py > tests/fixtures/chunk_golden.json
 tests/.venvs/bin/python scripts/gen_extraction.py > tests/fixtures/extraction_golden.json
 tests/.venvs/bin/python scripts/gen_hash.py > tests/fixtures/hash_golden.json
 tests/.venvs/bin/python scripts/gen_merge.py > tests/fixtures/merge_golden.json
+tests/.venvs/bin/python scripts/gen_report.py > tests/fixtures/report_golden.json
 tests/.venvs/bin/python scripts/gen_prompts.py   # src/graph/prompts/*.txt
 ```
 
-Only `gen_chunks.py` needs the venv (it must tokenize with the real BPE); the
-other four are stdlib-only and run with any `python3`.
+Only `gen_chunks.py` and `gen_report.py` need the venv: both measure their
+expected output in tokens, so they must run against the real BPE (the report
+context's budget splits between entity and relationship rows). The other four
+are stdlib-only and run with any `python3`.
 
 ## License
 

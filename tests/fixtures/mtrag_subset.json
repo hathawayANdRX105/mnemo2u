@@ -1,0 +1,123 @@
+{
+  "provenance": {
+    "dataset": "MTRAG human split (mtrag-human)",
+    "source": "https://github.com/IBM/mt-rag-benchmark",
+    "revision": "53fef6f5917c7e10c436f697e69a955dbc795d81",
+    "license": "Apache-2.0",
+    "copyright": null,
+    "citation": "@article{katsis2025mtrag, title={MTRAG: A Multi-Turn Conversational Benchmark for Evaluating Retrieval-Augmented Generation Systems}, author={Yannis Katsis and Sara Rosenthal and Kshitij Fadnis and Chulaka Gunasekara and Young-Suk Lee and Lucian Popa and Vraj Shah and Huaiyu Zhu and Danish Contractor and Marina Danilevsky}, journal={Transactions of the Association for Computational Linguistics}, volume={13}, pages={784--808}, year={2025}, doi={10.1162/TACL.a.19}, url={https://doi.org/10.1162/TACL.a.19}}",
+    "slice": "One accepted conversation out of 110: mtrag-human/conversations/conversations.json[0] (author d2b56e91-6d89-4df4-b89a-eef8d969850b, editor 9dcd142c-415e-4161-a82f-c8b14bfb36ac, domain mt-rag-clapnq-elser-512-100-20240503, status accepted), all 16 messages verbatim with their unix timestamps. The evaluated task is the mtrag-human/retrieval_tasks/clapnq/clapnq_lastturn.jsonl question dd6b6ffd177f2b311abe676261279d2f<::>2, whose qrels/dev.tsv entry names 3 relevant ClapNQ passages; that corpus text is third-party (ClapNQ) and is deliberately NOT shipped here, so this case scores recall over the MTRAG conversation itself, where the reviewed agent reply is the labelled gold evidence and the sibling Cardinals-team reply is the near miss. Upstream LICENSE is the unfilled Apache-2.0 boilerplate (Copyright [yyyy] [name of copyright owner]), so no copyright holder is asserted and copyright is null."
+  },
+  "case_id": "mtrag-clapnq-football-turn-2",
+  "conversation_id": "conv-mtrag-clapnq-football",
+  "turns": [
+    {
+      "turn_id": "m0",
+      "speaker": "user",
+      "content": "where do the arizona cardinals play this week",
+      "timestamp": 1724708469
+    },
+    {
+      "turn_id": "m1",
+      "speaker": "agent",
+      "content": "I'm sorry, but I don't have the answer to your question.",
+      "timestamp": 1724708471
+    },
+    {
+      "turn_id": "m2",
+      "speaker": "user",
+      "content": "Do the Arizona Cardinals play outside the US?",
+      "timestamp": 1724711083
+    },
+    {
+      "turn_id": "m3",
+      "speaker": "agent",
+      "content": "The Arizona Cardinals do play outside the United States. They had a game in London, England, on October 22, 2017, against the Los Angeles Rams at Twickenham Stadium and in 2005 they played in Mexico.",
+      "timestamp": 1724711087
+    },
+    {
+      "turn_id": "m4",
+      "speaker": "user",
+      "content": "Are the Arizona Cardinals and the Chicago Cardinals the same team?",
+      "timestamp": 1724713360
+    },
+    {
+      "turn_id": "m5",
+      "speaker": "agent",
+      "content": "The Chicago Cardinals became the St. Louis Cardinals in 1960 and eventually moved and became the Arizona Cardinals. The Chicago Cardinals ( now the Arizona Cardinals ) were a founding member of the NFL.",
+      "timestamp": 1724713368
+    },
+    {
+      "turn_id": "m6",
+      "speaker": "user",
+      "content": "How many teams are in the NFL?",
+      "timestamp": 1724715256
+    },
+    {
+      "turn_id": "m7",
+      "speaker": "agent",
+      "content": "There are 32 teams in the National Football League (NFL).",
+      "timestamp": 1724715259
+    },
+    {
+      "turn_id": "m8",
+      "speaker": "user",
+      "content": "How many teams are in the NFL playoffs?",
+      "timestamp": 1724716561
+    },
+    {
+      "turn_id": "m9",
+      "speaker": "agent",
+      "content": "Six teams from each conference (AFC and NFC), for a total of 12 team playoff system.",
+      "timestamp": 1724716563
+    },
+    {
+      "turn_id": "m10",
+      "speaker": "user",
+      "content": "Which team has won the most Super Bowls?",
+      "timestamp": 1724771590
+    },
+    {
+      "turn_id": "m11",
+      "speaker": "agent",
+      "content": "The Pittsburgh Steelers have won six Super Bowls.",
+      "timestamp": 1724771593
+    },
+    {
+      "turn_id": "m12",
+      "speaker": "user",
+      "content": "How many times have the New England Patriots played the super bowl?",
+      "timestamp": 1724778492
+    },
+    {
+      "turn_id": "m13",
+      "speaker": "agent",
+      "content": "The New England Patriots have the most Super Bowl appearances. Super Bowl LII was the Patriots ' tenth Super Bowl appearance.",
+      "timestamp": 1724778497
+    },
+    {
+      "turn_id": "m14",
+      "speaker": "user",
+      "content": "Who is the Patriot's coach?",
+      "timestamp": 1724781827
+    },
+    {
+      "turn_id": "m15",
+      "speaker": "agent",
+      "content": "Bill Belichick was hired as the team's head coach in 2000. New England Patriots Bill Belichick achieved his 200th career head coaching win on November 22, 2012.",
+      "timestamp": 1724781830
+    }
+  ],
+  "query": {
+    "task_id": "dd6b6ffd177f2b311abe676261279d2f<::>2",
+    "question": "Do the Arizona Cardinals play outside the US?",
+    "gold_turn_id": "m3",
+    "expected": [
+      "The Arizona Cardinals do play outside the United States."
+    ],
+    "near_miss_turn_id": "m5",
+    "forbidden": [
+      "The Chicago Cardinals became the St. Louis Cardinals in 1960"
+    ]
+  }
+}
