@@ -234,9 +234,9 @@ impl FactWriteGateway {
                     conversation_id,
                     turns,
                     &fresh,
-                    0,
-                    0,
-                    0,
+                    fresh.len(),
+                    skipped_known,
+                    skipped_superseded,
                     0,
                     0,
                     0,
@@ -674,6 +674,45 @@ impl FactWriteGateway {
         fact.revision += 1;
         self.facts.put(&fact).await?;
         Ok(())
+    }
+
+    /// Invalidate every current fact whose provenance cites the given source
+    /// event (R5.T4): a deleted or rewound turn takes its derived facts out
+    /// of the current view — `valid_to` closes at `at` (the deletion
+    /// instant, supplied by the host) and the revision bumps. Rows that
+    /// merely mention the same content are untouched: the blast radius is
+    /// exactly the facts that cite this source.
+    ///
+    /// A re-delivery of the invalidated turn matches the existing row and is
+    /// skipped, so invalidation survives replays and re-drives; a different
+    /// source re-asserting the value is new evidence and writes a fresh fact
+    /// (that is the difference between source invalidation and a value
+    /// tombstone).
+    ///
+    /// Returns the number of rows invalidated.
+    pub async fn invalidate_source(
+        &self,
+        session_id: &str,
+        event_id: &str,
+        at: i64,
+    ) -> Result<usize, GatewayError> {
+        let mut invalidated = 0usize;
+        for mut fact in self.facts.scan(&self.options.scope).await? {
+            if !fact.is_current() {
+                continue;
+            }
+            let cited = fact.source_refs.iter().any(|reference| {
+                reference.session_id == session_id && reference.event_id == event_id
+            });
+            if !cited {
+                continue;
+            }
+            fact.valid_to = Some(at);
+            fact.revision += 1;
+            self.facts.put(&fact).await?;
+            invalidated += 1;
+        }
+        Ok(invalidated)
     }
 }
 

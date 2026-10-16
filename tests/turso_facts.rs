@@ -223,6 +223,36 @@ async fn valid_to_closed_rows_leave_search() {
     assert!(!row.is_current());
 }
 
+/// `scan` is the truth-surface enumeration: every admitted row in stable id
+/// order, closed rows included, foreign scopes excluded — the durable
+/// backend mirrors the memory backend's contract.
+#[tokio::test]
+async fn scan_returns_every_admitted_row_in_id_order() {
+    let store = TursoFactStore::open(&temp_path("scan"))
+        .await
+        .expect("open");
+    let key = scope("ws-scan", None, None);
+    let other = scope("ws-other", None, None);
+
+    store.put(&fact("s-3", &key, "third")).await.expect("put");
+    store.put(&fact("s-1", &key, "first")).await.expect("put");
+    let mut closed = fact("s-2", &key, "second");
+    closed.valid_to = Some(9);
+    store.put(&closed).await.expect("put");
+    store
+        .put(&fact("x-9", &other, "foreign"))
+        .await
+        .expect("put");
+
+    let rows = store.scan(&key).await.expect("scan");
+    let ids: Vec<String> = rows.iter().map(|row| row.id.0.clone()).collect();
+    assert_eq!(
+        ids,
+        vec!["s-1", "s-2", "s-3"],
+        "stable id order, closed row included, foreign scope excluded"
+    );
+}
+
 /// `supersede` locates the row by bare fact id, across scopes — the trait
 /// takes no scope and `MemoryFactStore` does the same, so the two backends
 /// stay interchangeable for a cross-scope correction.

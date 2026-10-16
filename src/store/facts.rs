@@ -137,6 +137,20 @@ impl FactStore for MemoryFactStore {
         Ok(hits)
     }
 
+    /// Every admitted row, stable id order — no currency filter: the
+    /// truth-surface enumeration returns superseded rows too.
+    async fn scan(&self, scope: &ScopeKey) -> Result<Vec<Fact>> {
+        let inner = self.inner.read().expect("fact store lock");
+        let mut rows: Vec<Fact> = inner
+            .rows
+            .values()
+            .filter(|row| scope.admits(&row.scope))
+            .cloned()
+            .collect();
+        rows.sort_by(|left, right| left.id.0.cmp(&right.id.0));
+        Ok(rows)
+    }
+
     async fn append_audit(&self, op: &str, payload_hash: &str) -> Result<()> {
         let mut inner = self.inner.write().expect("fact store lock");
         inner.audit.push((op.to_string(), payload_hash.to_string()));
