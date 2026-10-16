@@ -7,6 +7,7 @@
 
 pub mod cache;
 pub mod envelope;
+pub mod fastembed;
 pub mod judge;
 pub mod judge_cache;
 pub mod judge_jev;

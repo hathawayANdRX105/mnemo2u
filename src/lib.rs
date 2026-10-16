@@ -11,6 +11,8 @@
 //! - [`index`] — write path: incremental merge, purge, cost gates (R2)
 //! - [`query`] — read path: arms → fusion → rerank (R3)
 
+pub mod assemble;
+pub mod config;
 pub mod core;
 pub mod eval;
 pub mod graph;
