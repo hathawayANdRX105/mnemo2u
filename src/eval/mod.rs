@@ -430,6 +430,7 @@ pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, Strin
         top_k: case.conditions.top_k,
         rrf_k: 60,
         per_arm_limit: 100,
+        staleness: None,
     };
 
     let mut results = Vec::with_capacity(case.queries.len());

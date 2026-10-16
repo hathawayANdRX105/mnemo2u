@@ -42,7 +42,7 @@ use std::sync::Arc;
 use crate::core::traits::{
     rrf_fuse, FactEdgeStore, FactStore, FactVectorStore, LexicalStore, Result,
 };
-use crate::core::types::{Edge, FactId, RelKind, ScopeKey, SourceRef, TrustState};
+use crate::core::types::{Edge, Fact, FactId, RelKind, ScopeKey, SourceRef, TrustState};
 use crate::llm::judge::{ExistsVerdict, FindRequest, JudgeClient, RerankCandidate, RerankRequest};
 
 /// Jev rerank candidate ceiling (stage doc 03 contract 4): fusion only ever
@@ -84,7 +84,36 @@ pub struct MemoryRecall {
     pub judge: Option<Arc<dyn JudgeClient>>,
 }
 
+/// Read-time staleness rule (R5 contract v2, T6): a fact older than
+/// `max_age_secs` (against `now_secs`) whose evidence comes from fewer than
+/// `min_sessions` distinct sessions is withheld from recall. Staleness is
+/// **derived at read time, never stored** — a corroboration that raises the
+/// session count revalidates the row with no state transition to undo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StaleRule {
+    pub max_age_secs: i64,
+    /// Distinct sessions that revalidate a row this old.
+    pub min_sessions: usize,
+    /// The evaluation instant, supplied by the caller — recall stays a pure
+    /// function of its inputs.
+    pub now_secs: i64,
+}
+
+impl StaleRule {
+    /// Whether `fact` is stale under this rule.
+    fn hides(&self, fact: &Fact) -> bool {
+        let distinct: HashSet<&str> = fact
+            .source_refs
+            .iter()
+            .map(|reference| reference.session_id.as_str())
+            .collect();
+        self.now_secs.saturating_sub(fact.created_at) > self.max_age_secs
+            && distinct.len() < self.min_sessions
+    }
+}
+
 /// Per-call budgets.
+#[derive(Debug, Clone)]
 pub struct RecallOptions {
     /// L0 candidates handed back (the caller's budget, applied after fusion
     /// and the temporal re-ordering).
@@ -96,6 +125,9 @@ pub struct RecallOptions {
     /// candidate set never outgrows the reranker's tool limit, no matter
     /// what the caller asks for.
     pub per_arm_limit: usize,
+    /// R5.T6 — read-time staleness: `None` keeps every current row (the
+    /// pre-R5 behaviour); `Some(rule)` withholds rows the rule calls stale.
+    pub staleness: Option<StaleRule>,
 }
 
 /// The five read arms, in fixed order. Used as the `degraded` vocabulary.
@@ -248,8 +280,18 @@ impl MemoryRecall {
         for id in &fused {
             let fact = self.facts.get(scope, id).await?;
             let Some(fact) = fact else { continue };
-            if fact.superseded_by.is_some() {
+            // Current-view predicate (R5): superseded, `valid_to`-closed and
+            // rejected rows never reach L0, wherever an arm found them —
+            // derived arm rows survive the write-side state change, so this
+            // is the read-side half of `Fact::is_current`.
+            if !fact.is_current() {
                 continue;
+            }
+            // R5.T6 — read-time staleness, derived and never stored.
+            if let Some(rule) = &opts.staleness {
+                if rule.hides(&fact) {
+                    continue;
+                }
             }
             let candidate = L0Candidate {
                 fact_id: fact.id.clone(),
