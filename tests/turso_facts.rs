@@ -152,6 +152,11 @@ async fn superseded_rows_leave_search_and_carry_the_chain() {
         .expect("row");
     assert_eq!(old.superseded_by, Some(FactId("f2".into())));
     assert_eq!(old.revision, 1);
+    assert_eq!(
+        old.valid_to,
+        Some(corrected.created_at),
+        "the correction closes the validity window"
+    );
 
     // An unknown id is a NotFound, not a silent no-op.
     let error = store
@@ -185,6 +190,37 @@ async fn superseded_rows_leave_search_and_carry_the_chain() {
         .await
         .expect("search");
     assert_eq!(hits.len(), 2, "only the two active rows remain");
+}
+
+/// A row closed only by `valid_to` (an invalidation without a replacement)
+/// leaves search — the durable backend enforces the same `Fact::is_current`
+/// predicate the memory backend does.
+#[tokio::test]
+async fn valid_to_closed_rows_leave_search() {
+    let store = TursoFactStore::open(&temp_path("valid-to"))
+        .await
+        .expect("open");
+    let key = scope("ws-a", None, None);
+    let live = fact("v-live", &key, "gadget registry default timeout");
+    let mut closed = fact("v-closed", &key, "gadget registry default timeout closed");
+    closed.valid_to = Some(999);
+    store.put(&live).await.expect("put live");
+    store.put(&closed).await.expect("put closed");
+
+    let hits = store
+        .search(&key, "gadget registry timeout", 10)
+        .await
+        .expect("search");
+    let ids: Vec<FactId> = hits.into_iter().map(|(id, _)| id).collect();
+    assert_eq!(ids, vec![FactId("v-live".into())]);
+
+    // Closure is not deletion: the row still reads back by id.
+    let row = store
+        .get(&key, &FactId("v-closed".into()))
+        .await
+        .expect("get")
+        .expect("row");
+    assert!(!row.is_current());
 }
 
 /// `supersede` locates the row by bare fact id, across scopes — the trait

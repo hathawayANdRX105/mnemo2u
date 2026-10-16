@@ -62,6 +62,20 @@ fn turn(turn_id: &str, content: &str, timestamp: i64) -> SessionTurn {
     }
 }
 
+/// One closed turn of a named conversation (the source-ref session falls
+/// back to the conversation id when the scope carries none).
+fn turn_in(conversation_id: &str, turn_id: &str, content: &str, timestamp: i64) -> SessionTurn {
+    SessionTurn {
+        conversation_id: conversation_id.to_string(),
+        turn: Turn {
+            turn_id: turn_id.to_string(),
+            role: "user".to_string(),
+            content: content.to_string(),
+            timestamp,
+        },
+    }
+}
+
 /// A real durable gateway over temp files.
 struct Harness {
     _dir: tempfile::TempDir,
@@ -570,12 +584,180 @@ async fn same_fact_duplicates_are_not_written() {
         .expect("commit");
     assert_eq!(outcome.deduplicated, 1);
     assert_eq!(outcome.written, 0);
+
+    // R5 contract v2: the duplicate corroborates the existing row instead
+    // of writing a copy — the new turn's source ref lands on the old row.
+    let corroborated = harness
+        .facts
+        .get(&key, &existing.id)
+        .await
+        .expect("get")
+        .expect("row");
+    assert_eq!(corroborated.source_refs.len(), 1);
+    assert_eq!(corroborated.source_refs[0].event_id, "t1");
+    assert_eq!(
+        corroborated.revision, 0,
+        "corroboration is not a correction"
+    );
+
     assert!(harness
         .facts
         .get(&key, &fact_id("conv-1", "t1"))
         .await
         .expect("get")
         .is_none());
+}
+
+/// Seed an existing candidate row plus its vector row, so the next turn's
+/// neighbours include it and `compare` can say `SameFact`.
+async fn seed_candidate(
+    harness: &Harness,
+    key: &ScopeKey,
+    text: &str,
+) -> mnemo2u::core::types::Fact {
+    let existing = mnemo2u::core::types::Fact {
+        id: FactId("fact-old".into()),
+        scope: key.clone(),
+        kind: "semantic".into(),
+        text: text.into(),
+        source_refs: vec![],
+        trust_state: mnemo2u::core::types::TrustState::Candidate,
+        valid_from: None,
+        valid_to: None,
+        created_at: 500,
+        superseded_by: None,
+        revision: 0,
+    };
+    harness.facts.put(&existing).await.expect("put");
+    let embedding = mnemo2u::llm::mock::MockEmbedder::new()
+        .embed(std::slice::from_ref(&existing.text))
+        .await
+        .expect("embed")
+        .remove(0);
+    harness
+        .vector
+        .upsert(key, &existing.id, &embedding)
+        .await
+        .expect("vector");
+    existing
+}
+
+/// R5.AC2 (first half): restatements from one session append one ref per
+/// distinct event but never add an independent source — the row stays a
+/// candidate, and every restatement stays deduplicated.
+#[tokio::test]
+async fn same_session_restatements_do_not_add_independent_sources() {
+    let harness = harness(
+        script_ok(3, &[1, 1, 1], CompareRelation::SameFact),
+        gate_open(),
+    )
+    .await;
+    let key = scope();
+    let text =
+        "the vault holds the rotating deploy key material that the deployment pipeline reads";
+    let existing = seed_candidate(&harness, &key, text).await;
+
+    let turns = vec![
+        turn("t1", text, 1_000),
+        turn("t2", text, 2_000),
+        turn("t3", text, 3_000),
+    ];
+    let outcome = harness
+        .gateway
+        .commit_turns("conv-1", &turns)
+        .await
+        .expect("commit");
+    assert_eq!(outcome.deduplicated, 3);
+    assert_eq!(outcome.written, 0);
+
+    let row = harness
+        .facts
+        .get(&key, &existing.id)
+        .await
+        .expect("get")
+        .expect("row");
+    assert_eq!(row.source_refs.len(), 3, "one ref per distinct event");
+    let sessions: std::collections::BTreeSet<&str> = row
+        .source_refs
+        .iter()
+        .map(|reference| reference.session_id.as_str())
+        .collect();
+    assert_eq!(
+        sessions.len(),
+        1,
+        "one session is repetition, not corroboration"
+    );
+    assert_eq!(
+        row.trust_state,
+        mnemo2u::core::types::TrustState::Candidate,
+        "a single session never promotes"
+    );
+    assert_eq!(row.revision, 0, "corroboration is not a correction");
+}
+
+/// R5.AC2 (second half): a second, independent session promotes the
+/// candidate to verified, and the promotion survives a replay of the first
+/// conversation (the watermark skips it, nothing is double-counted).
+#[tokio::test]
+async fn independent_conversations_promote_corroboration_to_verified() {
+    let mut script = script_ok(1, &[1], CompareRelation::SameFact);
+    script.extend(script_ok(1, &[1], CompareRelation::SameFact));
+    let harness = harness(script, gate_open()).await;
+    let key = scope();
+    let text =
+        "the vault holds the rotating deploy key material that the deployment pipeline reads";
+    let existing = seed_candidate(&harness, &key, text).await;
+
+    let first = harness
+        .gateway
+        .commit_turns("conv-1", &[turn("t1", text, 1_000)])
+        .await
+        .expect("commit 1");
+    assert_eq!(first.deduplicated, 1);
+
+    let second = harness
+        .gateway
+        .commit_turns("conv-2", &[turn_in("conv-2", "t9", text, 2_000)])
+        .await
+        .expect("commit 2");
+    assert_eq!(second.deduplicated, 1);
+
+    let row = harness
+        .facts
+        .get(&key, &existing.id)
+        .await
+        .expect("get")
+        .expect("row");
+    assert_eq!(row.source_refs.len(), 2);
+    let sessions: std::collections::BTreeSet<&str> = row
+        .source_refs
+        .iter()
+        .map(|reference| reference.session_id.as_str())
+        .collect();
+    assert_eq!(sessions.len(), 2);
+    assert_eq!(
+        row.trust_state,
+        mnemo2u::core::types::TrustState::Verified,
+        "two independent sessions promote the row"
+    );
+
+    let replay = harness
+        .gateway
+        .commit_turns("conv-1", &[turn("t1", text, 1_000)])
+        .await
+        .expect("replay");
+    assert_eq!(replay.written, 0, "the watermark covers the replayed turn");
+    let after = harness
+        .facts
+        .get(&key, &existing.id)
+        .await
+        .expect("get")
+        .expect("row");
+    assert_eq!(after.source_refs.len(), 2);
+    assert_eq!(
+        after.trust_state,
+        mnemo2u::core::types::TrustState::Verified
+    );
 }
 
 #[tokio::test]

@@ -21,7 +21,9 @@
 //!    then per candidate:
 //!    - `classify` `Yes` → `Fact.kind` = the picked class, `trust_state` =
 //!      [`TrustState::Verified`]; `Review` → default kind, [`TrustState::Candidate`]
-//!    - `compare` `SameFact` → skip the write (duplicate)
+//!    - `compare` `SameFact` → corroborate the existing row (append the
+//!      new source ref, promote `Candidate → Verified` once two independent
+//!      sessions vouch for it) and skip the duplicate write
 //!    - `compare` `Contradicts` → supersede chain + a
 //!      [`RelKind::Supersedes`] edge (the graph arm weights corrections ×1.5)
 //!    - `extract` `Auto` → the value is appended to the fact's *search copy*
@@ -41,7 +43,7 @@
 //! the zero-LLM capture path writes every surviving turn as an unverified
 //! `episodic` fact with no dedup, no conflict handling and no extraction.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -66,6 +68,11 @@ pub const DEFAULT_KIND: &str = "episodic";
 const VERIFIED: TrustState = TrustState::Verified;
 /// The `TrustState` a fact carries when nothing settled (or no judge ran).
 const UNVERIFIED: TrustState = TrustState::Candidate;
+
+/// Distinct sessions required before corroboration promotes a candidate to
+/// verified (R5 contract v2; the CSM/cambium lineage — one session vouching
+/// for itself is repetition, not corroboration).
+const CORROBORATION_THRESHOLD: usize = 2;
 
 /// Compare-neighbour threshold and fan-out defaults (stage doc 04: cosine ≥
 /// 0.85, per-scope vector-arm top-10).
@@ -260,7 +267,7 @@ impl FactWriteGateway {
                     else {
                         continue;
                     };
-                    if neighbour.superseded_by.is_some() {
+                    if !neighbour.is_current() {
                         continue;
                     }
                     neighbour_corpus.push(neighbour.text.clone());
@@ -347,18 +354,36 @@ impl FactWriteGateway {
                     )
                 })
                 .collect();
-            // A duplicate is already in memory: writing it again adds nothing,
-            // and a contradiction against a row we are not replacing is left
-            // for the reflection stage (R5) rather than half-resolved here.
-            let duplicates = judgement.compare.iter().any(|result| {
-                matches!(
-                    result.relation,
-                    crate::llm::judge::CompareRelation::SameFact
-                )
-            });
-            if duplicates {
-                deduplicated += 1;
-                continue;
+            // A duplicate is already in memory: writing it again adds
+            // nothing, so it corroborates the row(s) it duplicates (R5
+            // contract v2). The new source ref is appended — deduplicated by
+            // `(session_id, event_id)`, so a replay of the same evidence adds
+            // nothing — and two independent sessions promote the row. A
+            // contradiction against a row we are not replacing stays with
+            // the supersede path below.
+            let same_facts: Vec<&crate::index::judge::CompareResult> = judgement
+                .compare
+                .iter()
+                .filter(|result| {
+                    matches!(
+                        result.relation,
+                        crate::llm::judge::CompareRelation::SameFact
+                    )
+                })
+                .collect();
+            if !same_facts.is_empty() {
+                let source = self.source_ref_for(&item.conversation_id, &item.turn);
+                let mut corroborated = false;
+                for result in same_facts {
+                    corroborated |= self.corroborate(&result.fact_id, &source).await?;
+                }
+                // A same-fact target that no longer exists (vanished between
+                // the neighbour read and here) falls through to a normal
+                // write rather than dropping the evidence silently.
+                if corroborated {
+                    deduplicated += 1;
+                    continue;
+                }
             }
 
             let source_refs = vec![self.source_ref_for(&item.conversation_id, &item.turn)];
@@ -550,6 +575,41 @@ impl FactWriteGateway {
             epoch: 0,
             event_id: turn.turn_id.clone(),
         }
+    }
+
+    /// Corroborate an existing fact with a new source (R5 contract v2):
+    /// the ref is appended unless `(session_id, event_id)` is already
+    /// present, so a replay of the same evidence adds nothing; and once
+    /// [`CORROBORATION_THRESHOLD`] distinct sessions vouch for the row, a
+    /// `Candidate` is promoted to `Verified`. History is preserved — no
+    /// revision bump (that counter marks corrections).
+    ///
+    /// Returns whether the row existed (a vanished target lets the caller
+    /// fall through to a normal write instead of dropping the evidence).
+    async fn corroborate(&self, id: &FactId, source: &SourceRef) -> Result<bool, GatewayError> {
+        let Some(mut fact) = self.facts.get(&self.options.scope, id).await? else {
+            return Ok(false);
+        };
+        let already = fact.source_refs.iter().any(|known| {
+            known.session_id == source.session_id && known.event_id == source.event_id
+        });
+        if already {
+            return Ok(true);
+        }
+        fact.source_refs.push(source.clone());
+        let independent = {
+            let sessions: BTreeSet<&str> = fact
+                .source_refs
+                .iter()
+                .map(|known| known.session_id.as_str())
+                .collect();
+            sessions.len()
+        };
+        if independent >= CORROBORATION_THRESHOLD && fact.trust_state == UNVERIFIED {
+            fact.trust_state = VERIFIED;
+        }
+        self.facts.put(&fact).await?;
+        Ok(true)
     }
 }
 

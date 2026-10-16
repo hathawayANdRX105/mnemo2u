@@ -12,10 +12,12 @@
 //!   request gets `None`, never another scope's row and not even a hint that
 //!   it exists;
 //! - `search` applies [`ScopeKey::admits`] *inside* the store (stage doc 03
-//!   contract 1), drops superseded rows, and scores by deterministic lexical
+//!   contract 1), drops non-current rows (`Fact::is_current`: superseded or
+//!   `valid_to`-closed), and scores by deterministic lexical
 //!   overlap of the query against the fact's `text`;
 //! - `supersede` is the bi-temporal correction path: the old row survives
-//!   with `superseded_by` set and `revision` bumped, and leaves `search`.
+//!   with `superseded_by` set, `valid_to` closed at the correction's
+//!   application time and `revision` bumped, and leaves `search`.
 //!
 //! Derivative: nothing here is durable; rebuild from the truth layer.
 
@@ -107,6 +109,7 @@ impl FactStore for MemoryFactStore {
             .ok_or_else(|| StoreError::NotFound(old.0.clone()))?;
         let row = inner.rows.get_mut(&key).expect("row located above");
         row.superseded_by = Some(new.id.clone());
+        row.valid_to = Some(new.created_at);
         row.revision += 1;
         inner
             .rows
@@ -124,7 +127,7 @@ impl FactStore for MemoryFactStore {
         let mut hits: Vec<(FactId, f64)> = inner
             .rows
             .values()
-            .filter(|row| scope.admits(&row.scope) && row.superseded_by.is_none())
+            .filter(|row| scope.admits(&row.scope) && row.is_current())
             .map(|row| (row.id.clone(), score(query, &row.text)))
             .collect();
         // Highest score first; ties break on the id so the same corpus yields
