@@ -774,6 +774,13 @@ async fn independent_conversations_promote_corroboration_to_verified() {
 async fn rejected_values_never_reenter_and_leave_recall() {
     let harness = harness(
         script_ok(1, &[0], CompareRelation::DifferentFacts),
+/// R5.AC4: deleting a source event invalidates exactly the facts that cite
+/// it — nothing else moves, the invalidated row leaves recall with its
+/// window closed, and a replay/re-drive of the turn does not resurrect it.
+#[tokio::test]
+async fn invalidate_source_closes_citing_facts_and_stays_closed() {
+    let harness = harness(
+        script_ok(2, &[0, 0], CompareRelation::DifferentFacts),
         gate_open(),
     )
     .await;
@@ -842,6 +849,92 @@ async fn rejected_values_never_reenter_and_leave_recall() {
         harness.judge.calls(),
         calls_before,
         "the screen runs before any judge call"
+    );
+}
+
+/// R5.AC4: deleting a source event invalidates exactly the facts that cite
+/// it — nothing else moves, the invalidated row leaves recall with its
+/// window closed, and a replay/re-drive of the turn does not resurrect it.
+#[tokio::test]
+async fn invalidate_source_closes_citing_facts_and_stays_closed() {
+    let harness = harness(
+        script_ok(2, &[0, 0], CompareRelation::DifferentFacts),
+        gate_open(),
+    )
+    .await;
+    let key = scope();
+    let cited =
+        "the vault holds the rotating deploy key material that the deployment pipeline reads";
+    let untouched = "the harness replays the watermark range on every restart of the session";
+
+    let turns = vec![turn("t1", cited, 1_000), turn("t2", untouched, 2_000)];
+    let first = harness
+        .gateway
+        .commit_turns("conv-1", &turns)
+        .await
+        .expect("commit");
+    assert_eq!(first.written, 2);
+
+    let invalidated = harness
+        .gateway
+        .invalidate_source("conv-1", "t1", 9_000)
+        .await
+        .expect("invalidate");
+    assert_eq!(invalidated, 1, "only the citing fact is touched");
+
+    let closed = harness
+        .facts
+        .get(&key, &fact_id("conv-1", "t1"))
+        .await
+        .expect("get")
+        .expect("row");
+    assert_eq!(closed.valid_to, Some(9_000));
+    assert_eq!(closed.revision, 1);
+    assert!(!closed.is_current());
+
+    let survivor = harness
+        .facts
+        .get(&key, &fact_id("conv-1", "t2"))
+        .await
+        .expect("get")
+        .expect("row");
+    assert!(survivor.is_current(), "unrelated rows keep their window");
+
+    let hits = harness
+        .facts
+        .search(&key, "deploy key material vault", 10)
+        .await
+        .expect("search");
+    assert!(
+        hits.iter().all(|(id, _)| id != &fact_id("conv-1", "t1")),
+        "an invalidated row must leave recall"
+    );
+
+    // A re-drive (simulating a crash between the row write and the
+    // watermark) hits the row guard: the existing, window-closed row is
+    // skipped rather than rewritten.
+    harness
+        .watermarks
+        .remove(&["conv-1".to_string()])
+        .await
+        .expect("clear watermark");
+    let redrive = harness
+        .gateway
+        .commit_turns("conv-1", &[turn("t1", cited, 1_000)])
+        .await
+        .expect("redrive");
+    assert_eq!(redrive.written, 0);
+    assert_eq!(redrive.skipped_known, 1, "{redrive:?}");
+    let still = harness
+        .facts
+        .get(&key, &fact_id("conv-1", "t1"))
+        .await
+        .expect("get")
+        .expect("row");
+    assert_eq!(
+        still.valid_to,
+        Some(9_000),
+        "re-drive must not reopen the window"
     );
 }
 

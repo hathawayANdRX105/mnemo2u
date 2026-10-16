@@ -318,6 +318,37 @@ impl FactStore for TursoFactStore {
         Ok(hits)
     }
 
+    /// Every admitted row, stable id order — the admitting predicate matches
+    /// `search`'s, without the currency filter (superseded rows return too:
+    /// this is the truth-surface enumeration, R5.T4).
+    async fn scan(&self, scope: &ScopeKey) -> Result<Vec<Fact>> {
+        let conn = self.conn.lock().await;
+        let mut conditions = vec!["workspace_id = ?1".to_string()];
+        let mut binds = vec![TursoValue::Text(scope.workspace_id.clone())];
+        let mut index = 2usize;
+        for (column, value) in [
+            ("session_id", &scope.session_id),
+            ("task_id", &scope.task_id),
+        ] {
+            if let Some(bound) = value {
+                conditions.push(format!("{column} = ?{index}"));
+                binds.push(TursoValue::Text(bound.clone()));
+                index += 1;
+            }
+        }
+        let sql = format!("SELECT body FROM facts WHERE {}", conditions.join(" AND "));
+        let mut rows = conn.query(&sql, binds).await.map_err(backend)?;
+        let mut facts: Vec<Fact> = Vec::new();
+        while let Some(row) = rows.next().await.map_err(backend)? {
+            let body = text(column(&row, 0)?);
+            let fact: Fact = serde_json::from_str(&body)
+                .map_err(|error| backend(format!("decoding fact: {error}")))?;
+            facts.push(fact);
+        }
+        facts.sort_by(|left, right| left.id.0.cmp(&right.id.0));
+        Ok(facts)
+    }
+
     async fn append_audit(&self, op: &str, payload_hash: &str) -> Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(

@@ -150,6 +150,10 @@ pub trait FactStore: Send + Sync {
         query: &str,
         limit: usize,
     ) -> Result<Vec<(FactId, f64)>>;
+    /// Every row the scope admits — including superseded and `valid_to`-closed
+    /// ones (the truth-surface view that maintenance paths need, R5.T4), in
+    /// stable id order. Callers filter with [`Fact::is_current`] themselves.
+    async fn scan(&self, scope: &ScopeKey) -> Result<Vec<Fact>>;
     async fn append_audit(&self, op: &str, payload_hash: &str) -> Result<()>;
 }
 
