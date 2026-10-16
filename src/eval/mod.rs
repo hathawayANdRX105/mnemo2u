@@ -384,6 +384,7 @@ pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, Strin
             edges: Some(stores.edges.clone()),
             embedder: embedder.clone(),
             judge: None,
+            tombstones: Arc::new(MemoryKv::new()),
             watermarks: Arc::new(MemoryKv::new()),
             tokenizer: Tokenizer::for_gpt_4o().map_err(|error| error.to_string())?,
         },

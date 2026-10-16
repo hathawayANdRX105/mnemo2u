@@ -28,6 +28,9 @@
 //!      [`RelKind::Supersedes`] edge (the graph arm weights corrections ×1.5)
 //!    - `extract` `Auto` → the value is appended to the fact's *search copy*
 //!      (lexical-arm exact recall), never to the stored text
+//!    - a value the host explicitly rejected is screened out before any
+//!      judge call — the scope-local tombstone ledger (`reject()` writes it,
+//!      R5.T3)
 //!
 //! Commit order follows the repo's established protocol: derived indexes
 //! (vector, lexical, edges) first, the truth row (`FactStore`) last, the
@@ -89,6 +92,7 @@ pub struct FactWriteGateway {
     /// `None` = the zero-LLM capture path (no judge, still writes).
     judge: Option<Arc<dyn JudgeClient>>,
     watermarks: Arc<dyn KvStore>,
+    tombstones: Arc<dyn KvStore>,
     tokenizer: Tokenizer,
     options: GatewayOptions,
 }
@@ -132,6 +136,9 @@ pub struct GatewayParts {
     /// `None` = the zero-LLM capture path (no judge, still writes).
     pub judge: Option<Arc<dyn JudgeClient>>,
     pub watermarks: Arc<dyn KvStore>,
+    /// The scope-local tombstone ledger (R5.T3): value digests the host
+    /// explicitly rejected — see [`FactWriteGateway::reject`].
+    pub tombstones: Arc<dyn KvStore>,
     pub tokenizer: Tokenizer,
 }
 
@@ -145,6 +152,7 @@ impl FactWriteGateway {
             embedder,
             judge,
             watermarks,
+            tombstones,
             tokenizer,
         } = parts;
         Self {
@@ -155,6 +163,7 @@ impl FactWriteGateway {
             embedder,
             judge,
             watermarks,
+            tombstones,
             tokenizer,
             options,
         }
@@ -181,6 +190,7 @@ impl FactWriteGateway {
                 skipped_known: 0,
                 skipped_superseded: 0,
                 skipped_low_value: 0,
+                tombstoned: 0,
                 deduplicated: 0,
                 corrections: 0,
                 written: 0,
@@ -224,6 +234,7 @@ impl FactWriteGateway {
                     conversation_id,
                     turns,
                     &fresh,
+                    0,
                     0,
                     0,
                     0,
@@ -295,6 +306,31 @@ impl FactWriteGateway {
                 ChunkVerdict::Keep => survivors.push(index),
                 _ => skipped_low_value += 1,
             }
+        }
+
+        // 4b. Tombstone screen — a value the host explicitly rejected never
+        // re-enters memory, and the check runs before any judge call so a
+        // rejected value burns zero model attention (R5.T3, AC3).
+        let mut tombstoned = 0usize;
+        if !survivors.is_empty() {
+            let keys: Vec<String> = survivors
+                .iter()
+                .map(|&index| tombstone_key(&self.options.scope, &pending[index].text))
+                .collect();
+            let known = self
+                .tombstones
+                .get_by_ids(&keys)
+                .await
+                .map_err(GatewayError::Store)?;
+            let mut kept = Vec::with_capacity(survivors.len());
+            for (position, &index) in survivors.iter().enumerate() {
+                if known[position].is_some() {
+                    tombstoned += 1;
+                } else {
+                    kept.push(index);
+                }
+            }
+            survivors = kept;
         }
 
         let mut deduplicated = 0usize;
@@ -469,6 +505,7 @@ impl FactWriteGateway {
             skipped_known,
             skipped_superseded,
             skipped_low_value,
+            tombstoned,
             deduplicated,
             corrections,
             written,
@@ -488,6 +525,7 @@ impl FactWriteGateway {
         skipped_known: usize,
         skipped_superseded: usize,
         skipped_low_value: usize,
+        tombstoned: usize,
         deduplicated: usize,
         corrections: usize,
         written: usize,
@@ -501,6 +539,7 @@ impl FactWriteGateway {
                 skipped_known,
                 skipped_superseded,
                 skipped_low_value,
+                tombstoned,
                 deduplicated,
                 corrections,
                 written,
@@ -538,6 +577,7 @@ impl FactWriteGateway {
             skipped_known,
             skipped_superseded,
             skipped_low_value,
+            tombstoned,
             deduplicated,
             corrections,
             written,
@@ -611,6 +651,30 @@ impl FactWriteGateway {
         self.facts.put(&fact).await?;
         Ok(true)
     }
+
+    /// Explicitly reject a fact's value (R5.T3): the value's canonical
+    /// digest enters the scope's tombstone ledger, so no later extraction of
+    /// the same value can re-enter memory however the turn is re-delivered;
+    /// the row keeps its history with [`TrustState::Rejected`] and a bumped
+    /// revision, and leaves recall via [`Fact::is_current`].
+    ///
+    /// A tombstone never expires (atlas: "a tombstone that expires is not a
+    /// tombstone"), and its key is canonicalised — see [`tombstone_key`].
+    pub async fn reject(&self, id: &FactId, reason: &str) -> Result<(), GatewayError> {
+        let Some(mut fact) = self.facts.get(&self.options.scope, id).await? else {
+            return Err(StoreError::NotFound(id.0.clone()).into());
+        };
+        let key = tombstone_key(&self.options.scope, &fact.text);
+        let payload = serde_json::json!({ "reason": reason, "fact_id": fact.id.0 });
+        self.tombstones
+            .upsert(vec![(key, payload)])
+            .await
+            .map_err(GatewayError::Store)?;
+        fact.trust_state = TrustState::Rejected;
+        fact.revision += 1;
+        self.facts.put(&fact).await?;
+        Ok(())
+    }
 }
 
 /// One derived candidate awaiting judgment.
@@ -640,6 +704,30 @@ fn fact_id(conversation_id: &str, turn: &Turn) -> String {
     compute_mdhash_id(
         &format!("{}\u{1}{}", conversation_id, turn.turn_id),
         "fact-",
+    )
+}
+
+/// The scope-local tombstone key for a value (R5.T3): the text is
+/// canonicalised (whitespace collapsed, lowercased) and hashed together
+/// with the scope, so the ledger entry can never leak across scopes and a
+/// re-extraction of the same value — however it is spaced or cased — lands
+/// on the same key. NFKC folding is a registered gap (needs a Unicode
+/// dependency); the stage doc carries it.
+fn tombstone_key(scope: &ScopeKey, text: &str) -> String {
+    let canonical = text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    compute_mdhash_id(
+        &format!(
+            "{}\u{1}{}\u{1}{}\u{1}{}",
+            scope.workspace_id,
+            scope.session_id.as_deref().unwrap_or_default(),
+            scope.task_id.as_deref().unwrap_or_default(),
+            canonical
+        ),
+        "tomb-",
     )
 }
 
@@ -690,6 +778,9 @@ pub struct GatewayOutcome {
     pub skipped_superseded: usize,
     /// Turns dropped by the value gate — these cost zero judge calls.
     pub skipped_low_value: usize,
+    /// Turns whose value matches a tombstone — an explicitly rejected value
+    /// never re-enters memory, and this screen also costs zero judge calls.
+    pub tombstoned: usize,
     /// Turns the judge called duplicates of existing facts.
     pub deduplicated: usize,
     /// Turns that superseded an earlier fact.

@@ -77,11 +77,14 @@ pub struct Fact {
 }
 
 impl Fact {
-    /// Whether the row belongs to the current view: neither superseded nor
-    /// closed by `valid_to`. One predicate shared by both fact stores and
-    /// the recall paths (R5 contract v2) — readers must never re-derive it.
+    /// Whether the row belongs to the current view: not superseded, not
+    /// `valid_to`-closed, and not explicitly rejected. One predicate shared
+    /// by both fact stores and the recall paths (R5 contract v2) — readers
+    /// must never re-derive it.
     pub fn is_current(&self) -> bool {
-        self.superseded_by.is_none() && self.valid_to.is_none()
+        self.superseded_by.is_none()
+            && self.valid_to.is_none()
+            && self.trust_state != TrustState::Rejected
     }
 }
 
