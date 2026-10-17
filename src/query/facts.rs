@@ -35,6 +35,13 @@
 //! exact-scope [`FactStore::get`]: superseded rows (a correction landed) and
 //! rows the scope cannot see are dropped silently, so a correction never
 //! hands out the stale body.
+//!
+//! Every budget and weight above is a **default**: the surface is
+//! externalized into [`RecallKnobs`] (stage doc 08 S2), and
+//! [`RecallKnobs::default`] is exactly these numbers.
+//! [`MemoryRecall::recall`] runs that default; [`MemoryRecall::recall_with`]
+//! takes a caller's own set, so a tuning pass can move one number without a
+//! rebuild and without a global a second run could leak into.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -71,6 +78,13 @@ const DAY_MS: i64 = 86_400_000;
 /// (R4 contract: a whole near-zero column is a miss,
 /// not a confident ordering).
 const RERANK_NEAR_ZERO: f64 = 0.05;
+
+/// Graph-arm weight of a correction link — the `1.5` of the module-head rel
+/// weighting.
+const REL_CORRECTION: f64 = 1.5;
+
+/// Graph-arm weight of a task/framing link — the `1.2` arm.
+const REL_SUPPORT: f64 = 1.2;
 
 /// The memory-layer recall orchestrator: one truth layer plus whichever read
 /// arms the deployment configured. Each `Option` that is `None` is an arm the
@@ -133,6 +147,55 @@ pub struct RecallOptions {
     pub staleness: Option<StaleRule>,
 }
 
+/// The read path's tuning surface (stage doc 08 S2): every number here was a
+/// compile-time constant before S2, and [`RecallKnobs::default`] is exactly
+/// those constants — so the default assembly is unchanged by construction.
+///
+/// The knobs are a value, not a global: [`MemoryRecall::recall_with`] takes
+/// one. That is how a tuning pass moves a single number without a rebuild,
+/// and without the init-order and silent-drift problems a process
+/// environment or a config file would bring.
+///
+/// [`crate::tune`] records the same surface — ids, bounds, rationale — and
+/// is the registry half of it; this struct is the injection half.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RecallKnobs {
+    /// Rows each arm may contribute, once the caller's `per_arm_limit` is
+    /// clamped against it (was `JEV_CANDIDATE_CAP`).
+    pub jev_candidate_cap: usize,
+    /// Graph-arm seeds taken from each hit arm (was `SEEDS_PER_ARM`).
+    pub seeds_per_arm: usize,
+    /// Graph-arm traversal depth (was `GRAPH_HOPS`).
+    pub graph_hops: u8,
+    /// L0 summary length in chars (was `SUMMARY_CHARS`).
+    pub summary_chars: usize,
+    /// A whole rerank column at or below this is a miss rather than an
+    /// ordering (was `RERANK_NEAR_ZERO`).
+    pub rerank_near_zero: f64,
+    /// Graph-arm weight of a `Corrects`/`Supersedes` edge (was the `1.5` of
+    /// `rel_multiplier`).
+    pub rel_correction: f64,
+    /// Graph-arm weight of a `DependsOn`/`AboutTask` edge (was the `1.2`).
+    pub rel_support: f64,
+}
+
+impl Default for RecallKnobs {
+    /// The pre-S2 constants, read from their single source in this module:
+    /// changing one of them changes the default, and `tests/tune_knobs.rs`
+    /// is what turns a registry copy that was not updated with it red.
+    fn default() -> Self {
+        Self {
+            jev_candidate_cap: JEV_CANDIDATE_CAP,
+            seeds_per_arm: SEEDS_PER_ARM,
+            graph_hops: GRAPH_HOPS,
+            summary_chars: SUMMARY_CHARS,
+            rerank_near_zero: RERANK_NEAR_ZERO,
+            rel_correction: REL_CORRECTION,
+            rel_support: REL_SUPPORT,
+        }
+    }
+}
+
 /// The five read arms, in fixed order. Used as the `degraded` vocabulary.
 ///
 /// Serialized for `diag`'s evidence rows; `Debug` stays the hand-written
@@ -191,13 +254,12 @@ pub struct RecallOutcome {
 }
 
 impl MemoryRecall {
-    /// Run the arms, fuse, re-order, materialize L0.
+    /// Run the arms, fuse, re-order, materialize L0 — with the default
+    /// tuning.
     ///
-    /// `query_vec` gates the vector arm: without it that arm is skipped
-    /// (and not degraded). Every store error is absorbed per arm — recall
-    /// degrades, it does not fail — except [`FactStore::get`], which is the
-    /// truth layer L0 is cut from: a truth store that cannot answer has no
-    /// fallback, so its error propagates.
+    /// This is the default assembly: [`MemoryRecall::recall_with`] called
+    /// with [`RecallKnobs::default`], which is exactly the numbers the module
+    /// head documents.
     pub async fn recall(
         &self,
         scope: &ScopeKey,
@@ -205,7 +267,27 @@ impl MemoryRecall {
         query_vec: Option<&[f32]>,
         opts: &RecallOptions,
     ) -> Result<RecallOutcome> {
-        let limit = opts.per_arm_limit.min(JEV_CANDIDATE_CAP);
+        self.recall_with(scope, query_text, query_vec, opts, &RecallKnobs::default())
+            .await
+    }
+
+    /// Run the arms, fuse, re-order, materialize L0 — with an explicit
+    /// tuning surface (stage doc 08 S2).
+    ///
+    /// `query_vec` gates the vector arm: without it that arm is skipped
+    /// (and not degraded). Every store error is absorbed per arm — recall
+    /// degrades, it does not fail — except [`FactStore::get`], which is the
+    /// truth layer L0 is cut from: a truth store that cannot answer has no
+    /// fallback, so its error propagates.
+    pub async fn recall_with(
+        &self,
+        scope: &ScopeKey,
+        query_text: &str,
+        query_vec: Option<&[f32]>,
+        opts: &RecallOptions,
+        knobs: &RecallKnobs,
+    ) -> Result<RecallOutcome> {
+        let limit = opts.per_arm_limit.min(knobs.jev_candidate_cap);
         let mut degraded: Vec<ArmName> = Vec::new();
 
         // Arm 1 — vector. Configured but no query vector: skipped, not
@@ -237,10 +319,10 @@ impl MemoryRecall {
 
         // Arm 3 — graph, seeded by arm 1/2 hits only.
         let mut seeds: HashSet<FactId> = HashSet::new();
-        for hit in vector_hits.iter().take(SEEDS_PER_ARM) {
+        for hit in vector_hits.iter().take(knobs.seeds_per_arm) {
             seeds.insert(hit.0.clone());
         }
-        for hit in lexical_hits.iter().take(SEEDS_PER_ARM) {
+        for hit in lexical_hits.iter().take(knobs.seeds_per_arm) {
             seeds.insert(hit.0.clone());
         }
         let graph_hits: Vec<FactId> = match &self.edges {
@@ -250,8 +332,8 @@ impl MemoryRecall {
                 // An empty seed set is a zero contribution, not a failure:
                 // `neighbors` answers it with an empty neighborhood. The call
                 // still runs so a broken adjacency backend is observable.
-                match store.neighbors(&seed_list, GRAPH_HOPS, scope).await {
-                    Ok(edges) => graph_rank(&edges),
+                match store.neighbors(&seed_list, knobs.graph_hops, scope).await {
+                    Ok(edges) => graph_rank(&edges, knobs),
                     Err(error) => {
                         tracing::warn!(%error, arm = %ArmName::Graph, "recall arm failed");
                         degraded.push(ArmName::Graph);
@@ -302,7 +384,7 @@ impl MemoryRecall {
             }
             let candidate = L0Candidate {
                 fact_id: fact.id.clone(),
-                summary: summary(&fact.text),
+                summary: summary(&fact.text, knobs.summary_chars),
                 source_refs: fact.source_refs.clone(),
                 trust_state: fact.trust_state,
                 score: scores.get(id).copied().unwrap_or_default(),
@@ -350,7 +432,7 @@ impl MemoryRecall {
                         if response
                             .ranked
                             .iter()
-                            .all(|hit| hit.relevance <= RERANK_NEAR_ZERO)
+                            .all(|hit| hit.relevance <= knobs.rerank_near_zero)
                         {
                             // 近零分整列 → 视为 miss: the
                             // reranker found nothing relevant.
@@ -424,10 +506,10 @@ impl MemoryRecall {
     }
 }
 
-/// The first 200 chars of `text`, cut on char boundaries: an L0 summary must
-/// never split a multi-byte code point.
-fn summary(text: &str) -> String {
-    text.chars().take(SUMMARY_CHARS).collect()
+/// The first `chars` chars of `text` (200 by default), cut on char
+/// boundaries: an L0 summary must never split a multi-byte code point.
+fn summary(text: &str, chars: usize) -> String {
+    text.chars().take(chars).collect()
 }
 
 /// Which arms returned `id`, in fixed arm order.
@@ -464,11 +546,12 @@ fn rrf_scores(rankings: &[Vec<FactId>], k: u32) -> HashMap<FactId, f64> {
 }
 
 /// Rel weighting of the graph arm: a correction supersedes, a task link
-/// only frames, and every other relation carries no extra conviction.
-fn rel_multiplier(rel: RelKind) -> f64 {
+/// only frames, and every other relation carries no extra conviction. The
+/// two weights are [`RecallKnobs`] fields; the `1.0` default is not.
+fn rel_multiplier(rel: RelKind, knobs: &RecallKnobs) -> f64 {
     match rel {
-        RelKind::Corrects | RelKind::Supersedes => 1.5,
-        RelKind::DependsOn | RelKind::AboutTask => 1.2,
+        RelKind::Corrects | RelKind::Supersedes => knobs.rel_correction,
+        RelKind::DependsOn | RelKind::AboutTask => knobs.rel_support,
         RelKind::MentionsFile | RelKind::CausedBy | RelKind::Related => 1.0,
     }
 }
@@ -477,10 +560,10 @@ fn rel_multiplier(rel: RelKind) -> f64 {
 /// returned edge earns `edge.weight × rel_multiplier(rel)`, from both
 /// endpoints (traversal is undirected, so neither side is privileged).
 /// Score descending, id ascending as the deterministic tie-break.
-fn graph_rank(edges: &[Edge]) -> Vec<FactId> {
+fn graph_rank(edges: &[Edge], knobs: &RecallKnobs) -> Vec<FactId> {
     let mut scores: HashMap<FactId, f64> = HashMap::new();
     for edge in edges {
-        let contribution = edge.weight * rel_multiplier(edge.rel);
+        let contribution = edge.weight * rel_multiplier(edge.rel, knobs);
         *scores.entry(edge.src.clone()).or_default() += contribution;
         *scores.entry(edge.dst.clone()).or_default() += contribution;
     }

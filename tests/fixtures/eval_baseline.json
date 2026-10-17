@@ -1,0 +1,300 @@
+{
+  "generated_by": "MNEMO_BLESS_BASELINE=1 cargo test --test eval_baseline",
+  "note": "quality and cost are compared exactly; latency is recorded and not compared (module doc of mnemo2u::tune). The latency values are from the run that produced this artifact and are inert: tests/eval_baseline.rs strips every latency field before comparing.",
+  "scoreboard": {
+    "schema": 1,
+    "knobs": [
+      {
+        "id": "recall.graph_hops",
+        "layer": "arms",
+        "current": {
+          "kind": "u8",
+          "value": 2
+        },
+        "bounds": {
+          "min": 1.0,
+          "max": null
+        },
+        "rationale": "Graph-arm traversal depth: deeper walks reach further neighbors at the cost of a larger candidate set."
+      },
+      {
+        "id": "recall.jev_candidate_cap",
+        "layer": "arms",
+        "current": {
+          "kind": "usize",
+          "value": 250
+        },
+        "bounds": {
+          "min": 1.0,
+          "max": null
+        },
+        "rationale": "The rerank candidate ceiling: a caller's per-arm limit is clamped against it, so the candidate set never outgrows what the reranker accepts."
+      },
+      {
+        "id": "recall.per_arm_limit",
+        "layer": "arms",
+        "current": {
+          "kind": "unset"
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": 250.0
+        },
+        "rationale": "Rows each arm may contribute; the caller's per-call budget, clamped against recall.jev_candidate_cap."
+      },
+      {
+        "id": "recall.rel_correction",
+        "layer": "arms",
+        "current": {
+          "kind": "f64",
+          "value": 1.5
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": null
+        },
+        "rationale": "Graph-arm weight of a Corrects/Supersedes edge: a correction supersedes the row it corrects."
+      },
+      {
+        "id": "recall.rel_support",
+        "layer": "arms",
+        "current": {
+          "kind": "f64",
+          "value": 1.2
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": null
+        },
+        "rationale": "Graph-arm weight of a DependsOn/AboutTask edge: a task link only frames a row."
+      },
+      {
+        "id": "recall.rerank_near_zero",
+        "layer": "judge",
+        "current": {
+          "kind": "f64",
+          "value": 0.05
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": 1.0
+        },
+        "rationale": "Rerank relevance at or below which a whole column is a miss rather than a confident ordering; the domain is a relevance score."
+      },
+      {
+        "id": "recall.rrf_k",
+        "layer": "fusion",
+        "current": {
+          "kind": "u32",
+          "value": 60
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": null
+        },
+        "rationale": "RRF damping: 60 is the atlas default the whole tree passes, a default and not a measurement."
+      },
+      {
+        "id": "recall.seeds_per_arm",
+        "layer": "arms",
+        "current": {
+          "kind": "usize",
+          "value": 10
+        },
+        "bounds": {
+          "min": 1.0,
+          "max": null
+        },
+        "rationale": "Graph-arm seeds taken from each hit arm: a BFS frontier is a starting set, not the whole ranking."
+      },
+      {
+        "id": "recall.stale.max_age_secs",
+        "layer": "staleness",
+        "current": {
+          "kind": "unset"
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": null
+        },
+        "rationale": "Age past which a thinly corroborated row is withheld; the caller supplies the rule per call."
+      },
+      {
+        "id": "recall.stale.min_sessions",
+        "layer": "staleness",
+        "current": {
+          "kind": "unset"
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": null
+        },
+        "rationale": "Distinct sessions that revalidate a row older than the age bound; the caller supplies the rule per call."
+      },
+      {
+        "id": "recall.summary_chars",
+        "layer": "delivery",
+        "current": {
+          "kind": "usize",
+          "value": 200
+        },
+        "bounds": {
+          "min": 1.0,
+          "max": null
+        },
+        "rationale": "L0 summary length in chars, cut on char boundaries: a shorter cut can hide a marker a delivered row carries."
+      },
+      {
+        "id": "recall.top_k",
+        "layer": "fusion",
+        "current": {
+          "kind": "unset"
+        },
+        "bounds": {
+          "min": 0.0,
+          "max": null
+        },
+        "rationale": "L0 candidates handed back; the caller's per-case budget, applied after fusion and the temporal re-ordering."
+      }
+    ],
+    "report": {
+      "cases": [
+        {
+          "case_id": "focus-switch-aba",
+          "snapshot_id": "snap-e0fdc260fb2aa3927056eb3750b722bb",
+          "quality": {
+            "recall_at_k": 1.0,
+            "miss_rate": 0.0,
+            "wrong_evidence_rate": 0.0
+          },
+          "cost": {
+            "embed_calls": 1,
+            "embedded_texts": 1,
+            "judge_calls": 0,
+            "tokens": null
+          },
+          "latency": {
+            "samples": 3,
+            "p50_us": 2045,
+            "p95_us": 3647
+          },
+          "queries": [
+            {
+              "text": "rotation policy vault secret manager ninety days",
+              "recall": 1.0,
+              "missing": [],
+              "wrong_evidence": [],
+              "returned_ids": [
+                "fact-540d8323e0a45979fbedf760bf8fb78e"
+              ],
+              "top_hit": true
+            }
+          ],
+          "failures": [],
+          "conditions": {
+            "top_k": 5,
+            "min_recall": 1.0,
+            "forbid_wrong_evidence": true,
+            "expect_top_hit": false
+          }
+        },
+        {
+          "case_id": "identifier-exact",
+          "snapshot_id": "snap-3f44bd7a95c480b87071d6e27f4477c7",
+          "quality": {
+            "recall_at_k": 1.0,
+            "miss_rate": 0.0,
+            "wrong_evidence_rate": 0.0
+          },
+          "cost": {
+            "embed_calls": 5,
+            "embedded_texts": 5,
+            "judge_calls": 0,
+            "tokens": null
+          },
+          "latency": {
+            "samples": 10,
+            "p50_us": 1769,
+            "p95_us": 3309
+          },
+          "queries": [
+            {
+              "text": "src/pipeline.rs",
+              "recall": 1.0,
+              "missing": [],
+              "wrong_evidence": [],
+              "returned_ids": [
+                "fact-265ed8b76cf086024817541eb370885c"
+              ],
+              "top_hit": true
+            },
+            {
+              "text": "ERR-4041",
+              "recall": 1.0,
+              "missing": [],
+              "wrong_evidence": [],
+              "returned_ids": [
+                "fact-543fef22c5e659f94ef47f14620bfa95",
+                "fact-680ceaa36623c5a765d839d1e1b89244"
+              ],
+              "top_hit": true
+            },
+            {
+              "text": "rrf_fuse",
+              "recall": 1.0,
+              "missing": [],
+              "wrong_evidence": [],
+              "returned_ids": [
+                "fact-5e9b3a6cc80cc3decba33c702910e3f2"
+              ],
+              "top_hit": true
+            },
+            {
+              "text": "/etc/mnemo2u/config.toml",
+              "recall": 1.0,
+              "missing": [],
+              "wrong_evidence": [],
+              "returned_ids": [
+                "fact-55ee9dc509f2826dff98eab5a9413b7e"
+              ],
+              "top_hit": true
+            },
+            {
+              "text": "chunk vector rebuild entry point",
+              "recall": 1.0,
+              "missing": [],
+              "wrong_evidence": [],
+              "returned_ids": [
+                "fact-265ed8b76cf086024817541eb370885c"
+              ],
+              "top_hit": true
+            }
+          ],
+          "failures": [],
+          "conditions": {
+            "top_k": 3,
+            "min_recall": 1.0,
+            "forbid_wrong_evidence": true,
+            "expect_top_hit": true
+          }
+        }
+      ],
+      "quality": {
+        "recall_at_k": 1.0,
+        "miss_rate": 0.0,
+        "wrong_evidence_rate": 0.0
+      },
+      "cost": {
+        "embed_calls": 6,
+        "embedded_texts": 6,
+        "judge_calls": 0,
+        "tokens": null
+      },
+      "latency": {
+        "samples": 13,
+        "p50_us": 2045,
+        "p95_us": 3647
+      }
+    }
+  }
+}

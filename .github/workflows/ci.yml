@@ -45,3 +45,9 @@ jobs:
       # attribution terminal stops holding.
       - name: Smoke (diag probe)
         run: cargo run --quiet --example diag_probe
+      # Real-backend smoke for the tuning surface (stage doc 08 S2): two eval
+      # cases into a scoreboard, plus the knob set the attribution names for a
+      # ranked-out miss. Fails the job when a case stops passing or when a
+      # stage's knob set stops being the one the registry states.
+      - name: Smoke (tune probe)
+        run: cargo run --quiet --example tune_probe
