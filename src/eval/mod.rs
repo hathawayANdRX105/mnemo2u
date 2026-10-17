@@ -45,7 +45,7 @@ use crate::core::types::{FactId, ScopeKey};
 use crate::index::gateway::{FactWriteGateway, GatewayOptions, GatewayParts};
 use crate::index::ingest::{SessionTurn, Turn};
 use crate::llm::mock::MockEmbedder;
-use crate::query::facts::{MemoryRecall, RecallOptions, RecallOutcome};
+use crate::query::facts::{MemoryRecall, RecallKnobs, RecallOptions, RecallOutcome};
 use crate::store::memory::MemoryKv;
 use crate::store::turso_edges::TursoFactEdges;
 use crate::store::turso_facts::TursoFactStore;
@@ -361,7 +361,30 @@ pub async fn open_stores(workspace: &Path) -> Result<CaseStores, String> {
 ///
 /// `workspace` is where the stores live; pass a fresh directory per run so
 /// the case is self-contained (and re-runnable).
+///
+/// This is the default assembly. [`run_case_with`] is the same run with the
+/// read path's tuning surface injected; a caller that tunes takes that one.
 pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, String> {
+    run_case_with(case, workspace, &RecallKnobs::default()).await
+}
+
+/// Run one case end to end against an explicit tuning surface (stage doc 08
+/// S3): the seam a search loop drives.
+///
+/// Identical to [`run_case`] in every respect except the recall call, which
+/// becomes [`MemoryRecall::recall_with`](crate::query::facts::MemoryRecall::
+/// recall_with) with these knobs. The gateway, the embedder, the options the
+/// case freezes, the latency sampling and the failure classification are
+/// unchanged — a knob moves the read path and nothing else, so a baseline
+/// built on `run_case` stays comparable to a run built on this.
+///
+/// Pass [`RecallKnobs::default`] and the result equals `run_case`'s, latency
+/// aside; `tests/tune_search.rs` pins that equality.
+pub async fn run_case_with(
+    case: &Case,
+    workspace: &Path,
+    knobs: &RecallKnobs,
+) -> Result<CaseResult, String> {
     let stores = open_stores(workspace).await?;
     let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new());
 
@@ -453,7 +476,13 @@ pub async fn run_case(case: &Case, workspace: &Path) -> Result<CaseResult, Strin
         for _ in 0..case.repetitions.max(1) {
             let started = Instant::now();
             let outcome = recall
-                .recall(&case.scope, &query.text, Some(&query_vec[0]), &options)
+                .recall_with(
+                    &case.scope,
+                    &query.text,
+                    Some(&query_vec[0]),
+                    &options,
+                    knobs,
+                )
                 .await;
             samples.push(started.elapsed().as_micros());
             last = Some(outcome);
