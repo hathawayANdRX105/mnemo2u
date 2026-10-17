@@ -151,14 +151,23 @@ async fn noise_floor_rejects_one_query_of_gain() {
         "a one-query set cannot produce a gain that clears its own floor: {verdict:?}"
     );
 
-    // The same candidate under a zero floor is no longer blocked by the floor
-    // rule, which proves the refusal above was the floor and not a failure to
-    // measure.
-    let mut loose = Search::new(tune::default_registry(), tuning, holdout, 0.0);
-    let opened = loose.evaluate(&wide, &root).await.expect("evaluate runs");
+    // The refusal names the floor and not a broken condition, which is what
+    // distinguishes "no gain here" from "this candidate is unusable".
+    if let Verdict::RejectNoiseFloor { gain } = &verdict {
+        assert_eq!(
+            *gain, 0.0,
+            "on a set that already recalls everything the gain is exactly zero"
+        );
+    }
+
+    // The floor rule is strict: a gain must *exceed* the floor, so a zero gain
+    // is refused even when the floor is zero. Rejecting a tie is the point —
+    // a gain equal to the floor is one query's worth of movement.
+    let mut strict = Search::new(tune::default_registry(), tuning, holdout, 0.0);
+    let tied = strict.evaluate(&wide, &root).await.expect("evaluate runs");
     assert!(
-        !matches!(opened, Verdict::RejectNoiseFloor { .. }),
-        "with no floor the same candidate must not be rejected by the floor rule: {opened:?}"
+        matches!(tied, Verdict::RejectNoiseFloor { .. }),
+        "a gain equal to the floor must be refused, not accepted: {tied:?}"
     );
 }
 
@@ -335,11 +344,13 @@ async fn empty_holdout_never_accepts() {
     );
 }
 
-/// Bug this turns red: a direction refused by the noise floor is closed
-/// forever, so a step that would help from a different starting value can
-/// never be reached. The floor says "not from here", not "never".
+/// Bug this turns red: a direction refused by the noise floor is treated as
+/// refuted and lost forever, so a step that would help from a different
+/// assembly can never be reached — or, the other way, re-offered from the
+/// *same* assembly, which is the non-convergence the `tried` set stops. The
+/// floor says "not from here", and "here" changes on commit.
 #[tokio::test]
-async fn a_noise_floor_refusal_does_not_close_the_direction() {
+async fn a_floor_refusal_is_closed_for_this_assembly_and_reopened_by_commit() {
     let tuning = cases::all(0);
     let holdout = holdout_set();
     let root = workspace("floor-open");
@@ -358,15 +369,37 @@ async fn a_noise_floor_refusal_does_not_close_the_direction() {
         "this candidate must be refused by the floor: {verdict:?}"
     );
 
-    // The same direction is still on offer afterwards: `propose` may return it
-    // again, because what was refused was the value, not the knob.
+    // Closed for *this* assembly: offering it again would return the same
+    // verdict, which is the non-convergence the `tried` set exists to stop.
     let offered: Vec<Step> = std::iter::from_fn(|| search.propose()).take(64).collect();
     assert!(
-        offered
+        !offered
             .iter()
             .any(|candidate| candidate.knob_id == "recall.graph_hops"
                 && candidate.to == KnobValue::U8(3)),
-        "a floor refusal must not close the direction"
+        "a direction already measured against this assembly must not be re-offered"
+    );
+
+    // But not refuted: `commit` moves the assembly and re-opens the tried set,
+    // so the same direction becomes measurable again from the new value. The
+    // commit is driven here by hand rather than through the search's own
+    // loop, because on these saturated sets nothing is ever accepted.
+    let accepted = Step {
+        knob_id: "recall.summary_chars".to_string(),
+        from: step("recall.summary_chars", KnobValue::Usize(200)).from,
+        to: KnobValue::Usize(201),
+        rationale: "test: move the assembly so the tried set is re-opened".to_string(),
+    };
+    search
+        .commit(&accepted, &Verdict::Accept { gain: 1.0 })
+        .expect("a hand-built acceptance commits");
+    let reopened: Vec<Step> = std::iter::from_fn(|| search.propose()).take(64).collect();
+    assert!(
+        reopened
+            .iter()
+            .any(|candidate| candidate.knob_id == "recall.graph_hops"
+                && candidate.to == KnobValue::U8(3)),
+        "a floor refusal is not a refutation: a new assembly must re-open it"
     );
 }
 
