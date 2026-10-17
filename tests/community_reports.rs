@@ -86,7 +86,9 @@ async fn report_context_matches_python_reference() {
     let cases = golden["cases"].as_array().expect("cases");
     assert!(!cases.is_empty(), "fixture carries cases");
     assert!(
-        cases.iter().any(|case| case["kind"] == "describe"),
+        cases
+            .iter()
+            .any(|case| case.get("kind").and_then(Value::as_str) == Some("describe")),
         "fixture carries describe cases"
     );
 
