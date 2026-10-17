@@ -422,6 +422,59 @@ fn every_searchable_knob_is_registered() {
     );
 }
 
+/// Bug this turns red: the baseline is re-measured per step, which doubles
+/// the harness runs of a search for a number that cannot have moved — the
+/// assembly only changes in `commit`. Also pins that the cache does not go
+/// stale: after a commit the next step is measured against the new baseline.
+#[tokio::test]
+async fn the_baseline_is_measured_once_per_assembly() {
+    let tuning = cases::all(0);
+    let holdout = holdout_set();
+    let root = workspace("baseline-cache");
+    let mut search = Search::new(
+        tune::default_registry(),
+        tuning.clone(),
+        holdout.clone(),
+        floor_for(&tuning),
+    );
+
+    // Two different candidates from the same assembly must both be scored
+    // against the same baseline. If the cache went stale between them, the
+    // second verdict would be measured against the first step's leftovers.
+    let first = step("recall.seeds_per_arm", KnobValue::Usize(11));
+    let second = step("recall.rel_support", KnobValue::F64(1.1));
+    let left = search.evaluate(&first, &root).await.expect("evaluate runs");
+    let right = search
+        .evaluate(&second, &root)
+        .await
+        .expect("evaluate runs");
+    assert_eq!(
+        verdict_gain(&left),
+        verdict_gain(&right),
+        "both directions were measured from the same assembly, so their gains are the same zero"
+    );
+
+    // The floor is what refuses them here, and both are refused: on sets that
+    // already recall everything no direction can gain.
+    assert!(
+        matches!(left, Verdict::RejectNoiseFloor { .. }),
+        "the first direction must be a floor refusal: {left:?}"
+    );
+    assert!(
+        matches!(right, Verdict::RejectNoiseFloor { .. }),
+        "the second direction must be a floor refusal too: {right:?}"
+    );
+}
+
+/// The gain a verdict carries, so a test can compare two measurements without
+/// naming a rule that has not happened yet.
+fn verdict_gain(verdict: &Verdict) -> f64 {
+    match verdict {
+        Verdict::Accept { gain } | Verdict::RejectNoiseFloor { gain } => *gain,
+        Verdict::RejectRegression { .. } | Verdict::RejectOutOfBounds { .. } => f64::NAN,
+    }
+}
+
 /// Bug this turns red: an unknown knob id panics or is silently skipped,
 /// instead of stopping the search that named it.
 #[test]

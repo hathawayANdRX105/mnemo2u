@@ -109,6 +109,15 @@ pub struct Search {
     accepted: Vec<Step>,
     /// Directions refuted (not merely unprofitable), so a pass never repeats one.
     exhausted: Vec<(String, KnobValue)>,
+    /// Both sets' results under the assembly as it stands, measured once and
+    /// reused until the assembly moves.
+    ///
+    /// Every candidate is measured against the same baseline, and the
+    /// baseline is a function of the registry — which only `commit` changes.
+    /// Re-measuring it per step would double the harness runs of a search for
+    /// a number that cannot have moved, so it is cached and dropped on
+    /// commit. `None` means "not measured yet".
+    baseline: Option<(Vec<CaseResult>, Vec<CaseResult>)>,
 }
 
 impl Search {
@@ -129,6 +138,7 @@ impl Search {
             noise_floor,
             accepted: Vec::new(),
             exhausted: Vec::new(),
+            baseline: None,
         }
     }
 
@@ -232,14 +242,23 @@ impl Search {
             });
         }
 
-        // The baseline the step is measured against: both sets under the
-        // assembly as it stands, in this run.
-        let baseline_tuning = self
-            .run_set(&self.registry, "baseline-tuning", workspace_root)
-            .await?;
-        let baseline_holdout = self
-            .run_set(&self.registry, "baseline-holdout", workspace_root)
-            .await?;
+        // The baseline the step is measured against, in this run: both sets
+        // under the assembly as it stands. Cached, because the assembly only
+        // moves in `commit` — a search that re-measured it per step would pay
+        // for the same number twice per direction.
+        if self.baseline.is_none() {
+            let tuning = self
+                .run_set(&self.registry, "baseline-tuning", workspace_root)
+                .await?;
+            let holdout = self
+                .run_set(&self.registry, "baseline-holdout", workspace_root)
+                .await?;
+            self.baseline = Some((tuning, holdout));
+        }
+        let (baseline_tuning, baseline_holdout) = self
+            .baseline
+            .as_ref()
+            .expect("the baseline was just measured");
         let step_tuning = self
             .run_set(&candidate, "step-tuning", workspace_root)
             .await?;
@@ -273,7 +292,7 @@ impl Search {
         }
 
         // Rule 2: the holdout set may not get worse.
-        let holdout_before = recall_of(&baseline_holdout);
+        let holdout_before = recall_of(baseline_holdout);
         let holdout_after = recall_of(&step_holdout);
         if holdout_after < holdout_before {
             let reason =
@@ -288,7 +307,7 @@ impl Search {
         // The direction is deliberately NOT recorded in `exhausted`: a gain
         // inside the floor is unproductive from *this* value, not refuted, so
         // a step that starts somewhere else may still land on it.
-        let tuning_before = recall_of(&baseline_tuning);
+        let tuning_before = recall_of(baseline_tuning);
         let tuning_after = recall_of(&step_tuning);
         let gain = tuning_after - tuning_before;
         if gain <= self.noise_floor {
@@ -312,6 +331,9 @@ impl Search {
             .set(&step.knob_id, step.to)
             .map_err(|error| error.to_string())?;
         self.accepted.push(step.clone());
+        // The assembly moved, so the cached baseline is stale: the next step is
+        // measured against what this one just produced.
+        self.baseline = None;
         Ok(())
     }
 
