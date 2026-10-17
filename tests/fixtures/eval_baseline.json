@@ -12,7 +12,7 @@
           "value": 2
         },
         "bounds": {
-          "min": 1,
+          "min": 1.0,
           "max": null
         },
         "rationale": "Graph-arm traversal depth: deeper walks reach further neighbors at the cost of a larger candidate set."
@@ -25,7 +25,7 @@
           "value": 250
         },
         "bounds": {
-          "min": 1,
+          "min": 1.0,
           "max": null
         },
         "rationale": "The rerank candidate ceiling: a caller's per-arm limit is clamped against it, so the candidate set never outgrows what the reranker accepts."
@@ -37,8 +37,8 @@
           "kind": "unset"
         },
         "bounds": {
-          "min": 0,
-          "max": 250
+          "min": 0.0,
+          "max": 250.0
         },
         "rationale": "Rows each arm may contribute; the caller's per-call budget, clamped against recall.jev_candidate_cap."
       },
@@ -50,7 +50,7 @@
           "value": 1.5
         },
         "bounds": {
-          "min": 0,
+          "min": 0.0,
           "max": null
         },
         "rationale": "Graph-arm weight of a Corrects/Supersedes edge: a correction supersedes the row it corrects."
@@ -63,7 +63,7 @@
           "value": 1.2
         },
         "bounds": {
-          "min": 0,
+          "min": 0.0,
           "max": null
         },
         "rationale": "Graph-arm weight of a DependsOn/AboutTask edge: a task link only frames a row."
@@ -76,8 +76,8 @@
           "value": 0.05
         },
         "bounds": {
-          "min": 0,
-          "max": 1
+          "min": 0.0,
+          "max": 1.0
         },
         "rationale": "Rerank relevance at or below which a whole column is a miss rather than a confident ordering; the domain is a relevance score."
       },
@@ -89,7 +89,7 @@
           "value": 60
         },
         "bounds": {
-          "min": 0,
+          "min": 0.0,
           "max": null
         },
         "rationale": "RRF damping: 60 is the atlas default the whole tree passes, a default and not a measurement."
@@ -102,7 +102,7 @@
           "value": 10
         },
         "bounds": {
-          "min": 1,
+          "min": 1.0,
           "max": null
         },
         "rationale": "Graph-arm seeds taken from each hit arm: a BFS frontier is a starting set, not the whole ranking."
@@ -114,7 +114,7 @@
           "kind": "unset"
         },
         "bounds": {
-          "min": 0,
+          "min": 0.0,
           "max": null
         },
         "rationale": "Age past which a thinly corroborated row is withheld; the caller supplies the rule per call."
@@ -126,7 +126,7 @@
           "kind": "unset"
         },
         "bounds": {
-          "min": 0,
+          "min": 0.0,
           "max": null
         },
         "rationale": "Distinct sessions that revalidate a row older than the age bound; the caller supplies the rule per call."
@@ -139,7 +139,7 @@
           "value": 200
         },
         "bounds": {
-          "min": 1,
+          "min": 1.0,
           "max": null
         },
         "rationale": "L0 summary length in chars, cut on char boundaries: a shorter cut can hide a marker a delivered row carries."
@@ -151,7 +151,7 @@
           "kind": "unset"
         },
         "bounds": {
-          "min": 0,
+          "min": 0.0,
           "max": null
         },
         "rationale": "L0 candidates handed back; the caller's per-case budget, applied after fusion and the temporal re-ordering."
@@ -163,9 +163,9 @@
           "case_id": "focus-switch-aba",
           "snapshot_id": "snap-e0fdc260fb2aa3927056eb3750b722bb",
           "quality": {
-            "recall_at_k": 1,
-            "miss_rate": 0,
-            "wrong_evidence_rate": 0
+            "recall_at_k": 1.0,
+            "miss_rate": 0.0,
+            "wrong_evidence_rate": 0.0
           },
           "cost": {
             "embed_calls": 1,
@@ -181,7 +181,7 @@
           "queries": [
             {
               "text": "rotation policy vault secret manager ninety days",
-              "recall": 1,
+              "recall": 1.0,
               "missing": [],
               "wrong_evidence": [],
               "returned_ids": [
@@ -193,7 +193,7 @@
           "failures": [],
           "conditions": {
             "top_k": 5,
-            "min_recall": 1,
+            "min_recall": 1.0,
             "forbid_wrong_evidence": true,
             "expect_top_hit": false
           }
@@ -202,9 +202,9 @@
           "case_id": "identifier-exact",
           "snapshot_id": "snap-3f44bd7a95c480b87071d6e27f4477c7",
           "quality": {
-            "recall_at_k": 1,
-            "miss_rate": 0,
-            "wrong_evidence_rate": 0
+            "recall_at_k": 1.0,
+            "miss_rate": 0.0,
+            "wrong_evidence_rate": 0.0
           },
           "cost": {
             "embed_calls": 5,
@@ -220,7 +220,7 @@
           "queries": [
             {
               "text": "src/pipeline.rs",
-              "recall": 1,
+              "recall": 1.0,
               "missing": [],
               "wrong_evidence": [],
               "returned_ids": [
@@ -230,7 +230,7 @@
             },
             {
               "text": "ERR-4041",
-              "recall": 1,
+              "recall": 1.0,
               "missing": [],
               "wrong_evidence": [],
               "returned_ids": [
@@ -241,7 +241,7 @@
             },
             {
               "text": "rrf_fuse",
-              "recall": 1,
+              "recall": 1.0,
               "missing": [],
               "wrong_evidence": [],
               "returned_ids": [
@@ -251,7 +251,7 @@
             },
             {
               "text": "/etc/mnemo2u/config.toml",
-              "recall": 1,
+              "recall": 1.0,
               "missing": [],
               "wrong_evidence": [],
               "returned_ids": [
@@ -261,7 +261,7 @@
             },
             {
               "text": "chunk vector rebuild entry point",
-              "recall": 1,
+              "recall": 1.0,
               "missing": [],
               "wrong_evidence": [],
               "returned_ids": [
@@ -273,16 +273,16 @@
           "failures": [],
           "conditions": {
             "top_k": 3,
-            "min_recall": 1,
+            "min_recall": 1.0,
             "forbid_wrong_evidence": true,
             "expect_top_hit": true
           }
         }
       ],
       "quality": {
-        "recall_at_k": 1,
-        "miss_rate": 0,
-        "wrong_evidence_rate": 0
+        "recall_at_k": 1.0,
+        "miss_rate": 0.0,
+        "wrong_evidence_rate": 0.0
       },
       "cost": {
         "embed_calls": 6,
