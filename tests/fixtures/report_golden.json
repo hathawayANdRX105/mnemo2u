@@ -357,6 +357,1399 @@
    "force_to_use_sub_communities": false,
    "already_reports": {},
    "expected": "-----Reports-----\n```csv\n\n```\n-----Entities-----\n```csv\n\"id\",\t\"entity\",\t\"type\",\t\"description\",\t\"degree\"\n1,\t\"BETA\",\t\"ORGANIZATION\",\t\"Beta Labs builds small autonomous delivery drones that navigate urban corridors without a permanent flight corridor, and it publishes its trajectory planner under a permissive licence for academic reuse.\",\t3\n0,\t\"ACME\",\t\"ORGANIZATION\",\t\"Acme Corporation designs and assembles collaborative warehouse robots for mid sized distribution centres across the alpine region, and it maintains a dedicated research group focused on safe motion planning.\",\t2\n```\n-----Relationships-----\n```csv\n\"id\",\t\"source\",\t\"target\",\t\"description\",\t\"rank\"\n0,\t\"ACME\",\t\"BETA\",\t\"Acme Corporation and Beta Labs compete for the same mid sized warehouse accounts, and the contest has narrowed twice in the last eighteen months after each of them cut its list price on the flagship cobot class.\",\t5\n2,\t\"BETA\",\t\"ZURICH\",\t\"sources actuators\",\t5\n```"
+  },
+  {
+   "name": "describe_switches_to_sub_communities_over_the_size_limit",
+   "kind": "describe",
+   "note": "101 nodes trip `truncated` (>100) without `force`, so the automatic switch fires: the Reports CSV carries both sub rows and their three covered nodes (N000-N002) leave the Entities CSV while the remaining nodes stay (18 entity and 17 edge rows at budget 710, a plateau at least 20 tokens wide).",
+   "community": {
+    "level": 1,
+    "title": "Auto cluster",
+    "nodes": [
+     "N000",
+     "N001",
+     "N002",
+     "N003",
+     "N004",
+     "N005",
+     "N006",
+     "N007",
+     "N008",
+     "N009",
+     "N010",
+     "N011",
+     "N012",
+     "N013",
+     "N014",
+     "N015",
+     "N016",
+     "N017",
+     "N018",
+     "N019",
+     "N020",
+     "N021",
+     "N022",
+     "N023",
+     "N024",
+     "N025",
+     "N026",
+     "N027",
+     "N028",
+     "N029",
+     "N030",
+     "N031",
+     "N032",
+     "N033",
+     "N034",
+     "N035",
+     "N036",
+     "N037",
+     "N038",
+     "N039",
+     "N040",
+     "N041",
+     "N042",
+     "N043",
+     "N044",
+     "N045",
+     "N046",
+     "N047",
+     "N048",
+     "N049",
+     "N050",
+     "N051",
+     "N052",
+     "N053",
+     "N054",
+     "N055",
+     "N056",
+     "N057",
+     "N058",
+     "N059",
+     "N060",
+     "N061",
+     "N062",
+     "N063",
+     "N064",
+     "N065",
+     "N066",
+     "N067",
+     "N068",
+     "N069",
+     "N070",
+     "N071",
+     "N072",
+     "N073",
+     "N074",
+     "N075",
+     "N076",
+     "N077",
+     "N078",
+     "N079",
+     "N080",
+     "N081",
+     "N082",
+     "N083",
+     "N084",
+     "N085",
+     "N086",
+     "N087",
+     "N088",
+     "N089",
+     "N090",
+     "N091",
+     "N092",
+     "N093",
+     "N094",
+     "N095",
+     "N096",
+     "N097",
+     "N098",
+     "N099",
+     "N100"
+    ],
+    "edges": [
+     [
+      "N000",
+      "N001"
+     ],
+     [
+      "N001",
+      "N002"
+     ],
+     [
+      "N002",
+      "N003"
+     ],
+     [
+      "N003",
+      "N004"
+     ],
+     [
+      "N004",
+      "N005"
+     ],
+     [
+      "N005",
+      "N006"
+     ],
+     [
+      "N006",
+      "N007"
+     ],
+     [
+      "N007",
+      "N008"
+     ],
+     [
+      "N008",
+      "N009"
+     ],
+     [
+      "N009",
+      "N010"
+     ],
+     [
+      "N010",
+      "N011"
+     ],
+     [
+      "N011",
+      "N012"
+     ],
+     [
+      "N012",
+      "N013"
+     ],
+     [
+      "N013",
+      "N014"
+     ],
+     [
+      "N014",
+      "N015"
+     ],
+     [
+      "N015",
+      "N016"
+     ],
+     [
+      "N016",
+      "N017"
+     ],
+     [
+      "N017",
+      "N018"
+     ],
+     [
+      "N018",
+      "N019"
+     ],
+     [
+      "N019",
+      "N020"
+     ],
+     [
+      "N020",
+      "N021"
+     ],
+     [
+      "N021",
+      "N022"
+     ],
+     [
+      "N022",
+      "N023"
+     ],
+     [
+      "N023",
+      "N024"
+     ],
+     [
+      "N024",
+      "N025"
+     ],
+     [
+      "N025",
+      "N026"
+     ],
+     [
+      "N026",
+      "N027"
+     ],
+     [
+      "N027",
+      "N028"
+     ],
+     [
+      "N028",
+      "N029"
+     ],
+     [
+      "N029",
+      "N030"
+     ],
+     [
+      "N030",
+      "N031"
+     ],
+     [
+      "N031",
+      "N032"
+     ],
+     [
+      "N032",
+      "N033"
+     ],
+     [
+      "N033",
+      "N034"
+     ],
+     [
+      "N034",
+      "N035"
+     ],
+     [
+      "N035",
+      "N036"
+     ],
+     [
+      "N036",
+      "N037"
+     ],
+     [
+      "N037",
+      "N038"
+     ],
+     [
+      "N038",
+      "N039"
+     ],
+     [
+      "N039",
+      "N040"
+     ],
+     [
+      "N040",
+      "N041"
+     ],
+     [
+      "N041",
+      "N042"
+     ],
+     [
+      "N042",
+      "N043"
+     ],
+     [
+      "N043",
+      "N044"
+     ],
+     [
+      "N044",
+      "N045"
+     ],
+     [
+      "N045",
+      "N046"
+     ],
+     [
+      "N046",
+      "N047"
+     ],
+     [
+      "N047",
+      "N048"
+     ],
+     [
+      "N048",
+      "N049"
+     ],
+     [
+      "N049",
+      "N050"
+     ],
+     [
+      "N050",
+      "N051"
+     ],
+     [
+      "N051",
+      "N052"
+     ],
+     [
+      "N052",
+      "N053"
+     ],
+     [
+      "N053",
+      "N054"
+     ],
+     [
+      "N054",
+      "N055"
+     ],
+     [
+      "N055",
+      "N056"
+     ],
+     [
+      "N056",
+      "N057"
+     ],
+     [
+      "N057",
+      "N058"
+     ],
+     [
+      "N058",
+      "N059"
+     ],
+     [
+      "N059",
+      "N060"
+     ],
+     [
+      "N060",
+      "N061"
+     ],
+     [
+      "N061",
+      "N062"
+     ],
+     [
+      "N062",
+      "N063"
+     ],
+     [
+      "N063",
+      "N064"
+     ],
+     [
+      "N064",
+      "N065"
+     ],
+     [
+      "N065",
+      "N066"
+     ],
+     [
+      "N066",
+      "N067"
+     ],
+     [
+      "N067",
+      "N068"
+     ],
+     [
+      "N068",
+      "N069"
+     ],
+     [
+      "N069",
+      "N070"
+     ],
+     [
+      "N070",
+      "N071"
+     ],
+     [
+      "N071",
+      "N072"
+     ],
+     [
+      "N072",
+      "N073"
+     ],
+     [
+      "N073",
+      "N074"
+     ],
+     [
+      "N074",
+      "N075"
+     ],
+     [
+      "N075",
+      "N076"
+     ],
+     [
+      "N076",
+      "N077"
+     ],
+     [
+      "N077",
+      "N078"
+     ],
+     [
+      "N078",
+      "N079"
+     ],
+     [
+      "N079",
+      "N080"
+     ],
+     [
+      "N080",
+      "N081"
+     ],
+     [
+      "N081",
+      "N082"
+     ],
+     [
+      "N082",
+      "N083"
+     ],
+     [
+      "N083",
+      "N084"
+     ],
+     [
+      "N084",
+      "N085"
+     ],
+     [
+      "N085",
+      "N086"
+     ],
+     [
+      "N086",
+      "N087"
+     ],
+     [
+      "N087",
+      "N088"
+     ],
+     [
+      "N088",
+      "N089"
+     ],
+     [
+      "N089",
+      "N090"
+     ],
+     [
+      "N090",
+      "N091"
+     ],
+     [
+      "N091",
+      "N092"
+     ],
+     [
+      "N092",
+      "N093"
+     ],
+     [
+      "N093",
+      "N094"
+     ],
+     [
+      "N094",
+      "N095"
+     ],
+     [
+      "N095",
+      "N096"
+     ],
+     [
+      "N096",
+      "N097"
+     ],
+     [
+      "N097",
+      "N098"
+     ],
+     [
+      "N098",
+      "N099"
+     ],
+     [
+      "N099",
+      "N100"
+     ]
+    ],
+    "chunk_ids": [
+     "chunk-auto"
+    ],
+    "occurrence": 30.0,
+    "sub_communities": [
+     "0",
+     "1"
+    ]
+   },
+   "graph": {
+    "nodes": {
+     "N000": {
+      "entity_type": "THING",
+      "description": "auto node 000"
+     },
+     "N001": {
+      "entity_type": "THING",
+      "description": "auto node 001"
+     },
+     "N002": {
+      "entity_type": "THING",
+      "description": "auto node 002"
+     },
+     "N003": {
+      "entity_type": "THING",
+      "description": "auto node 003"
+     },
+     "N004": {
+      "entity_type": "THING",
+      "description": "auto node 004"
+     },
+     "N005": {
+      "entity_type": "THING",
+      "description": "auto node 005"
+     },
+     "N006": {
+      "entity_type": "THING",
+      "description": "auto node 006"
+     },
+     "N007": {
+      "entity_type": "THING",
+      "description": "auto node 007"
+     },
+     "N008": {
+      "entity_type": "THING",
+      "description": "auto node 008"
+     },
+     "N009": {
+      "entity_type": "THING",
+      "description": "auto node 009"
+     },
+     "N010": {
+      "entity_type": "THING",
+      "description": "auto node 010"
+     },
+     "N011": {
+      "entity_type": "THING",
+      "description": "auto node 011"
+     },
+     "N012": {
+      "entity_type": "THING",
+      "description": "auto node 012"
+     },
+     "N013": {
+      "entity_type": "THING",
+      "description": "auto node 013"
+     },
+     "N014": {
+      "entity_type": "THING",
+      "description": "auto node 014"
+     },
+     "N015": {
+      "entity_type": "THING",
+      "description": "auto node 015"
+     },
+     "N016": {
+      "entity_type": "THING",
+      "description": "auto node 016"
+     },
+     "N017": {
+      "entity_type": "THING",
+      "description": "auto node 017"
+     },
+     "N018": {
+      "entity_type": "THING",
+      "description": "auto node 018"
+     },
+     "N019": {
+      "entity_type": "THING",
+      "description": "auto node 019"
+     },
+     "N020": {
+      "entity_type": "THING",
+      "description": "auto node 020"
+     },
+     "N021": {
+      "entity_type": "THING",
+      "description": "auto node 021"
+     },
+     "N022": {
+      "entity_type": "THING",
+      "description": "auto node 022"
+     },
+     "N023": {
+      "entity_type": "THING",
+      "description": "auto node 023"
+     },
+     "N024": {
+      "entity_type": "THING",
+      "description": "auto node 024"
+     },
+     "N025": {
+      "entity_type": "THING",
+      "description": "auto node 025"
+     },
+     "N026": {
+      "entity_type": "THING",
+      "description": "auto node 026"
+     },
+     "N027": {
+      "entity_type": "THING",
+      "description": "auto node 027"
+     },
+     "N028": {
+      "entity_type": "THING",
+      "description": "auto node 028"
+     },
+     "N029": {
+      "entity_type": "THING",
+      "description": "auto node 029"
+     },
+     "N030": {
+      "entity_type": "THING",
+      "description": "auto node 030"
+     },
+     "N031": {
+      "entity_type": "THING",
+      "description": "auto node 031"
+     },
+     "N032": {
+      "entity_type": "THING",
+      "description": "auto node 032"
+     },
+     "N033": {
+      "entity_type": "THING",
+      "description": "auto node 033"
+     },
+     "N034": {
+      "entity_type": "THING",
+      "description": "auto node 034"
+     },
+     "N035": {
+      "entity_type": "THING",
+      "description": "auto node 035"
+     },
+     "N036": {
+      "entity_type": "THING",
+      "description": "auto node 036"
+     },
+     "N037": {
+      "entity_type": "THING",
+      "description": "auto node 037"
+     },
+     "N038": {
+      "entity_type": "THING",
+      "description": "auto node 038"
+     },
+     "N039": {
+      "entity_type": "THING",
+      "description": "auto node 039"
+     },
+     "N040": {
+      "entity_type": "THING",
+      "description": "auto node 040"
+     },
+     "N041": {
+      "entity_type": "THING",
+      "description": "auto node 041"
+     },
+     "N042": {
+      "entity_type": "THING",
+      "description": "auto node 042"
+     },
+     "N043": {
+      "entity_type": "THING",
+      "description": "auto node 043"
+     },
+     "N044": {
+      "entity_type": "THING",
+      "description": "auto node 044"
+     },
+     "N045": {
+      "entity_type": "THING",
+      "description": "auto node 045"
+     },
+     "N046": {
+      "entity_type": "THING",
+      "description": "auto node 046"
+     },
+     "N047": {
+      "entity_type": "THING",
+      "description": "auto node 047"
+     },
+     "N048": {
+      "entity_type": "THING",
+      "description": "auto node 048"
+     },
+     "N049": {
+      "entity_type": "THING",
+      "description": "auto node 049"
+     },
+     "N050": {
+      "entity_type": "THING",
+      "description": "auto node 050"
+     },
+     "N051": {
+      "entity_type": "THING",
+      "description": "auto node 051"
+     },
+     "N052": {
+      "entity_type": "THING",
+      "description": "auto node 052"
+     },
+     "N053": {
+      "entity_type": "THING",
+      "description": "auto node 053"
+     },
+     "N054": {
+      "entity_type": "THING",
+      "description": "auto node 054"
+     },
+     "N055": {
+      "entity_type": "THING",
+      "description": "auto node 055"
+     },
+     "N056": {
+      "entity_type": "THING",
+      "description": "auto node 056"
+     },
+     "N057": {
+      "entity_type": "THING",
+      "description": "auto node 057"
+     },
+     "N058": {
+      "entity_type": "THING",
+      "description": "auto node 058"
+     },
+     "N059": {
+      "entity_type": "THING",
+      "description": "auto node 059"
+     },
+     "N060": {
+      "entity_type": "THING",
+      "description": "auto node 060"
+     },
+     "N061": {
+      "entity_type": "THING",
+      "description": "auto node 061"
+     },
+     "N062": {
+      "entity_type": "THING",
+      "description": "auto node 062"
+     },
+     "N063": {
+      "entity_type": "THING",
+      "description": "auto node 063"
+     },
+     "N064": {
+      "entity_type": "THING",
+      "description": "auto node 064"
+     },
+     "N065": {
+      "entity_type": "THING",
+      "description": "auto node 065"
+     },
+     "N066": {
+      "entity_type": "THING",
+      "description": "auto node 066"
+     },
+     "N067": {
+      "entity_type": "THING",
+      "description": "auto node 067"
+     },
+     "N068": {
+      "entity_type": "THING",
+      "description": "auto node 068"
+     },
+     "N069": {
+      "entity_type": "THING",
+      "description": "auto node 069"
+     },
+     "N070": {
+      "entity_type": "THING",
+      "description": "auto node 070"
+     },
+     "N071": {
+      "entity_type": "THING",
+      "description": "auto node 071"
+     },
+     "N072": {
+      "entity_type": "THING",
+      "description": "auto node 072"
+     },
+     "N073": {
+      "entity_type": "THING",
+      "description": "auto node 073"
+     },
+     "N074": {
+      "entity_type": "THING",
+      "description": "auto node 074"
+     },
+     "N075": {
+      "entity_type": "THING",
+      "description": "auto node 075"
+     },
+     "N076": {
+      "entity_type": "THING",
+      "description": "auto node 076"
+     },
+     "N077": {
+      "entity_type": "THING",
+      "description": "auto node 077"
+     },
+     "N078": {
+      "entity_type": "THING",
+      "description": "auto node 078"
+     },
+     "N079": {
+      "entity_type": "THING",
+      "description": "auto node 079"
+     },
+     "N080": {
+      "entity_type": "THING",
+      "description": "auto node 080"
+     },
+     "N081": {
+      "entity_type": "THING",
+      "description": "auto node 081"
+     },
+     "N082": {
+      "entity_type": "THING",
+      "description": "auto node 082"
+     },
+     "N083": {
+      "entity_type": "THING",
+      "description": "auto node 083"
+     },
+     "N084": {
+      "entity_type": "THING",
+      "description": "auto node 084"
+     },
+     "N085": {
+      "entity_type": "THING",
+      "description": "auto node 085"
+     },
+     "N086": {
+      "entity_type": "THING",
+      "description": "auto node 086"
+     },
+     "N087": {
+      "entity_type": "THING",
+      "description": "auto node 087"
+     },
+     "N088": {
+      "entity_type": "THING",
+      "description": "auto node 088"
+     },
+     "N089": {
+      "entity_type": "THING",
+      "description": "auto node 089"
+     },
+     "N090": {
+      "entity_type": "THING",
+      "description": "auto node 090"
+     },
+     "N091": {
+      "entity_type": "THING",
+      "description": "auto node 091"
+     },
+     "N092": {
+      "entity_type": "THING",
+      "description": "auto node 092"
+     },
+     "N093": {
+      "entity_type": "THING",
+      "description": "auto node 093"
+     },
+     "N094": {
+      "entity_type": "THING",
+      "description": "auto node 094"
+     },
+     "N095": {
+      "entity_type": "THING",
+      "description": "auto node 095"
+     },
+     "N096": {
+      "entity_type": "THING",
+      "description": "auto node 096"
+     },
+     "N097": {
+      "entity_type": "THING",
+      "description": "auto node 097"
+     },
+     "N098": {
+      "entity_type": "THING",
+      "description": "auto node 098"
+     },
+     "N099": {
+      "entity_type": "THING",
+      "description": "auto node 099"
+     },
+     "N100": {
+      "entity_type": "THING",
+      "description": "auto node 100"
+     }
+    },
+    "edges": {
+     "N000\u0000N001": {
+      "description": "auto edge 000"
+     },
+     "N001\u0000N002": {
+      "description": "auto edge 001"
+     },
+     "N002\u0000N003": {
+      "description": "auto edge 002"
+     },
+     "N003\u0000N004": {
+      "description": "auto edge 003"
+     },
+     "N004\u0000N005": {
+      "description": "auto edge 004"
+     },
+     "N005\u0000N006": {
+      "description": "auto edge 005"
+     },
+     "N006\u0000N007": {
+      "description": "auto edge 006"
+     },
+     "N007\u0000N008": {
+      "description": "auto edge 007"
+     },
+     "N008\u0000N009": {
+      "description": "auto edge 008"
+     },
+     "N009\u0000N010": {
+      "description": "auto edge 009"
+     },
+     "N010\u0000N011": {
+      "description": "auto edge 010"
+     },
+     "N011\u0000N012": {
+      "description": "auto edge 011"
+     },
+     "N012\u0000N013": {
+      "description": "auto edge 012"
+     },
+     "N013\u0000N014": {
+      "description": "auto edge 013"
+     },
+     "N014\u0000N015": {
+      "description": "auto edge 014"
+     },
+     "N015\u0000N016": {
+      "description": "auto edge 015"
+     },
+     "N016\u0000N017": {
+      "description": "auto edge 016"
+     },
+     "N017\u0000N018": {
+      "description": "auto edge 017"
+     },
+     "N018\u0000N019": {
+      "description": "auto edge 018"
+     },
+     "N019\u0000N020": {
+      "description": "auto edge 019"
+     },
+     "N020\u0000N021": {
+      "description": "auto edge 020"
+     },
+     "N021\u0000N022": {
+      "description": "auto edge 021"
+     },
+     "N022\u0000N023": {
+      "description": "auto edge 022"
+     },
+     "N023\u0000N024": {
+      "description": "auto edge 023"
+     },
+     "N024\u0000N025": {
+      "description": "auto edge 024"
+     },
+     "N025\u0000N026": {
+      "description": "auto edge 025"
+     },
+     "N026\u0000N027": {
+      "description": "auto edge 026"
+     },
+     "N027\u0000N028": {
+      "description": "auto edge 027"
+     },
+     "N028\u0000N029": {
+      "description": "auto edge 028"
+     },
+     "N029\u0000N030": {
+      "description": "auto edge 029"
+     },
+     "N030\u0000N031": {
+      "description": "auto edge 030"
+     },
+     "N031\u0000N032": {
+      "description": "auto edge 031"
+     },
+     "N032\u0000N033": {
+      "description": "auto edge 032"
+     },
+     "N033\u0000N034": {
+      "description": "auto edge 033"
+     },
+     "N034\u0000N035": {
+      "description": "auto edge 034"
+     },
+     "N035\u0000N036": {
+      "description": "auto edge 035"
+     },
+     "N036\u0000N037": {
+      "description": "auto edge 036"
+     },
+     "N037\u0000N038": {
+      "description": "auto edge 037"
+     },
+     "N038\u0000N039": {
+      "description": "auto edge 038"
+     },
+     "N039\u0000N040": {
+      "description": "auto edge 039"
+     },
+     "N040\u0000N041": {
+      "description": "auto edge 040"
+     },
+     "N041\u0000N042": {
+      "description": "auto edge 041"
+     },
+     "N042\u0000N043": {
+      "description": "auto edge 042"
+     },
+     "N043\u0000N044": {
+      "description": "auto edge 043"
+     },
+     "N044\u0000N045": {
+      "description": "auto edge 044"
+     },
+     "N045\u0000N046": {
+      "description": "auto edge 045"
+     },
+     "N046\u0000N047": {
+      "description": "auto edge 046"
+     },
+     "N047\u0000N048": {
+      "description": "auto edge 047"
+     },
+     "N048\u0000N049": {
+      "description": "auto edge 048"
+     },
+     "N049\u0000N050": {
+      "description": "auto edge 049"
+     },
+     "N050\u0000N051": {
+      "description": "auto edge 050"
+     },
+     "N051\u0000N052": {
+      "description": "auto edge 051"
+     },
+     "N052\u0000N053": {
+      "description": "auto edge 052"
+     },
+     "N053\u0000N054": {
+      "description": "auto edge 053"
+     },
+     "N054\u0000N055": {
+      "description": "auto edge 054"
+     },
+     "N055\u0000N056": {
+      "description": "auto edge 055"
+     },
+     "N056\u0000N057": {
+      "description": "auto edge 056"
+     },
+     "N057\u0000N058": {
+      "description": "auto edge 057"
+     },
+     "N058\u0000N059": {
+      "description": "auto edge 058"
+     },
+     "N059\u0000N060": {
+      "description": "auto edge 059"
+     },
+     "N060\u0000N061": {
+      "description": "auto edge 060"
+     },
+     "N061\u0000N062": {
+      "description": "auto edge 061"
+     },
+     "N062\u0000N063": {
+      "description": "auto edge 062"
+     },
+     "N063\u0000N064": {
+      "description": "auto edge 063"
+     },
+     "N064\u0000N065": {
+      "description": "auto edge 064"
+     },
+     "N065\u0000N066": {
+      "description": "auto edge 065"
+     },
+     "N066\u0000N067": {
+      "description": "auto edge 066"
+     },
+     "N067\u0000N068": {
+      "description": "auto edge 067"
+     },
+     "N068\u0000N069": {
+      "description": "auto edge 068"
+     },
+     "N069\u0000N070": {
+      "description": "auto edge 069"
+     },
+     "N070\u0000N071": {
+      "description": "auto edge 070"
+     },
+     "N071\u0000N072": {
+      "description": "auto edge 071"
+     },
+     "N072\u0000N073": {
+      "description": "auto edge 072"
+     },
+     "N073\u0000N074": {
+      "description": "auto edge 073"
+     },
+     "N074\u0000N075": {
+      "description": "auto edge 074"
+     },
+     "N075\u0000N076": {
+      "description": "auto edge 075"
+     },
+     "N076\u0000N077": {
+      "description": "auto edge 076"
+     },
+     "N077\u0000N078": {
+      "description": "auto edge 077"
+     },
+     "N078\u0000N079": {
+      "description": "auto edge 078"
+     },
+     "N079\u0000N080": {
+      "description": "auto edge 079"
+     },
+     "N080\u0000N081": {
+      "description": "auto edge 080"
+     },
+     "N081\u0000N082": {
+      "description": "auto edge 081"
+     },
+     "N082\u0000N083": {
+      "description": "auto edge 082"
+     },
+     "N083\u0000N084": {
+      "description": "auto edge 083"
+     },
+     "N084\u0000N085": {
+      "description": "auto edge 084"
+     },
+     "N085\u0000N086": {
+      "description": "auto edge 085"
+     },
+     "N086\u0000N087": {
+      "description": "auto edge 086"
+     },
+     "N087\u0000N088": {
+      "description": "auto edge 087"
+     },
+     "N088\u0000N089": {
+      "description": "auto edge 088"
+     },
+     "N089\u0000N090": {
+      "description": "auto edge 089"
+     },
+     "N090\u0000N091": {
+      "description": "auto edge 090"
+     },
+     "N091\u0000N092": {
+      "description": "auto edge 091"
+     },
+     "N092\u0000N093": {
+      "description": "auto edge 092"
+     },
+     "N093\u0000N094": {
+      "description": "auto edge 093"
+     },
+     "N094\u0000N095": {
+      "description": "auto edge 094"
+     },
+     "N095\u0000N096": {
+      "description": "auto edge 095"
+     },
+     "N096\u0000N097": {
+      "description": "auto edge 096"
+     },
+     "N097\u0000N098": {
+      "description": "auto edge 097"
+     },
+     "N098\u0000N099": {
+      "description": "auto edge 098"
+     },
+     "N099\u0000N100": {
+      "description": "auto edge 099"
+     }
+    }
+   },
+   "max_token_size": 710,
+   "force_to_use_sub_communities": false,
+   "already_reports": {
+    "0": {
+     "level": 0,
+     "title": "Auto sub first",
+     "nodes": [
+      "N000",
+      "N001"
+     ],
+     "edges": [
+      [
+       "N000",
+       "N001"
+      ]
+     ],
+     "chunk_ids": [
+      "chunk-auto"
+     ],
+     "occurrence": 9.0,
+     "sub_communities": [],
+     "report_string": "# Auto sub first\n\nCovers the first pair.",
+     "report_json": {
+      "rating": 5
+     }
+    },
+    "1": {
+     "level": 0,
+     "title": "Auto sub second",
+     "nodes": [
+      "N002"
+     ],
+     "edges": [],
+     "chunk_ids": [
+      "chunk-auto"
+     ],
+     "occurrence": 4.0,
+     "sub_communities": [],
+     "report_string": "# Auto sub second\n\nCovers the third node.",
+     "report_json": {
+      "rating": 6
+     }
+    }
+   },
+   "expected": "-----Reports-----\n```csv\n\"id\",\t\"report\",\t\"rating\",\t\"importance\"\n0,\t\"# Auto sub first\n\nCovers the first pair.\",\t5,\t9.0\n1,\t\"# Auto sub second\n\nCovers the third node.\",\t6,\t4.0\n```\n-----Entities-----\n```csv\n\"id\",\t\"entity\",\t\"type\",\t\"description\",\t\"degree\"\n3,\t\"N003\",\t\"THING\",\t\"auto node 003\",\t2\n4,\t\"N004\",\t\"THING\",\t\"auto node 004\",\t2\n5,\t\"N005\",\t\"THING\",\t\"auto node 005\",\t2\n6,\t\"N006\",\t\"THING\",\t\"auto node 006\",\t2\n7,\t\"N007\",\t\"THING\",\t\"auto node 007\",\t2\n8,\t\"N008\",\t\"THING\",\t\"auto node 008\",\t2\n9,\t\"N009\",\t\"THING\",\t\"auto node 009\",\t2\n10,\t\"N010\",\t\"THING\",\t\"auto node 010\",\t2\n11,\t\"N011\",\t\"THING\",\t\"auto node 011\",\t2\n12,\t\"N012\",\t\"THING\",\t\"auto node 012\",\t2\n13,\t\"N013\",\t\"THING\",\t\"auto node 013\",\t2\n14,\t\"N014\",\t\"THING\",\t\"auto node 014\",\t2\n15,\t\"N015\",\t\"THING\",\t\"auto node 015\",\t2\n16,\t\"N016\",\t\"THING\",\t\"auto node 016\",\t2\n17,\t\"N017\",\t\"THING\",\t\"auto node 017\",\t2\n18,\t\"N018\",\t\"THING\",\t\"auto node 018\",\t2\n19,\t\"N019\",\t\"THING\",\t\"auto node 019\",\t2\n20,\t\"N020\",\t\"THING\",\t\"auto node 020\",\t2\n```\n-----Relationships-----\n```csv\n\"id\",\t\"source\",\t\"target\",\t\"description\",\t\"rank\"\n1,\t\"N001\",\t\"N002\",\t\"auto edge 001\",\t4\n2,\t\"N002\",\t\"N003\",\t\"auto edge 002\",\t4\n3,\t\"N003\",\t\"N004\",\t\"auto edge 003\",\t4\n4,\t\"N004\",\t\"N005\",\t\"auto edge 004\",\t4\n5,\t\"N005\",\t\"N006\",\t\"auto edge 005\",\t4\n6,\t\"N006\",\t\"N007\",\t\"auto edge 006\",\t4\n7,\t\"N007\",\t\"N008\",\t\"auto edge 007\",\t4\n8,\t\"N008\",\t\"N009\",\t\"auto edge 008\",\t4\n9,\t\"N009\",\t\"N010\",\t\"auto edge 009\",\t4\n10,\t\"N010\",\t\"N011\",\t\"auto edge 010\",\t4\n11,\t\"N011\",\t\"N012\",\t\"auto edge 011\",\t4\n12,\t\"N012\",\t\"N013\",\t\"auto edge 012\",\t4\n13,\t\"N013\",\t\"N014\",\t\"auto edge 013\",\t4\n14,\t\"N014\",\t\"N015\",\t\"auto edge 014\",\t4\n15,\t\"N015\",\t\"N016\",\t\"auto edge 015\",\t4\n16,\t\"N016\",\t\"N017\",\t\"auto edge 016\",\t4\n17,\t\"N017\",\t\"N018\",\t\"auto edge 017\",\t4\n```"
+  },
+  {
+   "name": "describe_truncates_and_filters_sub_community_reports",
+   "kind": "describe",
+   "note": "Report rows measure 110/149 tokens against the 252-token remaining budget, so the reference keeps only the highest-occurrence row (id 0, 7 tokens of slack) and drops id 1: S000 leaves the Entities CSV with the kept row while S003, covered only by the dropped row, stays; the id `9` has no report and is skipped without a row.",
+   "community": {
+    "level": 1,
+    "title": "Budget squeeze",
+    "nodes": [
+     "S000",
+     "S001",
+     "S002",
+     "S003",
+     "S004",
+     "S005"
+    ],
+    "edges": [
+     [
+      "S000",
+      "S001"
+     ],
+     [
+      "S001",
+      "S002"
+     ]
+    ],
+    "chunk_ids": [
+     "chunk-trunc"
+    ],
+    "occurrence": 3.0,
+    "sub_communities": [
+     "0",
+     "1",
+     "9"
+    ]
+   },
+   "graph": {
+    "nodes": {
+     "S000": {
+      "entity_type": "THING",
+      "description": "small node 000"
+     },
+     "S001": {
+      "entity_type": "THING",
+      "description": "small node 001"
+     },
+     "S002": {
+      "entity_type": "THING",
+      "description": "small node 002"
+     },
+     "S003": {
+      "entity_type": "THING",
+      "description": "small node 003"
+     },
+     "S004": {
+      "entity_type": "THING",
+      "description": "small node 004"
+     },
+     "S005": {
+      "entity_type": "THING",
+      "description": "small node 005"
+     }
+    },
+    "edges": {
+     "S000\u0000S001": {
+      "description": "small edge 000"
+     },
+     "S001\u0000S002": {
+      "description": "small edge 001"
+     }
+    }
+   },
+   "max_token_size": 275,
+   "force_to_use_sub_communities": true,
+   "already_reports": {
+    "0": {
+     "level": 0,
+     "title": "Trunc first",
+     "nodes": [
+      "S000"
+     ],
+     "edges": [
+      [
+       "S000",
+       "S001"
+      ]
+     ],
+     "chunk_ids": [
+      "chunk-trunc"
+     ],
+     "occurrence": 9.0,
+     "sub_communities": [],
+     "report_string": "# S000 side report\n\nThe first sub community secures the certified corridor and inventories every partner that assembles the actuator batches along it, together with the safety milestones the programme cleared before the winter season. It also records the price cuts that narrowed the warehouse accounts twice in the last eighteen months and the delivery routes that both rivals still share under the certification agreement. A closing note lists the suppliers audited against the tolerance table and the batches that failed the joint review earlier this year, which keeps the paragraph growing until it occupies the budget on its own.",
+     "report_json": {
+      "rating": 7
+     }
+    },
+    "1": {
+     "level": 0,
+     "title": "Trunc second",
+     "nodes": [
+      "S003"
+     ],
+     "edges": [],
+     "chunk_ids": [
+      "chunk-trunc"
+     ],
+     "occurrence": 5.0,
+     "sub_communities": [],
+     "report_string": "# S003 side report\n\nThe second sub community describes the rival assembly line, the joint audits it runs against the tolerance table, and the delivery season it shares with the certification programme. Its paragraphs repeat the corridor inventory with the same cadence so that the pair of reports, taken together, crosses the remaining budget while either of them alone would still fit beside the entity and relationship rows. The tail row exists only to be dropped: the reference stops the sub community list before it, and the covered node keeps its place in the entity CSV, which is exactly the boundary this case pins. A last sentence pads the row past the boundary with several tokens of slack on both sides, so a couple of tokens of tokenizer drift cannot flip which rows survive.",
+     "report_json": {
+      "rating": 6
+     }
+    }
+   },
+   "expected": "-----Reports-----\n```csv\n\"id\",\t\"report\",\t\"rating\",\t\"importance\"\n0,\t\"# S000 side report\n\nThe first sub community secures the certified corridor and inventories every partner that assembles the actuator batches along it, together with the safety milestones the programme cleared before the winter season. It also records the price cuts that narrowed the warehouse accounts twice in the last eighteen months and the delivery routes that both rivals still share under the certification agreement. A closing note lists the suppliers audited against the tolerance table and the batches that failed the joint review earlier this year, which keeps the paragraph growing until it occupies the budget on its own.\",\t7,\t9.0\n```\n-----Entities-----\n```csv\n\"id\",\t\"entity\",\t\"type\",\t\"description\",\t\"degree\"\n1,\t\"S001\",\t\"THING\",\t\"small node 001\",\t2\n2,\t\"S002\",\t\"THING\",\t\"small node 002\",\t1\n3,\t\"S003\",\t\"THING\",\t\"small node 003\",\t0\n4,\t\"S004\",\t\"THING\",\t\"small node 004\",\t0\n```\n-----Relationships-----\n```csv\n\"id\",\t\"source\",\t\"target\",\t\"description\",\t\"rank\"\n```"
   }
  ]
 }

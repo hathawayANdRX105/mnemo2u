@@ -460,6 +460,128 @@ LEVEL2 = {
     "sub_communities": ["0"],
 }
 
+# Automatic sub-community switch: the reference prefers sub-community
+# reports whenever the community exceeds 100 nodes/edges, `force` is not set,
+# and at least one report is already available. 101 chained nodes trip the
+# limit; both sub reports fit the budget, so their three covered nodes leave
+# the Entities CSV while the remaining nodes stay.
+AUTO_NODES = {
+    f"N{index:03d}": {"entity_type": "THING", "description": f"auto node {index:03d}"}
+    for index in range(101)
+}
+AUTO_EDGES = {
+    (f"N{index:03d}", f"N{index + 1:03d}"): {"description": f"auto edge {index:03d}"}
+    for index in range(100)
+}
+AUTO_GRAPH = {"nodes": AUTO_NODES, "edges": AUTO_EDGES}
+AUTO_CLUSTER = {
+    "level": 1,
+    "title": "Auto cluster",
+    "nodes": sorted(AUTO_NODES),
+    "edges": [[src, tgt] for src, tgt in AUTO_EDGES],
+    "chunk_ids": ["chunk-auto"],
+    "occurrence": 30.0,
+    "sub_communities": ["0", "1"],
+}
+AUTO_SUB_FIRST = {
+    "level": 0,
+    "title": "Auto sub first",
+    "nodes": ["N000", "N001"],
+    "edges": [["N000", "N001"]],
+    "chunk_ids": ["chunk-auto"],
+    "occurrence": 9.0,
+    "sub_communities": [],
+    "report_string": "# Auto sub first\n\nCovers the first pair.",
+    "report_json": {"rating": 5},
+}
+AUTO_SUB_SECOND = {
+    "level": 0,
+    "title": "Auto sub second",
+    "nodes": ["N002"],
+    "edges": [],
+    "chunk_ids": ["chunk-auto"],
+    "occurrence": 4.0,
+    "sub_communities": [],
+    "report_string": "# Auto sub second\n\nCovers the third node.",
+    "report_json": {"rating": 6},
+}
+
+# Sub-report truncation and filtering under a squeezed budget: the two
+# reports together overflow the remaining budget, so only the
+# highest-occurrence one survives the Reports CSV. That survivor's member
+# leaves the entity/relationship CSVs; the dropped report's member stays.
+# The id `9` has no report — the reference skips it without a row and
+# without filtering anything. The nodes carry short descriptions so the
+# entity rows stay small and the budget only bites at the report rows.
+TRUNC_NODES = {
+    f"S{index:03d}": {"entity_type": "THING", "description": f"small node {index:03d}"}
+    for index in range(6)
+}
+TRUNC_EDGES = {
+    ("S000", "S001"): {"description": "small edge 000"},
+    ("S001", "S002"): {"description": "small edge 001"},
+}
+TRUNC_GRAPH = {"nodes": TRUNC_NODES, "edges": TRUNC_EDGES}
+TRUNC_COMMUNITY = {
+    "level": 1,
+    "title": "Budget squeeze",
+    "nodes": sorted(TRUNC_NODES),
+    "edges": [["S000", "S001"], ["S001", "S002"]],
+    "chunk_ids": ["chunk-trunc"],
+    "occurrence": 3.0,
+    "sub_communities": ["0", "1", "9"],
+}
+TRUNC_FIRST = {
+    "level": 0,
+    "title": "Trunc first",
+    "nodes": ["S000"],
+    "edges": [["S000", "S001"]],
+    "chunk_ids": ["chunk-trunc"],
+    "occurrence": 9.0,
+    "sub_communities": [],
+    "report_string": (
+        "# S000 side report\n\n"
+        "The first sub community secures the certified corridor and "
+        "inventories every partner that assembles the actuator batches along "
+        "it, together with the safety milestones the programme cleared "
+        "before the winter season. "
+        "It also records the price cuts that narrowed the warehouse accounts "
+        "twice in the last eighteen months and the delivery routes that both "
+        "rivals still share under the certification agreement. "
+        "A closing note lists the suppliers audited against the tolerance "
+        "table and the batches that failed the joint review earlier this "
+        "year, which keeps the paragraph growing until it occupies the "
+        "budget on its own."
+    ),
+    "report_json": {"rating": 7},
+}
+TRUNC_SECOND = {
+    "level": 0,
+    "title": "Trunc second",
+    "nodes": ["S003"],
+    "edges": [],
+    "chunk_ids": ["chunk-trunc"],
+    "occurrence": 5.0,
+    "sub_communities": [],
+    "report_string": (
+        "# S003 side report\n\n"
+        "The second sub community describes the rival assembly line, the "
+        "joint audits it runs against the tolerance table, and the delivery "
+        "season it shares with the certification programme. "
+        "Its paragraphs repeat the corridor inventory with the same cadence "
+        "so that the pair of reports, taken together, crosses the remaining "
+        "budget while either of them alone would still fit beside the "
+        "entity and relationship rows. "
+        "The tail row exists only to be dropped: the reference stops the "
+        "sub community list before it, and the covered node keeps its place "
+        "in the entity CSV, which is exactly the boundary this case pins. "
+        "A last sentence pads the row past the boundary with several tokens "
+        "of slack on both sides, so a couple of tokens of tokenizer drift "
+        "cannot flip which rows survive."
+    ),
+    "report_json": {"rating": 6},
+}
+
 
 def main():
     cases = [
@@ -515,6 +637,33 @@ def main():
             "drift cannot change which rows fit: node rows measure 45/45/48 "
             "tokens (91 kept, 140 rejected, budget 115) and edge rows 52/16/51 "
             "(69 kept, 120 rejected, budget 92).",
+        ),
+        describe_case(
+            "describe_switches_to_sub_communities_over_the_size_limit",
+            AUTO_CLUSTER,
+            AUTO_GRAPH,
+            710,
+            {"0": AUTO_SUB_FIRST, "1": AUTO_SUB_SECOND},
+            False,
+            "101 nodes trip `truncated` (>100) without `force`, so the "
+            "automatic switch fires: the Reports CSV carries both sub rows "
+            "and their three covered nodes (N000-N002) leave the Entities CSV "
+            "while the remaining nodes stay (18 entity and 17 edge rows at "
+            "budget 710, a plateau at least 20 tokens wide).",
+        ),
+        describe_case(
+            "describe_truncates_and_filters_sub_community_reports",
+            TRUNC_COMMUNITY,
+            TRUNC_GRAPH,
+            275,
+            {"0": TRUNC_FIRST, "1": TRUNC_SECOND},
+            True,
+            "Report rows measure 110/149 tokens against the 252-token "
+            "remaining budget, so the reference keeps only the "
+            "highest-occurrence row (id 0, 7 tokens of slack) and drops id 1: "
+            "S000 leaves the Entities CSV with the kept row while S003, "
+            "covered only by the dropped row, stays; the id `9` has no report "
+            "and is skipped without a row.",
         ),
     ]
 
