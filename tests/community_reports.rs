@@ -71,10 +71,13 @@ fn golden_sub_reports(case: &Value) -> BTreeMap<i64, CommunitySchema> {
 /// `community_reports`, and the context block is what the report LLM reads. A
 /// quote, a newline, a separator or a float printed as `6` instead of `6.0`
 /// silently changes what the reference would have sent — no assertion on
-/// substrings or row counts can see that. The three `json_to_str` cases are
-/// the FAC6 spot-check (`todo/01-nano-graphrag-port.md` §6) turned into
-/// machine-checked fixtures: multiple findings, a plain-string finding, and
-/// the quote/rating boundary.
+/// substrings or row counts can see that. Three of the four `json_to_str`
+/// cases are the FAC6 spot-check (`todo/01-nano-graphrag-port.md` §6) turned
+/// into machine-checked fixtures: multiple findings, a plain-string finding,
+/// and the quote/rating boundary; the fourth pins the missing-explanation
+/// rendering. The `describe` cases also pin the automatic sub-community
+/// switch over the 100-node limit and the sub-community report truncation
+/// with its filtering.
 #[tokio::test]
 async fn report_context_matches_python_reference() {
     let raw = std::fs::read_to_string("tests/fixtures/report_golden.json").expect("fixture");
@@ -82,6 +85,12 @@ async fn report_context_matches_python_reference() {
     let tokenizer = Tokenizer::for_gpt_4o().expect("tokenizer");
     let cases = golden["cases"].as_array().expect("cases");
     assert!(!cases.is_empty(), "fixture carries cases");
+    assert!(
+        cases
+            .iter()
+            .any(|case| case.get("kind").and_then(Value::as_str) == Some("describe")),
+        "fixture carries describe cases"
+    );
 
     for case in cases {
         let name = case["name"].as_str().expect("case name");
