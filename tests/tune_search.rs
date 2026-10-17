@@ -349,6 +349,11 @@ async fn empty_holdout_never_accepts() {
 /// assembly can never be reached — or, the other way, re-offered from the
 /// *same* assembly, which is the non-convergence the `tried` set stops. The
 /// floor says "not from here", and "here" changes on commit.
+///
+/// Each offered direction is scored as it is offered: `propose` returns one
+/// step at a time, and only `evaluate` marks a direction tried. Collecting
+/// proposals without scoring them would gather the same step over and over,
+/// which proves nothing about what the search would actually do.
 #[tokio::test]
 async fn a_floor_refusal_is_closed_for_this_assembly_and_reopened_by_commit() {
     let tuning = cases::all(0);
@@ -371,19 +376,31 @@ async fn a_floor_refusal_is_closed_for_this_assembly_and_reopened_by_commit() {
 
     // Closed for *this* assembly: offering it again would return the same
     // verdict, which is the non-convergence the `tried` set exists to stop.
-    let offered: Vec<Step> = std::iter::from_fn(|| search.propose()).take(64).collect();
+    // The pass below is the search's own loop, so the assertions are about
+    // what the search offers, not about what a list of copies contains.
+    let mut pass = 0usize;
+    let mut seen_wide_again = false;
+    while let Some(candidate) = search.propose() {
+        pass += 1;
+        assert!(pass <= 32, "the pass did not converge");
+        if candidate.knob_id == "recall.graph_hops" && candidate.to == KnobValue::U8(3) {
+            seen_wide_again = true;
+        }
+        let _ = search
+            .evaluate(&candidate, &root)
+            .await
+            .expect("evaluate runs");
+    }
+    assert!(pass > 0, "the search offered nothing at all");
     assert!(
-        !offered
-            .iter()
-            .any(|candidate| candidate.knob_id == "recall.graph_hops"
-                && candidate.to == KnobValue::U8(3)),
+        !seen_wide_again,
         "a direction already measured against this assembly must not be re-offered"
     );
 
     // But not refuted: `commit` moves the assembly and re-opens the tried set,
     // so the same direction becomes measurable again from the new value. The
-    // commit is driven here by hand rather than through the search's own
-    // loop, because on these saturated sets nothing is ever accepted.
+    // commit is driven here by hand rather than through the search's own loop,
+    // because on these saturated sets nothing is ever accepted.
     let accepted = Step {
         knob_id: "recall.summary_chars".to_string(),
         from: step("recall.summary_chars", KnobValue::Usize(200)).from,
@@ -393,12 +410,23 @@ async fn a_floor_refusal_is_closed_for_this_assembly_and_reopened_by_commit() {
     search
         .commit(&accepted, &Verdict::Accept { gain: 1.0 })
         .expect("a hand-built acceptance commits");
-    let reopened: Vec<Step> = std::iter::from_fn(|| search.propose()).take(64).collect();
+
+    let mut reopened_wide = false;
+    let mut second_pass = 0usize;
+    while let Some(candidate) = search.propose() {
+        second_pass += 1;
+        assert!(second_pass <= 32, "the second pass did not converge");
+        if candidate.knob_id == "recall.graph_hops" && candidate.to == KnobValue::U8(3) {
+            reopened_wide = true;
+            break;
+        }
+        let _ = search
+            .evaluate(&candidate, &root)
+            .await
+            .expect("evaluate runs");
+    }
     assert!(
-        reopened
-            .iter()
-            .any(|candidate| candidate.knob_id == "recall.graph_hops"
-                && candidate.to == KnobValue::U8(3)),
+        reopened_wide,
         "a floor refusal is not a refutation: a new assembly must re-open it"
     );
 }
@@ -432,26 +460,22 @@ fn every_searchable_knob_is_registered() {
     }
     // The per-call budgets are the caller's, so the search must not name them:
     // naming one would mean changing what is measured rather than how the read
-    // path reads.
+    // path reads. One proposal is enough to check membership — `propose`
+    // returns one step at a time, and what matters is which knob it names.
     let search = Search::new(tune::default_registry(), cases::all(0), holdout_set(), 0.0);
-    let offered: Vec<Step> = std::iter::from_fn(|| search.propose()).take(64).collect();
-    for candidate in &offered {
+    let first = search
+        .propose()
+        .expect("a fresh search has a direction to offer");
+    for id in ["recall.top_k", "recall.rrf_k", "recall.per_arm_limit"] {
         assert_ne!(
-            candidate.knob_id, "recall.top_k",
-            "a per-call budget was offered"
-        );
-        assert_ne!(
-            candidate.knob_id, "recall.rrf_k",
-            "a per-call budget was offered"
-        );
-        assert_ne!(
-            candidate.knob_id, "recall.per_arm_limit",
-            "a per-call budget was offered"
+            first.knob_id, id,
+            "`{id}` is a per-call budget and must not be searchable"
         );
     }
     assert!(
-        !offered.is_empty(),
-        "a fresh search must have a direction to offer"
+        injectable.contains(&first.knob_id.as_str()),
+        "the first proposal must name a searchable knob, got `{}`",
+        first.knob_id
     );
 }
 
