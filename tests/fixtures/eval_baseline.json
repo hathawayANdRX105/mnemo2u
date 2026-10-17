@@ -1,0 +1,5 @@
+{
+  "generated_by": "MNEMO_BLESS_BASELINE=1 cargo test --test eval_baseline",
+  "note": "Placeholder: the first CI run fails on purpose and prints the artifact to replace this document with. quality and cost are compared exactly; latency is recorded and not compared (module doc of mnemo2u::tune).",
+  "scoreboard": {}
+}
