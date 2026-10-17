@@ -40,3 +40,8 @@ jobs:
       # one per 15-minute CI cycle.
       - name: Test
         run: cargo test --all-targets --no-fail-fast
+      # Real-backend smoke for the read-path diagnosis (stage doc 07): the
+      # probe opens the durable Turso stores and fails the job when either
+      # attribution terminal stops holding.
+      - name: Smoke (diag probe)
+        run: cargo run --quiet --example diag_probe
