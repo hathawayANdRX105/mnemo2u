@@ -496,6 +496,11 @@ fn unknown_knob_is_an_error_not_a_panic() {
 
 /// Bug this turns red: the proposer can loop forever, so a search that never
 /// converges hangs CI instead of reporting that it converged.
+///
+/// The cap below is a tripwire, not the mechanism: a full pass is one
+/// direction per knob per side (seven knobs, two sides), so a search that
+/// needed more than a small multiple of that is not converging. What proves
+/// convergence is that `propose` eventually returns `None` at all.
 #[tokio::test]
 async fn search_terminates() {
     let tuning = cases::all(0);
@@ -512,8 +517,8 @@ async fn search_terminates() {
     while let Some(candidate) = search.propose() {
         proposed += 1;
         assert!(
-            proposed <= 64,
-            "the search did not converge within a bounded number of directions"
+            proposed <= 32,
+            "the search did not converge: {proposed} directions proposed past the cap"
         );
         let verdict = search
             .evaluate(&candidate, &root)
@@ -525,10 +530,12 @@ async fn search_terminates() {
     }
     assert!(proposed > 0, "the proposer proposed nothing at all");
 
-    // Converged means converged: a second pass proposes nothing further.
+    // Converged means converged: with the assembly unchanged, no direction is
+    // left to offer. This is the assertion that catches a proposer handing
+    // back the same direction forever.
     assert!(
         search.propose().is_none(),
-        "a converged search must not propose again"
+        "a converged search must not propose again from the same assembly"
     );
 }
 

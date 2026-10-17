@@ -22,9 +22,22 @@
 //!    every case must still meet its frozen conditions.
 //! 4. **The ratchet only tightens.** An accepted value becomes the floor for
 //!    later steps: [`Search::commit`] moves the registry, records the step,
-//!    and a *refuted* direction is never proposed again. A direction refused
-//!    by the noise floor alone is not refuted — it was unproductive from that
-//!    value — so it stays on offer.
+//!    and re-opens the search. A *refuted* direction — a broken condition,
+//!    wrong evidence, a regressed holdout — is never proposed again, from any
+//!    assembly. A direction the noise floor merely found unproductive is not
+//!    refuted: it is closed for the assembly it was measured against and
+//!    re-opened by the next commit, which is what lets a later step reach a
+//!    value an earlier one could not.
+//!
+//! ## Why the search terminates
+//!
+//! Every direction is offered at most once per assembly, because `evaluate`
+//! records it as tried and `propose` skips tried directions. The registry has
+//! a finite set of knobs and each offers a bounded set of unit steps, so a
+//! pass over them is finite; a commit clears the tried set but moves an
+//! assembly, and there are finitely many accepted steps. A caller therefore
+//! converges, and `propose` returning `None` is the signal — a cap in a
+//! caller is a tripwire, never the mechanism.
 //!
 //! ## Why the noise floor is not a repeat-run variance
 //!
@@ -107,8 +120,16 @@ pub struct Search {
     holdout: Vec<Case>,
     noise_floor: f64,
     accepted: Vec<Step>,
-    /// Directions refuted (not merely unprofitable), so a pass never repeats one.
-    exhausted: Vec<(String, KnobValue)>,
+    /// Directions already evaluated against the assembly as it stands, so a
+    /// pass never repeats one. Cleared on `commit`, because the assembly
+    /// moved and a direction refused from the old value may be productive
+    /// from the new one — a floor refusal says "not from here", not "never".
+    tried: Vec<(String, KnobValue)>,
+    /// Directions refuted outright — a broken condition, wrong evidence, a
+    /// regressed holdout, or a value outside the window. Never proposed again
+    /// from any assembly, because what they broke has nothing to do with
+    /// where the search is standing.
+    refuted: Vec<(String, KnobValue)>,
     /// Both sets' results under the assembly as it stands, measured once and
     /// reused until the assembly moves.
     ///
@@ -137,7 +158,8 @@ impl Search {
             holdout,
             noise_floor,
             accepted: Vec::new(),
-            exhausted: Vec::new(),
+            tried: Vec::new(),
+            refuted: Vec::new(),
             baseline: None,
         }
     }
@@ -153,17 +175,21 @@ impl Search {
         &self.accepted
     }
 
-    /// The next single-knob direction, or `None` when every direction of
-    /// every injectable knob has been proposed (the search has converged).
+    /// The next single-knob direction, or `None` when every direction has been
+    /// evaluated against the assembly as it stands (the search has converged).
     ///
     /// Pure by construction: registry order, one unit step either side of the
     /// current value, no random, no clock, no IO. The same state always
     /// proposes the same sequence, which is what makes a tuning run auditable.
     ///
-    /// A direction already refused stays refused, so a pass never repeats one.
-    /// A direction refused by the *noise floor* is not closed — it was merely
-    /// unproductive from that value, and a later step from a different value
-    /// may legitimately revisit it.
+    /// Two things keep a direction from being offered again, and they are
+    /// different things on purpose. A direction **refuted** — a broken frozen
+    /// condition, wrong evidence, a regressed holdout, a value outside the
+    /// window — is never offered again from any assembly: what it broke has
+    /// nothing to do with where the search stands. A direction merely
+    /// **tried** is not offered again *from this assembly*, because the
+    /// verdict would be the same; [`Search::commit`] clears the tried set, so
+    /// what the floor called unproductive here becomes available again there.
     pub fn propose(&self) -> Option<Step> {
         for id in INJECTABLE {
             let knob = self
@@ -174,9 +200,16 @@ impl Search {
             let bounds = knob.bounds;
             for candidate in self.directions(&current) {
                 if self
-                    .exhausted
+                    .refuted
                     .iter()
-                    .any(|(tried, value)| tried == id && value == &candidate)
+                    .any(|(name, value)| name == id && value == &candidate)
+                {
+                    continue;
+                }
+                if self
+                    .tried
+                    .iter()
+                    .any(|(name, value)| name == id && value == &candidate)
                 {
                     continue;
                 }
@@ -203,6 +236,12 @@ impl Search {
     /// create would be thrown away. An empty set is a rejection rather than a
     /// pass, because a set nobody measured is not evidence of
     /// generalization — and with no tuning set there is nothing to gain.
+    ///
+    /// Whatever the verdict, the direction is recorded as tried against this
+    /// assembly, so a pass never proposes it twice. That is what makes the
+    /// search converge: a floor refusal is *not* a refutation and stays
+    /// available, but it is available from the next assembly, not from this
+    /// one — `commit` clears the tried set and re-opens it.
     pub async fn evaluate(
         &mut self,
         step: &Step,
@@ -214,7 +253,7 @@ impl Search {
             .get(&step.knob_id)
             .map_err(|error| error.to_string())?;
         if !knob.bounds.admits(&step.to) {
-            self.exhausted.push((step.knob_id.clone(), step.to));
+            self.refuted.push((step.knob_id.clone(), step.to));
             return Ok(Verdict::RejectOutOfBounds {
                 reason: format!(
                     "{:?} is outside this knob's window {:?}",
@@ -226,6 +265,9 @@ impl Search {
         candidate
             .set(&step.knob_id, step.to)
             .map_err(|error| error.to_string())?;
+        // Scored from here on, whether it is accepted or not: this is what
+        // bounds a pass to one proposal per direction per assembly.
+        self.tried.push((step.knob_id.clone(), step.to));
 
         // An empty set is not a pass. The holdout is what makes an acceptance
         // a generalization rather than an overfit, so with nothing to measure
@@ -277,7 +319,7 @@ impl Search {
             if !failed.is_empty() {
                 let reason =
                     format!("{label} set stopped meeting its frozen conditions: {failed:?}");
-                self.exhausted.push((step.knob_id.clone(), step.to));
+                self.refuted.push((step.knob_id.clone(), step.to));
                 return Ok(Verdict::RejectRegression { reason });
             }
             let wrong: f64 = results
@@ -286,7 +328,7 @@ impl Search {
                 .sum();
             if wrong > 0.0 {
                 let reason = format!("{label} set surfaced wrong evidence (rate {wrong})");
-                self.exhausted.push((step.knob_id.clone(), step.to));
+                self.refuted.push((step.knob_id.clone(), step.to));
                 return Ok(Verdict::RejectRegression { reason });
             }
         }
@@ -297,16 +339,17 @@ impl Search {
         if holdout_after < holdout_before {
             let reason =
                 format!("the holdout set regressed: recall {holdout_before} -> {holdout_after}");
-            self.exhausted.push((step.knob_id.clone(), step.to));
+            self.refuted.push((step.knob_id.clone(), step.to));
             return Ok(Verdict::RejectRegression { reason });
         }
 
         // Rule 1: the gain must clear the floor. Equality is a rejection —
         // one query's worth of movement is exactly what the floor is for.
         //
-        // The direction is deliberately NOT recorded in `exhausted`: a gain
-        // inside the floor is unproductive from *this* value, not refuted, so
-        // a step that starts somewhere else may still land on it.
+        // The direction is not added to `refuted`: a gain inside the floor is
+        // unproductive from *this* value, not refuted, so a later assembly may
+        // still reach it. It is in `tried` already, which is what stops this
+        // pass from offering it twice.
         let tuning_before = recall_of(baseline_tuning);
         let tuning_after = recall_of(&step_tuning);
         let gain = tuning_after - tuning_before;
@@ -331,9 +374,12 @@ impl Search {
             .set(&step.knob_id, step.to)
             .map_err(|error| error.to_string())?;
         self.accepted.push(step.clone());
-        // The assembly moved, so the cached baseline is stale: the next step is
-        // measured against what this one just produced.
+        // The assembly moved, so the cached baseline is stale and every
+        // direction is open again: the next step is measured against what this
+        // one just produced, and a direction refused from the old value may be
+        // productive from the new one.
         self.baseline = None;
+        self.tried.clear();
         Ok(())
     }
 

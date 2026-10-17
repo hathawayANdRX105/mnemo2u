@@ -19,10 +19,11 @@ use mnemo2u::tune::search::{Search, Verdict};
 use mnemo2u::tune::KnobRegistry;
 
 /// How many single-knob directions one search may propose before the probe
-/// calls it non-terminating. A full pass is one candidate per knob per
-/// direction, so this is several passes: reaching the cap means `propose`
-/// stopped converging, not that the search is merely long.
-const MAX_STEPS: usize = 64;
+/// calls it non-terminating. A full pass is one direction per knob per side
+/// (seven knobs, two sides), so a few passes is already more than a converging
+/// search needs: reaching the cap means `propose` stopped converging, not that
+/// the search is merely long. Convergence itself is what ends the loop.
+const MAX_STEPS: usize = 32;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
