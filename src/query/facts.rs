@@ -39,6 +39,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::core::traits::{
     rrf_fuse, FactEdgeStore, FactStore, FactVectorStore, LexicalStore, Result,
 };
@@ -47,19 +49,20 @@ use crate::llm::judge::{ExistsVerdict, FindRequest, JudgeClient, RerankCandidate
 
 /// Jev rerank candidate ceiling (stage doc 03 contract 4): fusion only ever
 /// sees the arms' own limits, so this fixture cap can never inflate the
-/// candidate set past what the reranker accepts.
-const JEV_CANDIDATE_CAP: usize = 250;
+/// candidate set past what the reranker accepts. Shared with `diag` so a
+/// probe asks the same ceiling.
+pub(crate) const JEV_CANDIDATE_CAP: usize = 250;
 
 /// Seeds per hit arm for the graph arm — a BFS frontier is a starting set,
-/// not the whole ranking.
-const SEEDS_PER_ARM: usize = 10;
+/// not the whole ranking. Shared with `diag` so a probe seeds the same set.
+pub(crate) const SEEDS_PER_ARM: usize = 10;
 
 /// L0 summary length, counted in chars: the truncation must never cut a
 /// multi-byte code point in half.
 const SUMMARY_CHARS: usize = 200;
 
-/// Graph-arm hops.
-const GRAPH_HOPS: u8 = 2;
+/// Graph-arm hops. Shared with `diag` so a probe walks the same depth.
+pub(crate) const GRAPH_HOPS: u8 = 2;
 
 /// One day in milliseconds — the temporal arm's window grid.
 const DAY_MS: i64 = 86_400_000;
@@ -131,6 +134,10 @@ pub struct RecallOptions {
 }
 
 /// The five read arms, in fixed order. Used as the `degraded` vocabulary.
+///
+/// Serialized for `diag`'s evidence rows; `Debug` stays the hand-written
+/// lowercase form below.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ArmName {
     Vector,
     Lexical,

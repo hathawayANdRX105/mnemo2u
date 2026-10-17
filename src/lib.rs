@@ -10,10 +10,12 @@
 //! - [`graph`] — graph pipeline: chunking, extraction, merge, communities (R1)
 //! - [`index`] — write path: incremental merge, purge, cost gates (R2)
 //! - [`query`] — read path: arms → fusion → rerank (R3)
+//! - [`diag`]  — read-path diagnosis: miss attribution + arm health (R7)
 
 pub mod assemble;
 pub mod config;
 pub mod core;
+pub mod diag;
 pub mod eval;
 pub mod graph;
 pub mod index;
