@@ -51,3 +51,9 @@ jobs:
       # stage's knob set stops being the one the registry states.
       - name: Smoke (tune probe)
         run: cargo run --quiet --example tune_probe
+      # Real-backend smoke for the tuning search loop (stage doc 08 S3): runs a
+      # full coordinate-descent search over the injectable knobs and fails the
+      # job when the default assembly stops passing or the search does not
+      # terminate.
+      - name: Smoke (tune search probe)
+        run: cargo run --quiet --example tune_search_probe

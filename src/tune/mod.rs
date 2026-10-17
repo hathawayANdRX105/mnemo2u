@@ -19,6 +19,10 @@
 //! 3. [`scoreboard_json`] is the comparable artifact: quality and cost
 //!    exactly, latency recorded.
 //!
+//! [`search`] is the fourth: the loop that proposes one knob at a time and
+//! decides, against a declared noise floor and a holdout set, whether the
+//! candidate may stay.
+//!
 //! Knobs are injected as a value ([`crate::query::facts::MemoryRecall::
 //! recall_with`]), never as process state: there is no environment variable,
 //! no config file and no global, so two runs in one process cannot drift
@@ -40,6 +44,8 @@ use serde::{Deserialize, Serialize};
 use crate::diag::Stage;
 use crate::eval::{CaseResult, Report};
 use crate::query::facts::RecallKnobs;
+
+pub mod search;
 
 /// The shape version of the scoreboard artifact. Bump it when a field's
 /// meaning changes, so an old baseline cannot be compared against a new one
@@ -271,7 +277,10 @@ static KNOBS: [Knob; 12] = [
 /// Why a knob could not be read or injected. Every failure is an `Err`: an
 /// unknown name and a knob without a value are both cases where a guess
 /// would be worse than a stop.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `PartialEq` and not `Eq`: a rejection can name a value, and values carry
+/// floats.
+#[derive(Debug, Clone, PartialEq)]
 pub enum TuneError {
     /// No knob with this id is registered.
     UnknownKnob { id: String },
@@ -280,6 +289,8 @@ pub enum TuneError {
     UnsetKnob { id: String },
     /// The knob is registered with a value of another kind.
     WrongKind { id: String },
+    /// The value sits outside the window the registry states.
+    OutOfBounds { id: String, bounds: KnobBounds },
 }
 
 impl std::fmt::Display for TuneError {
@@ -288,6 +299,9 @@ impl std::fmt::Display for TuneError {
             TuneError::UnknownKnob { id } => write!(f, "no knob is registered as `{id}`"),
             TuneError::UnsetKnob { id } => write!(f, "knob `{id}` has no value to inject"),
             TuneError::WrongKind { id } => write!(f, "knob `{id}` carries another kind of value"),
+            TuneError::OutOfBounds { id, bounds } => {
+                write!(f, "value for knob `{id}` is outside its window {bounds:?}")
+            }
         }
     }
 }
@@ -324,6 +338,39 @@ impl KnobRegistry {
     pub fn json(&self) -> String {
         serde_json::to_string_pretty(&self.knobs)
             .expect("knob records are plain JSON data (no NaN in the table)")
+    }
+
+    /// Move one knob to `value`, bounds-checked (stage doc 08 S3: this is the
+    /// write half of the surface, and the only one).
+    ///
+    /// The bounds are the window the registry states, so a value outside them
+    /// is an error rather than a silently accepted move — a search step that
+    /// could set anything could also set nonsense. An unset row stays unset:
+    /// the per-call budgets are the caller's, and this surface refuses to
+    /// invent a value for them.
+    ///
+    /// Rejected: an unknown id, a value outside [`Knob::bounds`], and
+    /// [`KnobValue::Unset`] written into a row that has no value to clear.
+    pub fn set(&mut self, id: &str, value: KnobValue) -> Result<(), TuneError> {
+        let knob = self.get(id)?;
+        let bounds = knob.bounds;
+        if matches!(value, KnobValue::Unset) {
+            return Err(TuneError::UnsetKnob { id: id.to_string() });
+        }
+        if !bounds.admits(&value) {
+            return Err(TuneError::OutOfBounds {
+                id: id.to_string(),
+                bounds,
+            });
+        }
+        // `get` borrowed `self`, so the row is looked up again to mutate it.
+        let knob = self
+            .knobs
+            .iter_mut()
+            .find(|knob| knob.id == id)
+            .expect("the id resolved a moment ago");
+        knob.current = value;
+        Ok(())
     }
 
     /// The injection half of the surface: this registry's values as the value
