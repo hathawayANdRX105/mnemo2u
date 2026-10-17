@@ -22,7 +22,9 @@
 //!    every case must still meet its frozen conditions.
 //! 4. **The ratchet only tightens.** An accepted value becomes the floor for
 //!    later steps: [`Search::commit`] moves the registry, records the step,
-//!    and a rejected direction is never proposed again.
+//!    and a *refuted* direction is never proposed again. A direction refused
+//!    by the noise floor alone is not refuted — it was unproductive from that
+//!    value — so it stays on offer.
 //!
 //! ## Why the noise floor is not a repeat-run variance
 //!
@@ -71,11 +73,11 @@ pub struct Step {
 pub enum Verdict {
     /// The gain cleared the noise floor and every other rule held.
     Accept { gain: f64 },
-    /// The gain did not clear the floor: not a refutation, so the direction
-    /// stays closed but the knob keeps its value.
+    /// The gain did not clear the floor: unproductive *from this value*, not
+    /// refuted, so the direction may be proposed again later.
     RejectNoiseFloor { gain: f64 },
     /// A rule other than the floor failed: a frozen condition, wrong
-    /// evidence, or the holdout set.
+    /// evidence, or the holdout set. Refuted, so the direction stays closed.
     RejectRegression { reason: String },
     /// The candidate value is outside the window the registry states, or of
     /// another kind: rejected before any case runs.
@@ -105,7 +107,7 @@ pub struct Search {
     holdout: Vec<Case>,
     noise_floor: f64,
     accepted: Vec<Step>,
-    /// Directions already tried and refused, so a pass never repeats one.
+    /// Directions refuted (not merely unprofitable), so a pass never repeats one.
     exhausted: Vec<(String, KnobValue)>,
 }
 
@@ -202,7 +204,7 @@ impl Search {
             .get(&step.knob_id)
             .map_err(|error| error.to_string())?;
         if !knob.bounds.admits(&step.to) {
-            self.exhausted.push((step.knob_id.clone(), step.to.clone()));
+            self.exhausted.push((step.knob_id.clone(), step.to));
             return Ok(Verdict::RejectOutOfBounds {
                 reason: format!(
                     "{:?} is outside this knob's window {:?}",
@@ -212,7 +214,7 @@ impl Search {
         }
         let mut candidate = self.registry.clone();
         candidate
-            .set(&step.knob_id, step.to.clone())
+            .set(&step.knob_id, step.to)
             .map_err(|error| error.to_string())?;
 
         // An empty set is not a pass. The holdout is what makes an acceptance
@@ -256,7 +258,7 @@ impl Search {
             if !failed.is_empty() {
                 let reason =
                     format!("{label} set stopped meeting its frozen conditions: {failed:?}");
-                self.exhausted.push((step.knob_id.clone(), step.to.clone()));
+                self.exhausted.push((step.knob_id.clone(), step.to));
                 return Ok(Verdict::RejectRegression { reason });
             }
             let wrong: f64 = results
@@ -265,7 +267,7 @@ impl Search {
                 .sum();
             if wrong > 0.0 {
                 let reason = format!("{label} set surfaced wrong evidence (rate {wrong})");
-                self.exhausted.push((step.knob_id.clone(), step.to.clone()));
+                self.exhausted.push((step.knob_id.clone(), step.to));
                 return Ok(Verdict::RejectRegression { reason });
             }
         }
@@ -276,7 +278,7 @@ impl Search {
         if holdout_after < holdout_before {
             let reason =
                 format!("the holdout set regressed: recall {holdout_before} -> {holdout_after}");
-            self.exhausted.push((step.knob_id.clone(), step.to.clone()));
+            self.exhausted.push((step.knob_id.clone(), step.to));
             return Ok(Verdict::RejectRegression { reason });
         }
 
@@ -307,7 +309,7 @@ impl Search {
             ));
         };
         self.registry
-            .set(&step.knob_id, step.to.clone())
+            .set(&step.knob_id, step.to)
             .map_err(|error| error.to_string())?;
         self.accepted.push(step.clone());
         Ok(())
