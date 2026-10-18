@@ -18,8 +18,12 @@
 //!    least two queries changed the same way.
 //! 2. **Holdout does not regress.** Recall on the holdout set may not fall
 //!    below its baseline, and its wrong-evidence rate may not rise.
-//! 3. **wrong = 0 is kept.** Both sets must stay at zero wrong evidence and
-//!    every case must still meet its frozen conditions.
+//! 3. **wrong = 0 is kept.** Both sets must stay at zero wrong evidence, and
+//!    no case may be taken further from its frozen conditions than it already
+//!    was. The comparison is per case against that case's own baseline, not a
+//!    blanket "every case passed": a case the default assembly already misses
+//!    is allowed to improve, and one the default assembly passes may not be
+//!    broken. That is what lets a tuning set carry headroom at all.
 //! 4. **The ratchet only tightens.** An accepted value becomes the floor for
 //!    later steps: [`Search::commit`] moves the registry, records the step,
 //!    and re-opens the search. A *refuted* direction — a broken condition,
@@ -310,19 +314,37 @@ impl Search {
 
         // Rule 3 before the floor: a candidate that breaks a frozen condition
         // or surfaces wrong evidence is a regression whatever it gains.
-        for (label, results) in [("tuning", &step_tuning), ("holdout", &step_holdout)] {
-            let failed: Vec<&str> = results
-                .iter()
-                .filter(|result| !result.passed())
-                .map(|result| result.case_id.as_str())
-                .collect();
-            if !failed.is_empty() {
+        //
+        // Judged per case, against that case's *baseline* result rather than
+        // against a blanket "every case passed": a case whose default
+        // assembly already misses a marker must not be taken further from it,
+        // but it is allowed to improve. Without this, a tuning set with
+        // headroom — where the default assembly legitimately misses — would
+        // fail its own frozen conditions and no direction could be accepted,
+        // while a set that is already perfect still may not be broken.
+        for (label, baseline, measured) in [
+            ("tuning", baseline_tuning, &step_tuning),
+            ("holdout", baseline_holdout, &step_holdout),
+        ] {
+            let mut regressed: Vec<&str> = Vec::new();
+            for (before, after) in baseline.iter().zip(measured.iter()) {
+                let allowed = if before.passed() {
+                    after.passed() && after.quality.recall_at_k >= before.quality.recall_at_k
+                } else {
+                    after.quality.recall_at_k >= before.quality.recall_at_k
+                        && after.quality.wrong_evidence_rate <= before.quality.wrong_evidence_rate
+                };
+                if !allowed {
+                    regressed.push(after.case_id.as_str());
+                }
+            }
+            if !regressed.is_empty() {
                 let reason =
-                    format!("{label} set stopped meeting its frozen conditions: {failed:?}");
+                    format!("{label} set stopped meeting its frozen conditions: {regressed:?}");
                 self.refuted.push((step.knob_id.clone(), step.to));
                 return Ok(Verdict::RejectRegression { reason });
             }
-            let wrong: f64 = results
+            let wrong: f64 = measured
                 .iter()
                 .map(|result| result.quality.wrong_evidence_rate)
                 .sum();
