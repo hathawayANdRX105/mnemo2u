@@ -107,6 +107,18 @@ impl KnobValue {
             KnobValue::Unset => None,
         }
     }
+
+    /// Whether both values are of the same kind — the same variant, whatever
+    /// their magnitudes.
+    ///
+    /// Named because a bound check alone cannot catch it: `as_f64` flattens
+    /// every variant to one number, so `F64(2.0)` is "inside" a window that
+    /// belongs to a `u8` row. A write that passes the bounds and fails here
+    /// would otherwise be accepted and then fail much later, where the caller
+    /// who made it is no longer on the stack.
+    pub fn same_kind(&self, other: &KnobValue) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
 }
 
 /// A knob's admissible window, as the range a search step may move it
@@ -369,7 +381,7 @@ impl KnobRegistry {
             // be the silent drift this surface exists to stop.
             return Err(TuneError::UnsetKnob { id: id.to_string() });
         }
-        if std::mem::discriminant(&value) != std::mem::discriminant(&knob.current) {
+        if !value.same_kind(&knob.current) {
             return Err(TuneError::WrongKind { id: id.to_string() });
         }
         if !bounds.admits(&value) {
