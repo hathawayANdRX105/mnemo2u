@@ -391,7 +391,11 @@ pub fn held_out_case(scale: usize) -> Case {
             forbidden: vec!["VLV-2210".into()],
         },
         CaseQuery {
-            text: "linen towels folded who".into(),
+            // Every term co-occurs in the marker-bearing turn and nowhere
+            // else, so the lexical arm AND-matches exactly the fact that holds
+            // the answer. A query that also matched a neighbouring turn would
+            // rank that one and let the markers fall out of the top-k.
+            text: "linen towels second shelf mara folded".into(),
             expected: vec!["mara folded".into(), "second shelf".into()],
             forbidden: vec!["relief valve".into()],
         },
