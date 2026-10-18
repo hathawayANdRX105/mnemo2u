@@ -6,10 +6,11 @@
 //! drives one full coordinate-descent search over the injectable knobs:
 //! `propose`, `evaluate`, `commit` on an accept, until `propose` reports no
 //! direction left. Run by CI (`.github/workflows/ci.yml`, "Smoke (tune search probe)") —
-//! it exits non-zero when the default assembly stops passing on either set,
-//! when the search does not terminate, or when an evaluation errors. A search
-//! that accepts nothing is still a green run, with a line that says so: the
-//! probe reports what the search decided and never fakes a gain to look green.
+//! it exits non-zero when the default assembly stops passing the holdout, when
+//! the tuning set becomes unmeasurable or surfaces wrong evidence, when the
+//! search does not terminate, or when an evaluation errors. A search that
+//! accepts nothing is still a green run, with a line that says so: the probe
+//! reports what the search decided and never fakes a gain to look green.
 
 use std::path::Path;
 
@@ -82,9 +83,16 @@ async fn main() -> Result<(), String> {
     let registry = tune::default_registry();
     let baseline = run_all(&tuning, &root, "default-tuning", None).await?;
     print_set("default tuning", &baseline, &registry)?;
-    check_passed("the default assembly", "the tuning set", &baseline)?;
+    // The tuning set is *meant* to miss: that is what gives the search
+    // somewhere to go. What may not happen is a set that is not even
+    // measurable — an empty recall with an error would be a defect, and a
+    // wrong-evidence rate above zero is one too, because the acceptance rules
+    // refuse a candidate that surfaces any.
+    check_measurable("the default assembly", "the tuning set", &baseline)?;
     let baseline_holdout = run_all(&holdout, &root, "default-holdout", None).await?;
     print_set("default holdout", &baseline_holdout, &registry)?;
+    // The holdout is the invariant: nothing the search may move is allowed to
+    // change it, so the default assembly has to pass it in full.
     check_passed("the default assembly", "the holdout set", &baseline_holdout)?;
 
     // 3. One full search: propose, evaluate, commit on an accept, repeat until
@@ -202,6 +210,35 @@ fn print_set(label: &str, results: &[CaseResult], registry: &KnobRegistry) -> Re
         report["cost"]["embed_calls"],
         produced["schema"]
     );
+    Ok(())
+}
+
+/// A set with headroom is allowed to miss — that is what headroom is — but it
+/// is not allowed to be unmeasurable or to surface wrong evidence. The former
+/// would make the noise floor a number over nothing, and the latter is what
+/// the acceptance rules refuse on, so a default that already fails it would
+/// refuse every candidate.
+fn check_measurable(what: &str, which: &str, results: &[CaseResult]) -> Result<(), String> {
+    let errored: Vec<&str> = results
+        .iter()
+        .filter(|result| result.quality.recall_at_k.is_nan())
+        .map(|result| result.case_id.as_str())
+        .collect();
+    if !errored.is_empty() {
+        return Err(format!(
+            "{what} produced an unusable recall on {which}: {errored:?}"
+        ));
+    }
+    let wrong: Vec<&str> = results
+        .iter()
+        .filter(|result| result.quality.wrong_evidence_rate > 0.0)
+        .map(|result| result.case_id.as_str())
+        .collect();
+    if !wrong.is_empty() {
+        return Err(format!(
+            "{what} surfaced wrong evidence on {which}: {wrong:?}"
+        ));
+    }
     Ok(())
 }
 
