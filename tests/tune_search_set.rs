@@ -436,3 +436,34 @@ fn an_accepted_write_moves_the_knob_and_nothing_else() {
     }
     assert_eq!(after.len(), before.len(), "the knob set is unchanged");
 }
+
+/// Bug this turns red: a bound check is mistaken for a kind check.
+/// [`KnobValue::as_f64`] flattens every variant to one number, so `F64(2.0)`
+/// is "inside" a window that belongs to a `u8` row — the kind is the one
+/// property the bounds cannot see, and `same_kind` is where it is seen.
+#[test]
+fn same_kind_separates_magnitude_from_kind() {
+    // Same kind, different magnitude.
+    assert!(
+        KnobValue::Usize(200).same_kind(&KnobValue::Usize(400)),
+        "two counts are the same kind"
+    );
+    assert!(
+        KnobValue::U8(2).same_kind(&KnobValue::U8(3)),
+        "two depths are the same kind"
+    );
+    // Same number, different kind — the case `admits` cannot catch.
+    assert!(
+        !KnobValue::F64(2.0).same_kind(&KnobValue::U8(2)),
+        "an f64 and a u8 carrying the same number are still different kinds"
+    );
+    assert!(
+        !KnobValue::U32(60).same_kind(&KnobValue::Usize(60)),
+        "two integer widths are different kinds"
+    );
+    // Unset is its own kind, which is what makes a value-less row unwritable.
+    assert!(
+        !KnobValue::Usize(5).same_kind(&KnobValue::Unset),
+        "unset is not any value's kind"
+    );
+}
