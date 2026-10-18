@@ -299,8 +299,8 @@ fn the_floor_over_the_new_sets_is_what_the_probe_declares() {
     let holdout_queries: usize = holdout.iter().map(|case| case.queries.len()).sum();
     assert_eq!(tuning_queries, 2, "the headroom set has two queries");
     assert_eq!(
-        holdout_queries, 4,
-        "the holdout has the invariant case's two queries plus one per external slice"
+        holdout_queries, 6,
+        "the holdout has the invariant case's four plus one per external slice"
     );
     assert_eq!(
         floor_for(&tuning),
