@@ -372,14 +372,16 @@ fn an_accepted_write_moves_the_knob_and_nothing_else() {
             .unwrap_or_else(|| panic!("`{id}` is not in the registry"))
             .clone()
     };
+    // `KnobValue` serializes tagged, so `U8(3)` is `{"kind":"u8","value":3}`
+    // and not the bare `3`.
     assert_eq!(
         current(&after, "recall.graph_hops")["current"],
-        serde_json::json!(3),
+        serde_json::json!({"kind": "u8", "value": 3}),
         "the accepted write lands on the knob it named"
     );
     assert_eq!(
         current(&before, "recall.graph_hops")["current"],
-        serde_json::json!(2),
+        serde_json::json!({"kind": "u8", "value": 2}),
         "the knob started where the table says it does"
     );
     // Every other row is byte-identical, which is the whole point of a write
