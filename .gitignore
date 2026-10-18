@@ -7,3 +7,6 @@ tests/.venvs/
 .ruff_cache/
 __pycache__/
 .wt/
+
+# Local scratch: agent tooling, jev MCP client, evidence files. Never shipped.
+.tmp/
