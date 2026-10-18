@@ -467,3 +467,39 @@ fn same_kind_separates_magnitude_from_kind() {
         "unset is not any value's kind"
     );
 }
+
+/// Bug this turns red: `admits` starts rejecting an unset value, or starts
+/// bounding it. `true` for a row that holds no value is load-bearing — the
+/// baseline invariant `bounds.admits(&current)` must hold for the four
+/// per-call budget rows, which are unset — and it is exactly why `admits`
+/// alone cannot guard a write.
+#[test]
+fn an_unset_value_is_admissible_but_still_not_writable() {
+    let registry = tune::default_registry();
+    for knob in registry.knobs() {
+        assert!(
+            knob.bounds.admits(&knob.current),
+            "`{}` ({:?}) must sit inside its own window ({:?})",
+            knob.id,
+            knob.current,
+            knob.bounds
+        );
+    }
+    // The rows that exercise this are the ones with no value at all.
+    let unset_rows: Vec<&str> = registry
+        .knobs()
+        .iter()
+        .filter(|knob| matches!(knob.current, KnobValue::Unset))
+        .map(|knob| knob.id)
+        .collect();
+    assert_eq!(
+        unset_rows,
+        vec![
+            "recall.per_arm_limit",
+            "recall.stale.max_age_secs",
+            "recall.stale.min_sessions",
+            "recall.top_k",
+        ],
+        "the caller's per-call budgets, unset by design"
+    );
+}
