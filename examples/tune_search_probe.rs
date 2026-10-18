@@ -1,10 +1,11 @@
 //! Smoke probe for the tuning search loop (stage doc 08 S3).
 //!
-//! Scores the default assembly on both case sets — the two self-built cases as
-//! the tuning set, the two external slices as the holdout — then drives one
-//! full coordinate-descent search over the injectable knobs: `propose`,
-//! `evaluate`, `commit` on an accept, until `propose` reports no direction
-//! left. Run by CI (`.github/workflows/ci.yml`, "Smoke (tune search probe)") —
+//! Scores the default assembly on the headroom set as the tuning set — a chain
+//! whose answer sits three hops out, so `graph_hops` has somewhere to go — and
+//! on the invariant case plus the two external slices as the holdout, then
+//! drives one full coordinate-descent search over the injectable knobs:
+//! `propose`, `evaluate`, `commit` on an accept, until `propose` reports no
+//! direction left. Run by CI (`.github/workflows/ci.yml`, "Smoke (tune search probe)") —
 //! it exits non-zero when the default assembly stops passing on either set,
 //! when the search does not terminate, or when an evaluation errors. A search
 //! that accepts nothing is still a green run, with a line that says so: the
@@ -35,8 +36,13 @@ async fn main() -> Result<(), String> {
 
     // 1. The two sets exactly as the search sees them: scale 0, the fixtures
     // already in the repo, nothing added.
-    let tuning = cases::all(0);
-    let holdout = external::external_all(0, &external::fixture_dir())?;
+    // The headroom set: the answer is three hops out, so `graph_hops` has
+    // somewhere to go. The saturated self-built sets stay with the baseline.
+    let tuning = cases::summary_cut_all(0);
+    // The new invariant case plus the two external slices: 6 queries, where
+    // one query cannot swing the whole set.
+    let mut holdout = cases::held_out_all(0);
+    holdout.extend(external::external_all(0, &external::fixture_dir())?);
     if tuning.is_empty() || holdout.is_empty() {
         return Err("a case set came back empty; a probe with no case says nothing".to_string());
     }

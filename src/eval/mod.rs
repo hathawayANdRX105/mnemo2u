@@ -40,7 +40,7 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::core::text::Tokenizer;
-use crate::core::traits::Embedder;
+use crate::core::traits::{Embedder, FactEdgeStore};
 use crate::core::types::{FactId, ScopeKey};
 use crate::index::gateway::{FactWriteGateway, GatewayOptions, GatewayParts};
 use crate::index::ingest::{SessionTurn, Turn};
@@ -77,6 +77,37 @@ pub struct Case {
     pub conditions: Conditions,
     /// How many recall runs per query (the latency sample size).
     pub repetitions: usize,
+    /// The relation edges the case's facts carry, by the turn ids that
+    /// produced them.
+    ///
+    /// The write gateway only ever writes `Supersedes` edges, and only from a
+    /// contradiction it needs a judge to find — so a case built out of turns
+    /// alone has no edges at all, which leaves the graph arm with nothing to
+    /// expand and every graph knob inert. Naming the turns instead of the fact
+    /// ids keeps the case a pure description: ids are derived from
+    /// `conversation_id` + `turn_id`, so a case stays byte-identical across
+    /// machines and the snapshot can hash this list as-is.
+    pub edges: Vec<CaseEdge>,
+}
+
+/// One relation a case wants between two of its own turns' facts.
+///
+/// Turns are named by their **position** in [`Case::turns`], not by their
+/// `turn_id`: [`run_case_with`] rewrites every turn id to `t{index}` before it
+/// hands the stream to the gateway, so the id in the case is documentation
+/// and the position is what the store actually holds. Naming positions keeps
+/// the edge from silently pointing at the wrong fact when a turn id is
+/// edited for readability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CaseEdge {
+    /// Index into [`Case::turns`] of the fact the edge starts from.
+    pub src: usize,
+    /// Index into [`Case::turns`] of the fact the edge points at.
+    pub dst: usize,
+    /// The relation, in the same vocabulary the store uses.
+    pub rel: crate::core::types::RelKind,
+    /// Edge weight, as the store holds it.
+    pub weight: f64,
 }
 
 /// One recall query and what a correct answer looks like.
@@ -310,6 +341,41 @@ pub fn snapshot_id(
     crate::core::text::compute_mdhash_id(&payload.to_string(), "snap-")
 }
 
+/// [`snapshot_id`] with the case's relations in the hash.
+///
+/// Added rather than extended, because `snapshot_id` is called from tests
+/// that describe frozen-field edits and have no relations to contribute: an
+/// empty list serializes to `[]` either way, so those tests are untouched and
+/// every case that carries no edge keeps exactly the snapshot it had.
+///
+/// Edges belong in the snapshot for the same reason the corpus does: a graph
+/// arm that walks a chain is measuring a different corpus from one that walks
+/// none, and a case that edits a chain without rotating its snapshot would
+/// silently change what was measured.
+pub fn snapshot_id_with_edges(
+    case_id: &str,
+    turns: &[Turn],
+    queries: &[CaseQuery],
+    scale: usize,
+    conditions: &Conditions,
+    edges: &[CaseEdge],
+) -> String {
+    let payload = serde_json::json!({
+        "case_id": case_id,
+        "turns": turns,
+        "queries": queries,
+        "distractor_sessions": scale,
+        "conditions": {
+            "top_k": conditions.top_k,
+            "min_recall": conditions.min_recall,
+            "forbid_wrong_evidence": conditions.forbid_wrong_evidence,
+            "expect_top_hit": conditions.expect_top_hit,
+        },
+        "edges": edges,
+    });
+    crate::core::text::compute_mdhash_id(&payload.to_string(), "snap-")
+}
+
 /// The distractor corpus for one scale: `scale` unrelated sessions, four
 /// turns each, vocabulary that does not appear in any case's content turns.
 /// Deterministic in `scale`, so the same scale always builds the same
@@ -465,6 +531,54 @@ pub async fn run_case_with(
     ] {
         gateway
             .commit_turns(conversation, &turns)
+            .await
+            .map_err(|error| error.to_string())?;
+    }
+
+    // The case's own relations, written straight to the store after the
+    // gateway. The gateway cannot produce them: it writes `Supersedes` only,
+    // and only from a contradiction a judge has to find, and this harness
+    // runs the judge off. A chain a graph walk can follow is a property of the
+    // corpus the case describes, so the case describes it.
+    //
+    // An index outside the turn list is a defect in the case, not something to
+    // skip: a silently dropped edge turns a case that should have had headroom
+    // into one that reads as saturated, which is exactly the failure this
+    // mechanism exists to avoid.
+    for edge in &case.edges {
+        let (Some(src), Some(dst)) = (case.turns.get(edge.src), case.turns.get(edge.dst)) else {
+            return Err(format!(
+                "case `{}` names edge {}->{} but has {} turn(s)",
+                case.case_id,
+                edge.src,
+                edge.dst,
+                case.turns.len()
+            ));
+        };
+        // The gateway's id for a turn is the hash of the conversation id and
+        // the rewritten `t{index}` — resolved here the same way, so the edge
+        // joins the facts the gateway actually wrote.
+        let resolve = |index: usize, turn: &Turn| {
+            FactId(crate::index::gateway::fact_id(
+                &case.conversation_id,
+                &Turn {
+                    turn_id: format!("t{index}"),
+                    ..turn.clone()
+                },
+            ))
+        };
+        stores
+            .edges
+            .upsert_edges(
+                &case.scope,
+                &[crate::core::types::Edge {
+                    src: resolve(edge.src, src),
+                    dst: resolve(edge.dst, dst),
+                    rel: edge.rel,
+                    weight: edge.weight,
+                    source_event_id: src.turn_id.clone(),
+                }],
+            )
             .await
             .map_err(|error| error.to_string())?;
     }

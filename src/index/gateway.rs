@@ -739,7 +739,15 @@ fn covered(watermark: &Option<OrganizedThrough>, turn: &SessionTurn) -> bool {
 
 /// Deterministic fact id for a turn: the same turn always maps to the same
 /// row, so replay and crash recovery converge.
-fn fact_id(conversation_id: &str, turn: &Turn) -> String {
+/// The deterministic fact id the gateway derives for one turn of one
+/// conversation.
+///
+/// `pub(crate)` because the eval harness rewrites every turn id to `t{index}`
+/// before it hands the stream over, so a `CaseEdge` has to resolve the
+/// position it names against that rewrite to find the facts the store holds.
+/// Re-deriving the hash anywhere else would leave a second copy of it to
+/// drift.
+pub(crate) fn fact_id(conversation_id: &str, turn: &Turn) -> String {
     compute_mdhash_id(
         &format!("{}\u{1}{}", conversation_id, turn.turn_id),
         "fact-",

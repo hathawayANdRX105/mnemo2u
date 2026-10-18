@@ -549,6 +549,9 @@ fn assemble(
         queries,
         conditions,
         repetitions,
+        // External slices describe flat sessions, so they carry no relations:
+        // the graph arm has nothing to expand here and stays inert.
+        edges: Vec::new(),
     })
 }
 
