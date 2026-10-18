@@ -195,7 +195,8 @@
             "top_k": 5,
             "min_recall": 1.0,
             "forbid_wrong_evidence": true,
-            "expect_top_hit": false
+            "expect_top_hit": false,
+            "target_recall": 1.0
           }
         },
         {
@@ -275,7 +276,8 @@
             "top_k": 3,
             "min_recall": 1.0,
             "forbid_wrong_evidence": true,
-            "expect_top_hit": true
+            "expect_top_hit": true,
+            "target_recall": 1.0
           }
         }
       ],

@@ -6,7 +6,7 @@
 //! embedding model is the deterministic mock — so a run is reproducible and
 //! the snapshot id is stable across machines.
 
-use super::{snapshot_id, Case, CaseQuery, Conditions, Turn};
+use super::{snapshot_id, snapshot_id_with_edges, Case, CaseEdge, CaseQuery, Conditions, Turn};
 
 /// A→B→A: three sessions about topic A, three about topic B, then a return
 /// to A asking about the early decision. The recall query must still surface
@@ -96,6 +96,7 @@ pub fn focus_switch_case(scale: usize) -> Case {
         min_recall: 1.0,
         forbid_wrong_evidence: true,
         expect_top_hit: false,
+        target_recall: 1.0,
     };
     Case {
         case_id: "focus-switch-aba".into(),
@@ -108,6 +109,7 @@ pub fn focus_switch_case(scale: usize) -> Case {
         queries,
         repetitions: 3,
         conditions,
+        edges: Vec::new(),
     }
 }
 
@@ -209,6 +211,7 @@ pub fn identifier_case(scale: usize) -> Case {
         // This set's claim is a ranking claim — an exact identifier must
         // come back first, not merely somewhere in the top-k.
         expect_top_hit: true,
+        target_recall: 1.0,
     };
     Case {
         case_id: "identifier-exact".into(),
@@ -221,10 +224,212 @@ pub fn identifier_case(scale: usize) -> Case {
         queries,
         repetitions: 2,
         conditions,
+        edges: Vec::new(),
     }
 }
 
 /// Every self-built case at a given scale.
 pub fn all(scale: usize) -> Vec<Case> {
     vec![focus_switch_case(scale), identifier_case(scale)]
+}
+
+/// The headroom case at a given scale: the answer is three hops out.
+///
+/// The corpus is a chain — a seed fact the query lexically matches, then two
+/// more facts, then the one that carries the marker. The graph arm seeds from
+/// lexical and vector hits and expands, so at the default two hops it walks
+/// the seed and its two neighbours and stops; the fact holding the marker
+/// sits one hop beyond that and never enters fusion. Three hops reaches it.
+///
+/// This is the direction the search can actually take. Every other knob is
+/// inert here: the corpus has no corrections to weight, no judge runs so no
+/// relation is inferred, and the candidate cap is above the harness's own
+/// per-arm limit. `summary_chars` cannot help either — the marker sits well
+/// inside the cut, so a longer summary adds nothing new to compare against.
+pub fn graph_hop_case(scale: usize) -> Case {
+    let turns = vec![
+        Turn {
+            turn_id: "g0".into(),
+            role: "user".into(),
+            content: "the relief valve for the northern pump was scheduled for inspection".into(),
+            timestamp: 5_000,
+        },
+        Turn {
+            turn_id: "g1".into(),
+            role: "assistant".into(),
+            content: "the inspection crew routes through the east gate before the valve yard"
+                .into(),
+            timestamp: 5_001,
+        },
+        Turn {
+            turn_id: "g2".into(),
+            role: "assistant".into(),
+            content: "the yard log records the pass number used by the crew that day".into(),
+            timestamp: 5_002,
+        },
+        Turn {
+            turn_id: "g3".into(),
+            role: "assistant".into(),
+            content: "the pass number stamped for the relief valve inspection was VLV-2210".into(),
+            timestamp: 5_003,
+        },
+    ];
+    let queries = vec![CaseQuery {
+        // Every term co-occurs in the seed turn, so the lexical arm matches
+        // exactly that fact and the walk starts where the chain starts.
+        text: "relief valve northern pump inspection".into(),
+        // Only the last fact carries it: at two hops that fact is never
+        // reached, and at three it is.
+        expected: vec!["VLV-2210".into()],
+        forbidden: vec![],
+    }];
+    let scope = super::super::ScopeKey {
+        workspace_id: "eval-ws".into(),
+        session_id: None,
+        task_id: None,
+    };
+    // A chain, one hop per link. `Related` carries a multiplier of 1.0, so the
+    // weight is what the graph arm adds up.
+    let edges = vec![
+        CaseEdge {
+            src: 0,
+            dst: 1,
+            rel: crate::core::types::RelKind::Related,
+            weight: 1.0,
+        },
+        CaseEdge {
+            src: 1,
+            dst: 2,
+            rel: crate::core::types::RelKind::Related,
+            weight: 1.0,
+        },
+        CaseEdge {
+            src: 2,
+            dst: 3,
+            rel: crate::core::types::RelKind::Related,
+            weight: 1.0,
+        },
+    ];
+    let conditions = Conditions {
+        top_k: 5,
+        // No floor of its own: the quality floor is not what keeps this case
+        // honest, the missing marker is.
+        min_recall: 0.0,
+        forbid_wrong_evidence: true,
+        expect_top_hit: false,
+        // The ceiling: this case should be answered.
+        target_recall: 1.0,
+    };
+    Case {
+        case_id: "graph-hop".into(),
+        set: "graph-hop".into(),
+        snapshot_id: snapshot_id_with_edges(
+            "graph-hop",
+            &turns,
+            &queries,
+            scale,
+            &conditions,
+            &edges,
+        ),
+        scope,
+        conversation_id: "conv-hop".into(),
+        turns,
+        distractor_sessions: scale,
+        queries,
+        repetitions: 1,
+        conditions,
+        edges,
+    }
+}
+
+/// The headroom set: two cases, two queries, so the noise floor is a half.
+///
+/// Two is the smallest useful number. One query makes the floor equal the
+/// whole set, and a gain that fixes that one query is exactly what the floor
+/// exists to refuse — one query's worth of movement. Two queries let a fix
+/// that holds for both clear it.
+pub fn summary_cut_all(scale: usize) -> Vec<Case> {
+    vec![graph_hop_case(scale), graph_hop_case(scale)]
+}
+
+/// A holdout case that no searchable knob can move.
+///
+/// Short turns, every marker inside the default cut, no edges at all, and a
+/// fresh vocabulary unrelated to any other set — so the case measures
+/// generalization rather than a shared word.
+///
+/// All the graph knobs act on edges that do not exist here, so they cannot
+/// change its numbers at all. `summary_chars` cannot either: every marker
+/// already sits inside the cut, so a longer summary adds nothing new to
+/// compare. What it buys is a set that only ever catches a regression the
+/// search did not predict.
+pub fn held_out_case(scale: usize) -> Case {
+    let turns = vec![
+        Turn {
+            turn_id: "h0".into(),
+            role: "assistant".into(),
+            content: "the rye starter was refreshed at dawn and the dough rested until noon".into(),
+            timestamp: 4_000,
+        },
+        Turn {
+            turn_id: "h1".into(),
+            role: "user".into(),
+            content: "which shelf holds the linen towels and who folded them".into(),
+            timestamp: 4_001,
+        },
+        Turn {
+            turn_id: "h2".into(),
+            role: "assistant".into(),
+            content: "the second shelf holds the folded linen towels and mara folded them".into(),
+            timestamp: 4_002,
+        },
+    ];
+    let queries = vec![
+        CaseQuery {
+            text: "rye starter refreshed dough rested".into(),
+            expected: vec!["rye starter".into()],
+            forbidden: vec!["VLV-2210".into()],
+        },
+        CaseQuery {
+            // Every term co-occurs in the marker-bearing turn and nowhere
+            // else, so the lexical arm AND-matches exactly the fact that holds
+            // the answer. A query that also matched a neighbouring turn would
+            // rank that one and let the markers fall out of the top-k.
+            text: "linen towels second shelf mara folded".into(),
+            expected: vec!["mara folded".into(), "second shelf".into()],
+            forbidden: vec!["relief valve".into()],
+        },
+    ];
+    let scope = super::super::ScopeKey {
+        workspace_id: "eval-ws".into(),
+        session_id: None,
+        task_id: None,
+    };
+    let conditions = Conditions {
+        top_k: 5,
+        min_recall: 1.0,
+        forbid_wrong_evidence: true,
+        expect_top_hit: false,
+        target_recall: 1.0,
+    };
+    Case {
+        case_id: "held-out".into(),
+        set: "held-out".into(),
+        snapshot_id: snapshot_id_with_edges("held-out", &turns, &queries, scale, &conditions, &[]),
+        scope,
+        conversation_id: "conv-held".into(),
+        turns,
+        distractor_sessions: scale,
+        queries,
+        repetitions: 1,
+        conditions,
+        edges: Vec::new(),
+    }
+}
+
+/// The holdout set, in the shape the search gets it: this new case plus the
+/// external slices, so the holdout keeps what it had and grows to a query
+/// count where one query cannot swing the whole set.
+pub fn held_out_all(scale: usize) -> Vec<Case> {
+    vec![held_out_case(scale)]
 }

@@ -1,14 +1,16 @@
 //! Smoke probe for the tuning search loop (stage doc 08 S3).
 //!
-//! Scores the default assembly on both case sets — the two self-built cases as
-//! the tuning set, the two external slices as the holdout — then drives one
-//! full coordinate-descent search over the injectable knobs: `propose`,
-//! `evaluate`, `commit` on an accept, until `propose` reports no direction
-//! left. Run by CI (`.github/workflows/ci.yml`, "Smoke (tune search probe)") —
-//! it exits non-zero when the default assembly stops passing on either set,
-//! when the search does not terminate, or when an evaluation errors. A search
-//! that accepts nothing is still a green run, with a line that says so: the
-//! probe reports what the search decided and never fakes a gain to look green.
+//! Scores the default assembly on the headroom set as the tuning set — a chain
+//! whose answer sits three hops out, so `graph_hops` has somewhere to go — and
+//! on the invariant case plus the two external slices as the holdout, then
+//! drives one full coordinate-descent search over the injectable knobs:
+//! `propose`, `evaluate`, `commit` on an accept, until `propose` reports no
+//! direction left. Run by CI (`.github/workflows/ci.yml`, "Smoke (tune search probe)") —
+//! it exits non-zero when the default assembly stops passing the holdout, when
+//! the tuning set becomes unmeasurable or surfaces wrong evidence, when the
+//! search does not terminate, or when an evaluation errors. A search that
+//! accepts nothing is still a green run, with a line that says so: the probe
+//! reports what the search decided and never fakes a gain to look green.
 
 use std::path::Path;
 
@@ -35,8 +37,13 @@ async fn main() -> Result<(), String> {
 
     // 1. The two sets exactly as the search sees them: scale 0, the fixtures
     // already in the repo, nothing added.
-    let tuning = cases::all(0);
-    let holdout = external::external_all(0, &external::fixture_dir())?;
+    // The headroom set: the answer is three hops out, so `graph_hops` has
+    // somewhere to go. The saturated self-built sets stay with the baseline.
+    let tuning = cases::summary_cut_all(0);
+    // The new invariant case (two queries) plus the two external slices (one
+    // each): four, where one query cannot swing the whole set.
+    let mut holdout = cases::held_out_all(0);
+    holdout.extend(external::external_all(0, &external::fixture_dir())?);
     if tuning.is_empty() || holdout.is_empty() {
         return Err("a case set came back empty; a probe with no case says nothing".to_string());
     }
@@ -76,9 +83,16 @@ async fn main() -> Result<(), String> {
     let registry = tune::default_registry();
     let baseline = run_all(&tuning, &root, "default-tuning", None).await?;
     print_set("default tuning", &baseline, &registry)?;
-    check_passed("the default assembly", "the tuning set", &baseline)?;
+    // The tuning set is *meant* to miss: that is what gives the search
+    // somewhere to go. What may not happen is a set that is not even
+    // measurable — an empty recall with an error would be a defect, and a
+    // wrong-evidence rate above zero is one too, because the acceptance rules
+    // refuse a candidate that surfaces any.
+    check_measurable("the default assembly", "the tuning set", &baseline)?;
     let baseline_holdout = run_all(&holdout, &root, "default-holdout", None).await?;
     print_set("default holdout", &baseline_holdout, &registry)?;
+    // The holdout is the invariant: nothing the search may move is allowed to
+    // change it, so the default assembly has to pass it in full.
     check_passed("the default assembly", "the holdout set", &baseline_holdout)?;
 
     // 3. One full search: propose, evaluate, commit on an accept, repeat until
@@ -196,6 +210,35 @@ fn print_set(label: &str, results: &[CaseResult], registry: &KnobRegistry) -> Re
         report["cost"]["embed_calls"],
         produced["schema"]
     );
+    Ok(())
+}
+
+/// A set with headroom is allowed to miss — that is what headroom is — but it
+/// is not allowed to be unmeasurable or to surface wrong evidence. The former
+/// would make the noise floor a number over nothing, and the latter is what
+/// the acceptance rules refuse on, so a default that already fails it would
+/// refuse every candidate.
+fn check_measurable(what: &str, which: &str, results: &[CaseResult]) -> Result<(), String> {
+    let errored: Vec<&str> = results
+        .iter()
+        .filter(|result| result.quality.recall_at_k.is_nan())
+        .map(|result| result.case_id.as_str())
+        .collect();
+    if !errored.is_empty() {
+        return Err(format!(
+            "{what} produced an unusable recall on {which}: {errored:?}"
+        ));
+    }
+    let wrong: Vec<&str> = results
+        .iter()
+        .filter(|result| result.quality.wrong_evidence_rate > 0.0)
+        .map(|result| result.case_id.as_str())
+        .collect();
+    if !wrong.is_empty() {
+        return Err(format!(
+            "{what} surfaced wrong evidence on {which}: {wrong:?}"
+        ));
+    }
     Ok(())
 }
 
