@@ -10,7 +10,9 @@
 //! What these tests are for: proving that a case whose default assembly
 //! misses is *allowed* to improve (S3's rule 3 used to refuse every direction
 //! on such a set), that the direction that improves it is accepted, and that
-//! the guards which stopped a candidate before still stop it.
+//! the guards which stopped a candidate before still stop it. The last two
+//! cover the write half of the knob surface, which the search cannot reach
+//! through its own bounds check — the gap jev_review named on the S3.5 diff.
 
 use std::path::PathBuf;
 
@@ -307,4 +309,87 @@ fn the_floor_over_the_new_sets_is_what_the_probe_declares() {
         1.0 / 2.0,
         "the floor is one query's weight over the tuning set"
     );
+}
+
+/// Bug this turns red: `KnobRegistry::set` accepts a value outside the knob's
+/// declared window. The search's own bounds check never lets that happen, so
+/// without this the write half of the knob surface would be unreachable —
+/// exactly the test gap jev_review named on the S3.5 diff.
+#[test]
+fn a_registry_rejects_a_value_outside_the_knobs_window() {
+    let mut registry = tune::default_registry();
+    let before = registry.get("recall.graph_hops").unwrap().current;
+    // The window starts at 1, so 0 is below it.
+    let error = registry
+        .set("recall.graph_hops", KnobValue::U8(0))
+        .expect_err("0 is below the declared floor");
+    assert!(
+        matches!(error, tune::TuneError::OutOfBounds { .. }),
+        "the error must name the window it broke: {error:?}"
+    );
+    assert_eq!(
+        registry.get("recall.graph_hops").unwrap().current,
+        before,
+        "a refused write must leave the assembly where it was"
+    );
+
+    // And a value the search can never name explicitly: an unset knob.
+    let unset = registry
+        .set("recall.graph_hops", KnobValue::Unset)
+        .expect_err("an unset value is not a setting");
+    assert!(
+        matches!(unset, tune::TuneError::UnsetKnob { .. }),
+        "an unset knob must be refused, not written: {unset:?}"
+    );
+
+    // A name the registry does not carry is an error, not a panic.
+    let unknown = registry
+        .set("recall.nope", KnobValue::U8(1))
+        .expect_err("an unknown knob is an error");
+    assert!(
+        matches!(unknown, tune::TuneError::UnknownKnob { .. }),
+        "an unknown knob id must be an error: {unknown:?}"
+    );
+}
+
+/// Bug this turns red: a refused write silently mutates, or a successful one
+/// does not. The write half has to be an exact, observable operation.
+#[test]
+fn an_accepted_write_moves_the_knob_and_nothing_else() {
+    let mut registry = tune::default_registry();
+    let before: Vec<serde_json::Value> =
+        serde_json::from_str(&registry.json()).expect("the registry serializes as JSON");
+    registry
+        .set("recall.graph_hops", KnobValue::U8(3))
+        .expect("3 is inside the window");
+    let after: Vec<serde_json::Value> =
+        serde_json::from_str(&registry.json()).expect("the registry serializes as JSON");
+
+    let current = |records: &[serde_json::Value], id: &str| {
+        records
+            .iter()
+            .find(|record| record["id"] == id)
+            .unwrap_or_else(|| panic!("`{id}` is not in the registry"))
+            .clone()
+    };
+    assert_eq!(
+        current(&after, "recall.graph_hops")["current"],
+        serde_json::json!(3),
+        "the accepted write lands on the knob it named"
+    );
+    assert_eq!(
+        current(&before, "recall.graph_hops")["current"],
+        serde_json::json!(2),
+        "the knob started where the table says it does"
+    );
+    // Every other row is byte-identical, which is the whole point of a write
+    // that names one knob.
+    for record in &before {
+        let id = record["id"].as_str().expect("a knob id");
+        if id == "recall.graph_hops" {
+            continue;
+        }
+        assert_eq!(&current(&after, id), record, "`{id}` must not have moved");
+    }
+    assert_eq!(after.len(), before.len(), "the knob set is unchanged");
 }
