@@ -369,15 +369,28 @@ fn a_registry_rejects_a_value_outside_the_knobs_window() {
         "a refused write leaves the row where it was"
     );
 
-    // And a row that holds no value at all — the per-call budgets — is not
-    // writable, because it has no kind to match.
-    let unset_row = registry
-        .set("recall.top_k", KnobValue::Usize(5))
-        .expect_err("a per-call budget is the caller's to set");
-    assert!(
-        matches!(unset_row, tune::TuneError::UnsetKnob { .. }),
-        "a row with no value must refuse a write: {unset_row:?}"
-    );
+    // And the rows that hold no value at all — the caller's per-call budgets.
+    // All four, not one example: a member of this class is unwritable because
+    // the class is, and a test that names a single row would keep passing if
+    // the class grew or if one of them quietly gained a default.
+    for id in [
+        "recall.top_k",
+        "recall.per_arm_limit",
+        "recall.stale.max_age_secs",
+        "recall.stale.min_sessions",
+    ] {
+        let refused = registry
+            .set(id, KnobValue::Usize(5))
+            .expect_err("a per-call budget is the caller's to set");
+        assert!(
+            matches!(refused, tune::TuneError::UnsetKnob { .. }),
+            "`{id}` holds no value and must refuse a write: {refused:?}"
+        );
+        assert!(
+            matches!(registry.get(id).unwrap().current, KnobValue::Unset),
+            "`{id}` must stay unset after a refused write"
+        );
+    }
 }
 
 /// Bug this turns red: a refused write silently mutates, or a successful one
