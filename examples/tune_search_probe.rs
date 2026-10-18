@@ -40,8 +40,8 @@ async fn main() -> Result<(), String> {
     // The headroom set: the answer is three hops out, so `graph_hops` has
     // somewhere to go. The saturated self-built sets stay with the baseline.
     let tuning = cases::summary_cut_all(0);
-    // The new invariant case (two queries) plus the two external slices (one
-    // each): four, where one query cannot swing the whole set.
+    // The new invariant case (four queries) plus the two external slices (one
+    // each): six, where one query cannot swing the whole set.
     let mut holdout = cases::held_out_all(0);
     holdout.extend(external::external_all(0, &external::fixture_dir())?);
     if tuning.is_empty() || holdout.is_empty() {

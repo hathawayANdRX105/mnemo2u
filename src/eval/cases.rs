@@ -363,6 +363,13 @@ pub fn summary_cut_all(scale: usize) -> Vec<Case> {
 /// already sits inside the cut, so a longer summary adds nothing new to
 /// compare. What it buys is a set that only ever catches a regression the
 /// search did not predict.
+///
+/// Four queries, so that with the two external slices the holdout reaches six:
+/// a one-query holdout can swing on a single flip, and a set that coarse cannot
+/// tell a regression from noise. Each query's terms live in its marker-bearing
+/// turn and nowhere else — the lexical arm is an AND-of-tokens, so a term that
+/// also matched a neighbouring turn would rank that one and let the markers
+/// fall out of the top-k.
 pub fn held_out_case(scale: usize) -> Case {
     let turns = vec![
         Turn {
@@ -383,6 +390,20 @@ pub fn held_out_case(scale: usize) -> Case {
             content: "the second shelf holds the folded linen towels and mara folded them".into(),
             timestamp: 4_002,
         },
+        Turn {
+            turn_id: "h3".into(),
+            role: "assistant".into(),
+            content: "the copper kettle was scoured with lemon juice before the winter storage"
+                .into(),
+            timestamp: 4_003,
+        },
+        Turn {
+            turn_id: "h4".into(),
+            role: "assistant".into(),
+            content: "the attic hatch sticks after the rain because the frame swelled unevenly"
+                .into(),
+            timestamp: 4_004,
+        },
     ];
     let queries = vec![
         CaseQuery {
@@ -398,6 +419,18 @@ pub fn held_out_case(scale: usize) -> Case {
             text: "linen towels second shelf mara folded".into(),
             expected: vec!["mara folded".into(), "second shelf".into()],
             forbidden: vec!["relief valve".into()],
+        },
+        CaseQuery {
+            // Same rule as the rest: the terms live in `h3` and nowhere else.
+            text: "copper kettle scoured lemon juice winter storage".into(),
+            expected: vec!["copper kettle".into()],
+            forbidden: vec!["linen towels".into()],
+        },
+        CaseQuery {
+            // And here: `h4` only.
+            text: "attic hatch sticks frame swelled".into(),
+            expected: vec!["frame swelled".into()],
+            forbidden: vec!["copper kettle".into()],
         },
     ];
     let scope = super::super::ScopeKey {
