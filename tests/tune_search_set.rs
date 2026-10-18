@@ -312,9 +312,10 @@ fn the_floor_over_the_new_sets_is_what_the_probe_declares() {
 }
 
 /// Bug this turns red: `KnobRegistry::set` accepts a value outside the knob's
-/// declared window. The search's own bounds check never lets that happen, so
-/// without this the write half of the knob surface would be unreachable —
-/// exactly the test gap jev_review named on the S3.5 diff.
+/// declared window, of another kind than the row carries, or on a row that
+/// holds no value at all. The search's own bounds check never lets any of that
+/// happen, so without this the write half of the knob surface would be
+/// unreachable — exactly the test gap jev_review named on the S3.5 diff.
 #[test]
 fn a_registry_rejects_a_value_outside_the_knobs_window() {
     let mut registry = tune::default_registry();
@@ -349,6 +350,33 @@ fn a_registry_rejects_a_value_outside_the_knobs_window() {
     assert!(
         matches!(unknown, tune::TuneError::UnknownKnob { .. }),
         "an unknown knob id must be an error: {unknown:?}"
+    );
+
+    // A value of another kind is refused, not silently converted. `admits`
+    // reads a value as one number whatever its variant, so `F64(2.0)` on a
+    // `u8` row is inside the window — and would fail much later, in
+    // `recall_knobs`, long after the write that caused it.
+    let wrong_kind = registry
+        .set("recall.graph_hops", KnobValue::F64(2.0))
+        .expect_err("an f64 is not a hop count");
+    assert!(
+        matches!(wrong_kind, tune::TuneError::WrongKind { .. }),
+        "a value of another kind must name that: {wrong_kind:?}"
+    );
+    assert_eq!(
+        registry.get("recall.graph_hops").unwrap().current,
+        before,
+        "a refused write leaves the row where it was"
+    );
+
+    // And a row that holds no value at all — the per-call budgets — is not
+    // writable, because it has no kind to match.
+    let unset_row = registry
+        .set("recall.top_k", KnobValue::Usize(5))
+        .expect_err("a per-call budget is the caller's to set");
+    assert!(
+        matches!(unset_row, tune::TuneError::UnsetKnob { .. }),
+        "a row with no value must refuse a write: {unset_row:?}"
     );
 }
 
