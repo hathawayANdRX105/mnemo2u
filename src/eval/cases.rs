@@ -230,3 +230,156 @@ pub fn identifier_case(scale: usize) -> Case {
 pub fn all(scale: usize) -> Vec<Case> {
     vec![focus_switch_case(scale), identifier_case(scale)]
 }
+
+/// The headroom case at a given scale: one turn whose only expected marker
+/// sits past the default L0 summary cut.
+///
+/// The query shares its terms with the first part of the turn, so the lexical
+/// arm AND-matches it and the fact reaches the top-k — it just cannot be
+/// *matched* on, because a candidate is asserted against its summary, and the
+/// summary is cut at 200 chars. Raising `summary_chars` past the marker brings
+/// the recall back, which is the one direction this set makes available.
+///
+/// The case fails its own frozen conditions by default, on purpose: the
+/// default assembly genuinely cannot answer it. That is what makes it
+/// headroom, and why it lives in its own set rather than in `all` — the two
+/// sets there are measured at perfect recall and start there.
+pub fn summary_cut_case(scale: usize) -> Case {
+    let padding =
+        "the drain flume report was filed last friday against the north pen and the ".repeat(4);
+    let head = format!("{padding} the spill valve release count");
+    let turn = Turn {
+        turn_id: "cut0".into(),
+        role: "assistant".into(),
+        content: format!("{head} was recorded as ERV-7714 in the drain log"),
+        timestamp: 3_000,
+    };
+    let turns = vec![turn];
+    let queries = vec![CaseQuery {
+        // Terms that only co-occur in this turn, so the lexical arm matches
+        // exactly this fact.
+        text: "drain flume report north pen spill valve release".into(),
+        // Past the 200-char cut: invisible to the default assembly, and the
+        // thing `summary_chars` buying above 240 brings back.
+        expected: vec!["ERV-7714".into()],
+        forbidden: vec![],
+    }];
+    let scope = super::super::ScopeKey {
+        workspace_id: "eval-ws".into(),
+        session_id: None,
+        task_id: None,
+    };
+    let conditions = Conditions {
+        top_k: 5,
+        // No floor of its own: the quality floor is not what keeps this case
+        // honest, the missing marker is.
+        min_recall: 0.0,
+        // Nothing forbidden, and no wrong evidence is ever the right answer,
+        // so this stays on.
+        forbid_wrong_evidence: true,
+        expect_top_hit: false,
+        // The ceiling: this case should be answered.
+        target_recall: 1.0,
+    };
+    Case {
+        case_id: "summary-cut".into(),
+        set: "summary-cut".into(),
+        snapshot_id: snapshot_id("summary-cut", &turns, &queries, scale, &conditions),
+        scope,
+        conversation_id: "conv-cut".into(),
+        turns,
+        distractor_sessions: scale,
+        queries,
+        repetitions: 1,
+        conditions,
+    }
+}
+
+/// The headroom set: two cases, two queries, so the noise floor is one half.
+///
+/// Two is the smallest useful number. One query makes the floor equal the
+/// whole set, and a gain that fixes that one query is exactly what the floor
+/// exists to refuse — one query's worth of movement. Two queries let a fix
+/// that holds for both clear it.
+pub fn summary_cut_all(scale: usize) -> Vec<Case> {
+    vec![summary_cut_case(scale), summary_cut_case(scale)]
+}
+
+/// A holdout case immune to every searchable knob.
+///
+/// Short turns, all markers inside the default cut, and no edges — which is
+/// also all a `Case` can build: the gateway only writes `Supersedes` edges
+/// from a contradiction it needs a judge to find, and the harness passes none.
+/// The vocabulary is a fresh domain, unrelated to any other set, so the case
+/// is measuring generalization rather than a shared word.
+///
+/// All the graph and relation knobs act on edges that do not exist here, so
+/// they cannot move this case's numbers at all. `summary_chars` cannot either:
+/// every marker already sits inside the cut, so a longer summary adds nothing
+/// new to compare. What it buys is a set that only ever catches a regression
+/// the search did not predict.
+pub fn held_out_case(scale: usize) -> Case {
+    let turns = vec![
+        Turn {
+            turn_id: "h0".into(),
+            role: "assistant".into(),
+            content: "the rye starter was refreshed at dawn and the dough rested until noon".into(),
+            timestamp: 4_000,
+        },
+        Turn {
+            turn_id: "h1".into(),
+            role: "user".into(),
+            content: "which shelf holds the linen towels and who folded them".into(),
+            timestamp: 4_001,
+        },
+        Turn {
+            turn_id: "h2".into(),
+            role: "assistant".into(),
+            content: "the second shelf holds the folded linen towels and mara folded them".into(),
+            timestamp: 4_002,
+        },
+    ];
+    let queries = vec![
+        CaseQuery {
+            text: "rye starter refreshed dough rested".into(),
+            expected: vec!["rye starter".into()],
+            forbidden: vec!["ERV-7714".into()],
+        },
+        CaseQuery {
+            text: "linen towels folded who".into(),
+            expected: vec!["mara folded".into(), "second shelf".into()],
+            forbidden: vec!["spill valve".into()],
+        },
+    ];
+    let scope = super::super::ScopeKey {
+        workspace_id: "eval-ws".into(),
+        session_id: None,
+        task_id: None,
+    };
+    let conditions = Conditions {
+        top_k: 5,
+        min_recall: 1.0,
+        forbid_wrong_evidence: true,
+        expect_top_hit: false,
+        target_recall: 1.0,
+    };
+    Case {
+        case_id: "held-out".into(),
+        set: "held-out".into(),
+        snapshot_id: snapshot_id("held-out", &turns, &queries, scale, &conditions),
+        scope,
+        conversation_id: "conv-held".into(),
+        turns,
+        distractor_sessions: scale,
+        queries,
+        repetitions: 1,
+        conditions,
+    }
+}
+
+/// The holdout set, in the shape the search gets it: this new case plus the
+/// external slices, so the holdout keeps what it had and grows to a query
+/// count where one query cannot swing the whole set.
+pub fn held_out_all(scale: usize) -> Vec<Case> {
+    vec![held_out_case(scale)]
+}
