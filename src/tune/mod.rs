@@ -349,13 +349,28 @@ impl KnobRegistry {
     /// the per-call budgets are the caller's, and this surface refuses to
     /// invent a value for them.
     ///
-    /// Rejected: an unknown id, a value outside [`Knob::bounds`], and
-    /// [`KnobValue::Unset`] written into a row that has no value to clear.
+    /// Rejected: an unknown id, a value outside [`Knob::bounds`],
+    /// [`KnobValue::Unset`] written into a row that has no value to clear, a
+    /// value of a different kind than the row carries, and any write to a row
+    /// that holds no value at all.
     pub fn set(&mut self, id: &str, value: KnobValue) -> Result<(), TuneError> {
         let knob = self.get(id)?;
         let bounds = knob.bounds;
         if matches!(value, KnobValue::Unset) {
             return Err(TuneError::UnsetKnob { id: id.to_string() });
+        }
+        // Bounds alone let a different kind through: `admits` reads the value
+        // as one number whatever its variant, so `F64(2.0)` on a `u8` row is
+        // inside the window. It would then fail in `recall_knobs`, long after
+        // the write that caused it — so the kind is checked here, where the
+        // caller who made the mistake still exists.
+        if matches!(knob.current, KnobValue::Unset) {
+            // A row with no value has no kind to match, and guessing one would
+            // be the silent drift this surface exists to stop.
+            return Err(TuneError::UnsetKnob { id: id.to_string() });
+        }
+        if std::mem::discriminant(&value) != std::mem::discriminant(&knob.current) {
+            return Err(TuneError::WrongKind { id: id.to_string() });
         }
         if !bounds.admits(&value) {
             return Err(TuneError::OutOfBounds {
