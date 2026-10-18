@@ -302,6 +302,9 @@ pub fn mtrag_case(slice: &MtragSlice, scale: usize) -> Result<Case, String> {
                 min_recall: 1.0,
                 forbid_wrong_evidence: true,
                 expect_top_hit: false,
+                // No headroom declared: this set is measured against perfect
+                // recall, and it reaches it.
+                target_recall: 1.0,
             },
             // The latency sample size, nothing else.
             repetitions: 3,
@@ -393,6 +396,9 @@ pub fn longmemeval_case(slice: &LongmemEvalSlice, scale: usize) -> Result<Case, 
                 min_recall: 1.0,
                 forbid_wrong_evidence: true,
                 expect_top_hit: false,
+                // No headroom declared: this set is measured against perfect
+                // recall, and it reaches it.
+                target_recall: 1.0,
             },
             repetitions: 2,
         },

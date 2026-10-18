@@ -105,6 +105,18 @@ pub struct Conditions {
     /// without this a correct fact demoted from rank 1 by a fusion or
     /// per-arm-limit change still passes.
     pub expect_top_hit: bool,
+    /// What this case *should* reach, as opposed to what it must reach.
+    ///
+    /// `min_recall` and the frozen conditions say when a run failed; this
+    /// says how much room a case still has, which is what a search needs to
+    /// know whether a gain was possible. A case whose default assembly
+    /// already sits at its target is saturated — moving a knob cannot help it
+    /// — and one below its target has headroom the size of the difference.
+    ///
+    /// It takes no part in `CaseResult::passed`, and it is deliberately absent
+    /// from [`snapshot_id`]'s payload: it is a measurement target, not a frozen
+    /// threshold, and hashing it would rotate every existing case's snapshot.
+    pub target_recall: f64,
 }
 
 impl Default for Conditions {
@@ -114,6 +126,7 @@ impl Default for Conditions {
             min_recall: 1.0,
             forbid_wrong_evidence: true,
             expect_top_hit: false,
+            target_recall: 1.0,
         }
     }
 }
@@ -268,6 +281,13 @@ fn now_seconds() -> i64 {
 /// The snapshot id: a hash over everything that defines the effective run —
 /// corpus, queries, scale *and* the frozen thresholds — so neither a silent
 /// corpus edit nor a loosened criterion can pass a frozen expectation.
+/// The snapshot hash: case id, corpus, queries, scale and the frozen
+/// thresholds.
+///
+/// The conditions are hashed field by field rather than as a whole, so adding
+/// a field that is not a frozen threshold — `target_recall` is the first — does
+/// not rotate every existing case's snapshot. A rotated snapshot would rewrite
+/// the S2 baseline fixture, which is a frozen contract.
 pub fn snapshot_id(
     case_id: &str,
     turns: &[Turn],
@@ -280,7 +300,12 @@ pub fn snapshot_id(
         "turns": turns,
         "queries": queries,
         "distractor_sessions": scale,
-        "conditions": conditions,
+        "conditions": {
+            "top_k": conditions.top_k,
+            "min_recall": conditions.min_recall,
+            "forbid_wrong_evidence": conditions.forbid_wrong_evidence,
+            "expect_top_hit": conditions.expect_top_hit,
+        },
     });
     crate::core::text::compute_mdhash_id(&payload.to_string(), "snap-")
 }

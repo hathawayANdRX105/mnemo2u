@@ -96,6 +96,7 @@ pub fn focus_switch_case(scale: usize) -> Case {
         min_recall: 1.0,
         forbid_wrong_evidence: true,
         expect_top_hit: false,
+        target_recall: 1.0,
     };
     Case {
         case_id: "focus-switch-aba".into(),
@@ -209,6 +210,7 @@ pub fn identifier_case(scale: usize) -> Case {
         // This set's claim is a ranking claim — an exact identifier must
         // come back first, not merely somewhere in the top-k.
         expect_top_hit: true,
+        target_recall: 1.0,
     };
     Case {
         case_id: "identifier-exact".into(),
