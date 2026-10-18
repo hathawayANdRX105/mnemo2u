@@ -134,6 +134,12 @@ pub struct KnobBounds {
 impl KnobBounds {
     /// Whether `value` sits inside the window. An unset value is admissible
     /// by definition: it is the caller's to supply, not the search's.
+    ///
+    /// That `true` is load-bearing, not incidental — the baseline invariant
+    /// `knob.bounds.admits(&knob.current)` must hold for the per-call budget
+    /// rows, and those hold no value. It is also why this method alone cannot
+    /// guard a write: an unset value would sail through the window. See
+    /// [`KnobRegistry::set`], which checks the kind before the bounds.
     pub fn admits(&self, value: &KnobValue) -> bool {
         let Some(number) = value.as_f64() else {
             return true;
