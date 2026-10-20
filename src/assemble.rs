@@ -9,14 +9,16 @@ use crate::llm::fastembed::FastembedEmbedder;
 use crate::llm::LlmClient;
 use crate::pipeline::{CommunityMode, Pipeline, PipelineOptions};
 use crate::store::lancedb::LanceVector;
+use crate::store::redb_graph::RedbGraph;
 use crate::store::repair::RepairQueue;
 use crate::store::turso::TursoKv;
-use crate::store::turso_graph::TursoGraph;
 
 /// What one workspace's stores resolve to.
 pub struct Assembled {
     pub pipeline: Pipeline,
     pub truth_path: std::path::PathBuf,
+    /// The derived graph index. Droppable: rebuild it from the truth layer.
+    pub graph_path: std::path::PathBuf,
     pub vector_uri: String,
     pub embedder: Arc<dyn Embedder>,
 }
@@ -49,14 +51,15 @@ async fn open(
 
 impl Config {
     /// Build the durable pipeline this config describes: one turso file for
-    /// truth + adjacency, one lancedb directory for the vector tables, the
-    /// configured chat model wrapped in the response cache, and the local
-    /// ONNX embedder.
+    /// truth, one redb file for the graph adjacency, one lancedb directory for
+    /// the vector tables, the configured chat model wrapped in the response
+    /// cache, and the local ONNX embedder.
     pub async fn assemble(&self) -> Result<Assembled, String> {
         let dir = &self.store.data_dir;
         std::fs::create_dir_all(dir)
             .map_err(|error| format!("creating {}: {error}", dir.display()))?;
         let truth_path = dir.join("truth.db");
+        let graph_path = dir.join("graph.redb");
         let vector_uri = dir.join("vectors").to_string_lossy().to_string();
 
         let embedder: Arc<dyn Embedder> = Arc::new(
@@ -79,12 +82,9 @@ impl Config {
         let repair_kv = kv(&truth_path, &format!("{ns}:repair_queue")).await?;
 
         let graph = Arc::new(
-            TursoGraph::open(
-                truth_path.to_string_lossy().as_ref(),
-                &self.store.graph_scope,
-            )
-            .await
-            .map_err(|error| format!("opening graph: {error}"))?,
+            RedbGraph::open(&graph_path, &self.store.graph_scope)
+                .await
+                .map_err(|error| format!("opening graph: {error}"))?,
         );
 
         let cosine = self.query.cosine_better_than_threshold;
@@ -158,6 +158,7 @@ impl Config {
         Ok(Assembled {
             pipeline,
             truth_path,
+            graph_path,
             vector_uri,
             embedder,
         })

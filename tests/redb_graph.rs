@@ -1,8 +1,8 @@
-//! Turso graph contract: attribute merge, edges, degrees, adjacency ordering,
+//! Redb graph contract: attribute merge, edges, degrees, adjacency ordering,
 //! snapshot, scope isolation, persistence across reopen.
 
 use mnemo2u::core::traits::GraphStore;
-use mnemo2u::store::turso_graph::TursoGraph;
+use mnemo2u::store::redb_graph::RedbGraph;
 use serde_json::json;
 
 #[tokio::test]
@@ -10,13 +10,13 @@ async fn graph_semantics_and_persistence() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir
         .path()
-        .join("graph.db")
+        .join("graph.redb")
         .to_str()
         .expect("utf8 path")
         .to_string();
 
     {
-        let graph = TursoGraph::open(&path, "entity_graph").await.expect("open");
+        let graph = RedbGraph::open(&path, "entity_graph").await.expect("open");
 
         assert!(
             !graph.has_node("ACME").await.expect("has"),
@@ -155,7 +155,7 @@ async fn graph_semantics_and_persistence() {
     }
 
     // Reopening sees committed state.
-    let graph = TursoGraph::open(&path, "entity_graph")
+    let graph = RedbGraph::open(&path, "entity_graph")
         .await
         .expect("reopen");
     assert!(graph.has_node("ACME").await.expect("has"));
@@ -167,7 +167,7 @@ async fn graph_semantics_and_persistence() {
     assert_eq!(graph.snapshot().await.expect("snapshot").edges.len(), 3);
 
     // A different scope in the same file is empty.
-    let other = TursoGraph::open(&path, "other_graph")
+    let other = RedbGraph::open(&path, "other_graph")
         .await
         .expect("other scope");
     assert!(

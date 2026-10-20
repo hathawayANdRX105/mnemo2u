@@ -9,11 +9,14 @@
 
 [store]
 # One workspace = one directory. Moving or deleting it moves or deletes the
-# whole workspace (turso truth file + lancedb vector tables live inside).
+# whole workspace (turso truth file + redb graph file + lancedb vector tables
+# all live inside).
 data_dir = "./mnemo2u-data"
 # Namespace prefix for every table in that directory, so two workspaces can
 # share one directory without mixing rows.
 namespace = "default"
+# Graph adjacency scope label. `graph.redb` is a derived index — delete it and
+# rebuild it from the truth layer, the same rule the vector index follows.
 graph_scope = "default"
 
 [llm]

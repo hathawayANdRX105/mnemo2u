@@ -1,0 +1,544 @@
+//! Redb graph store — the durable graph arm.
+//!
+//! Two tables in one redb file, keyed so a scope never mixes rows:
+//! `nodes(scope, id) -> props_json` and `edges(scope, src, dst) -> props_json`.
+//!
+//! Why redb rather than turso adjacency tables or a graph engine:
+//! turso holds a single `Connection` behind a `tokio::Mutex`, so a graph call
+//! used to serialise against the KV/fact writes on the *same* connection. A
+//! separate redb file gives the graph its own lock, and the whole graph lives
+//! in memory — traversal, degrees and adjacency never touch the disk. kuzu was
+//! the other candidate and is out for good: the upstream repository is
+//! archived and its static link collides with `turso_core`'s vendored simsimd
+//! (`todo/01-nano-graphrag-port.md` §8.5 records the link evidence; §8.7
+//! records this switch).
+//!
+//! Semantics are `MemoryGraph`'s (`BaseGraphStorage`, base.py:117-186);
+//! `tests/redb_graph.rs` pins that contract.
+//!
+//! Derivative: the file can be dropped and rebuilt from the truth layer —
+//! the same "rebuildable derived index" rule the vector index follows.
+
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::{Arc, LazyLock, Mutex as StdMutex, Weak};
+
+use async_trait::async_trait;
+use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
+use serde_json::Value as Json;
+use tokio::sync::Mutex;
+
+use crate::core::traits::{GraphSnapshot, GraphStore, Result, StoreError};
+
+const NODES: TableDefinition<(&str, &str), &str> = TableDefinition::new("graph_node");
+const EDGES: TableDefinition<(&str, &str, &str), &str> = TableDefinition::new("graph_edge");
+
+/// Live graph files, keyed by path. The entry is a `Weak`: when the last
+/// handle to a file goes away the `Database` drops, the file lock is released
+/// and the next `open` loads the file from disk again — a real restart.
+/// While a handle is alive, a second `open` of the same path shares it
+/// instead of failing on redb's exclusive file lock.
+static REGISTRY: LazyLock<StdMutex<HashMap<String, Weak<SharedGraph>>>> =
+    LazyLock::new(|| StdMutex::new(HashMap::new()));
+
+/// In-memory adjacency for one scope: `src -> [(dst, seq)]` and
+/// `dst -> [(src, seq)]`, where `seq` is the edge's insertion order.
+///
+/// `MemoryGraph` keeps edges in insertion order and reports adjacency in that
+/// order; redb orders rows by key, so `seq` is what reproduces the reference
+/// ordering without a second table.
+#[derive(Clone, Default)]
+struct Adjacency {
+    out: HashMap<String, Vec<(String, u64)>>,
+    incoming: HashMap<String, Vec<(String, u64)>>,
+}
+
+impl Adjacency {
+    fn insert(&mut self, src: &str, dst: &str, seq: u64) {
+        self.out
+            .entry(src.to_string())
+            .or_default()
+            .push((dst.to_string(), seq));
+        self.incoming
+            .entry(dst.to_string())
+            .or_default()
+            .push((src.to_string(), seq));
+    }
+
+    fn remove(&mut self, src: &str, dst: &str) {
+        if let Some(rows) = self.out.get_mut(src) {
+            rows.retain(|(target, _)| target != dst);
+            if rows.is_empty() {
+                self.out.remove(src);
+            }
+        }
+        if let Some(rows) = self.incoming.get_mut(dst) {
+            rows.retain(|(source, _)| source != src);
+            if rows.is_empty() {
+                self.incoming.remove(dst);
+            }
+        }
+    }
+
+    fn remove_node(&mut self, node_id: &str) {
+        // Collect first: `remove` mutates both maps, so a borrow held across
+        // the loop would fight it.
+        let touching: Vec<(String, String)> = self
+            .out
+            .get(node_id)
+            .map(|rows| {
+                rows.iter()
+                    .map(|(dst, _)| (node_id.to_string(), dst.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .chain(
+                self.incoming
+                    .get(node_id)
+                    .map(|rows| {
+                        rows.iter()
+                            .map(|(src, _)| (src.clone(), node_id.to_string()))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default(),
+            )
+            .collect();
+        for (src, dst) in touching {
+            self.remove(&src, &dst);
+        }
+    }
+
+    fn degree(&self, node_id: &str) -> i64 {
+        let out = self.out.get(node_id).map_or(0, Vec::len);
+        let incoming = self.incoming.get(node_id).map_or(0, Vec::len);
+        (out + incoming) as i64
+    }
+
+    /// `(queried node, other)` pairs in `MemoryGraph` order: outgoing first,
+    /// then incoming, each in edge insertion order. The queried node always
+    /// comes first, whichever direction the edge runs.
+    fn neighbours(&self, node_id: &str) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        if let Some(rows) = self.out.get(node_id) {
+            let mut ordered = rows.clone();
+            ordered.sort_by_key(|(_, seq)| *seq);
+            out.extend(
+                ordered
+                    .into_iter()
+                    .map(|(dst, _)| (node_id.to_string(), dst)),
+            );
+        }
+        if let Some(rows) = self.incoming.get(node_id) {
+            let mut ordered = rows.clone();
+            ordered.sort_by_key(|(_, seq)| *seq);
+            out.extend(
+                ordered
+                    .into_iter()
+                    .map(|(src, _)| (node_id.to_string(), src)),
+            );
+        }
+        out
+    }
+}
+
+/// One scope's graph, in memory.
+#[derive(Clone, Default)]
+struct ScopeIndex {
+    /// Node id → attributes.
+    nodes: HashMap<String, Json>,
+    /// Node ids in insertion order, so `snapshot` reports nodes the way
+    /// `MemoryGraph` does rather than in key order.
+    node_order: Vec<String>,
+    /// `(src, dst)` → attributes.
+    edges: HashMap<(String, String), Json>,
+    adjacency: Adjacency,
+    /// Next edge sequence number for this scope.
+    next_seq: u64,
+}
+
+impl ScopeIndex {
+    fn note_node(&mut self, node_id: &str) {
+        if !self.nodes.contains_key(node_id) {
+            self.node_order.push(node_id.to_string());
+        }
+    }
+}
+
+/// The state of one graph file, shared by every handle on it.
+struct SharedGraph {
+    db: Arc<Database>,
+    /// One index per scope: the row keys are scoped, so the in-memory view has
+    /// to be scoped too.
+    scopes: Mutex<HashMap<String, ScopeIndex>>,
+}
+
+pub struct RedbGraph {
+    shared: Arc<SharedGraph>,
+    scope: String,
+}
+
+fn backend(error: impl std::fmt::Display) -> StoreError {
+    StoreError::Backend(error.to_string())
+}
+
+/// `MemoryGraph` merge: object attributes merge key-by-key (last write wins),
+/// anything else replaces wholesale.
+fn merge_attributes(existing: Option<&Json>, incoming: &Json) -> Json {
+    match (existing.and_then(Json::as_object), incoming.as_object()) {
+        (Some(old), Some(new)) => {
+            let mut merged = old.clone();
+            for (key, value) in new {
+                merged.insert(key.clone(), value.clone());
+            }
+            Json::Object(merged)
+        }
+        _ => incoming.clone(),
+    }
+}
+
+fn decode(raw: &str) -> Result<Json> {
+    serde_json::from_str(raw).map_err(backend)
+}
+
+/// Read every row of the file into per-scope in-memory indexes. One
+/// sequential pass over both tables; reopen cost is linear in graph size.
+fn load_state(db: &Database) -> Result<HashMap<String, ScopeIndex>> {
+    let mut scopes: HashMap<String, ScopeIndex> = HashMap::new();
+    let txn = db.begin_read().map_err(backend)?;
+
+    if let Ok(nodes) = txn.open_table(NODES) {
+        for entry in nodes.iter().map_err(backend)? {
+            let (key, value) = entry.map_err(backend)?;
+            let (scope, id) = key.value();
+            let index = scopes.entry(scope.to_string()).or_default();
+            index.note_node(id);
+            index.nodes.insert(id.to_string(), decode(value.value())?);
+        }
+    }
+
+    if let Ok(edges) = txn.open_table(EDGES) {
+        for entry in edges.iter().map_err(backend)? {
+            let (key, value) = entry.map_err(backend)?;
+            let (scope, src, dst) = key.value();
+            let index = scopes.entry(scope.to_string()).or_default();
+            let seq = index.next_seq;
+            index.next_seq += 1;
+            index.adjacency.insert(src, dst, seq);
+            index
+                .edges
+                .insert((src.to_string(), dst.to_string()), decode(value.value())?);
+        }
+    }
+
+    Ok(scopes)
+}
+
+impl RedbGraph {
+    /// Open (creating if needed) the graph file and load its in-memory index.
+    ///
+    /// redb holds an exclusive file lock for as long as the `Database` lives,
+    /// so a second `open` of the same path in the same process would fail
+    /// with `DatabaseAlreadyOpen`. The registry hands back the live instance
+    /// instead, so several handles can share one file the way the turso graph
+    /// did. When the last handle drops, the `Database` drops with it, the file
+    /// lock is released, and a later `open` loads the file from disk again —
+    /// a restart still reads what was committed, not a stale cache.
+    pub async fn open(path: impl AsRef<Path>, scope: impl Into<String>) -> Result<Self> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|error| backend(format!("creating {}: {error}", parent.display())))?;
+            }
+        }
+        let key = path.to_string_lossy().into_owned();
+
+        let shared = {
+            let registry = REGISTRY.lock().expect("graph registry lock");
+            registry.get(&key).and_then(Weak::upgrade)
+        };
+        let shared = match shared {
+            Some(shared) => shared,
+            None => {
+                let db = Arc::new(Database::create(path).map_err(backend)?);
+                let scopes = load_state(&db)?;
+                let shared = Arc::new(SharedGraph {
+                    db,
+                    scopes: Mutex::new(scopes),
+                });
+                REGISTRY
+                    .lock()
+                    .expect("graph registry lock")
+                    .insert(key, Arc::downgrade(&shared));
+                shared
+            }
+        };
+
+        Ok(Self {
+            shared,
+            scope: scope.into(),
+        })
+    }
+}
+
+#[async_trait]
+impl GraphStore for RedbGraph {
+    async fn has_node(&self, node_id: &str) -> Result<bool> {
+        let scopes = self.shared.scopes.lock().await;
+        Ok(scopes
+            .get(&self.scope)
+            .is_some_and(|index| index.nodes.contains_key(node_id)))
+    }
+
+    async fn has_edge(&self, src: &str, tgt: &str) -> Result<bool> {
+        let scopes = self.shared.scopes.lock().await;
+        Ok(scopes.get(&self.scope).is_some_and(|index| {
+            index
+                .edges
+                .contains_key(&(src.to_string(), tgt.to_string()))
+        }))
+    }
+
+    async fn get_node(&self, node_id: &str) -> Result<Option<Json>> {
+        let scopes = self.shared.scopes.lock().await;
+        Ok(scopes
+            .get(&self.scope)
+            .and_then(|index| index.nodes.get(node_id))
+            .cloned())
+    }
+
+    async fn get_nodes_batch(&self, ids: &[String]) -> Result<Vec<Option<Json>>> {
+        let scopes = self.shared.scopes.lock().await;
+        let index = scopes.get(&self.scope);
+        Ok(ids
+            .iter()
+            .map(|id| index.and_then(|index| index.nodes.get(id)).cloned())
+            .collect())
+    }
+
+    async fn get_edge(&self, src: &str, tgt: &str) -> Result<Option<Json>> {
+        let scopes = self.shared.scopes.lock().await;
+        Ok(scopes
+            .get(&self.scope)
+            .and_then(|index| index.edges.get(&(src.to_string(), tgt.to_string())))
+            .cloned())
+    }
+
+    async fn get_edges_batch(&self, pairs: &[(String, String)]) -> Result<Vec<Option<Json>>> {
+        let scopes = self.shared.scopes.lock().await;
+        let index = scopes.get(&self.scope);
+        Ok(pairs
+            .iter()
+            .map(|(src, tgt)| {
+                index
+                    .and_then(|index| index.edges.get(&(src.clone(), tgt.clone())))
+                    .cloned()
+            })
+            .collect())
+    }
+
+    async fn node_degree(&self, node_id: &str) -> Result<i64> {
+        let scopes = self.shared.scopes.lock().await;
+        Ok(scopes
+            .get(&self.scope)
+            .map_or(0, |index| index.adjacency.degree(node_id)))
+    }
+
+    async fn node_degrees_batch(&self, ids: &[String]) -> Result<Vec<i64>> {
+        let scopes = self.shared.scopes.lock().await;
+        let index = scopes.get(&self.scope);
+        Ok(ids
+            .iter()
+            .map(|id| index.map_or(0, |index| index.adjacency.degree(id)))
+            .collect())
+    }
+
+    async fn edge_degree(&self, src: &str, tgt: &str) -> Result<i64> {
+        Ok(self.node_degree(src).await? + self.node_degree(tgt).await?)
+    }
+
+    async fn edge_degrees_batch(&self, pairs: &[(String, String)]) -> Result<Vec<i64>> {
+        let mut out = Vec::with_capacity(pairs.len());
+        for (src, tgt) in pairs {
+            out.push(self.edge_degree(src, tgt).await?);
+        }
+        Ok(out)
+    }
+
+    async fn node_edges(&self, node_id: &str) -> Result<Option<Vec<(String, String)>>> {
+        let scopes = self.shared.scopes.lock().await;
+        let Some(index) = scopes.get(&self.scope) else {
+            return Ok(None);
+        };
+        if !index.nodes.contains_key(node_id) {
+            return Ok(None);
+        }
+        Ok(Some(index.adjacency.neighbours(node_id)))
+    }
+
+    async fn nodes_edges_batch(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<Option<Vec<(String, String)>>>> {
+        let scopes = self.shared.scopes.lock().await;
+        let index = scopes.get(&self.scope);
+        Ok(ids
+            .iter()
+            .map(|id| match index {
+                Some(index) if index.nodes.contains_key(id) => Some(index.adjacency.neighbours(id)),
+                _ => None,
+            })
+            .collect())
+    }
+
+    async fn upsert_node(&self, node_id: &str, data: Json) -> Result<()> {
+        let mut scopes = self.shared.scopes.lock().await;
+        let index = scopes.entry(self.scope.clone()).or_default();
+        let merged = merge_attributes(index.nodes.get(node_id), &data);
+        let payload = merged.to_string();
+
+        let txn = self.shared.db.begin_write().map_err(backend)?;
+        {
+            let mut table = txn.open_table(NODES).map_err(backend)?;
+            table
+                .insert((self.scope.as_str(), node_id), payload.as_str())
+                .map_err(backend)?;
+        }
+        txn.commit().map_err(backend)?;
+
+        index.note_node(node_id);
+        index.nodes.insert(node_id.to_string(), merged);
+        Ok(())
+    }
+
+    async fn upsert_nodes_batch(&self, rows: Vec<(String, Json)>) -> Result<()> {
+        for (id, data) in rows {
+            self.upsert_node(&id, data).await?;
+        }
+        Ok(())
+    }
+
+    async fn upsert_edge(&self, src: &str, tgt: &str, data: Json) -> Result<()> {
+        let mut scopes = self.shared.scopes.lock().await;
+        let index = scopes.entry(self.scope.clone()).or_default();
+        let key = (src.to_string(), tgt.to_string());
+        let merged = merge_attributes(index.edges.get(&key), &data);
+        let payload = merged.to_string();
+
+        let txn = self.shared.db.begin_write().map_err(backend)?;
+        {
+            let mut table = txn.open_table(EDGES).map_err(backend)?;
+            table
+                .insert((self.scope.as_str(), src, tgt), payload.as_str())
+                .map_err(backend)?;
+        }
+        txn.commit().map_err(backend)?;
+
+        if !index.edges.contains_key(&key) {
+            let seq = index.next_seq;
+            index.next_seq += 1;
+            index.adjacency.insert(src, tgt, seq);
+        }
+        index.edges.insert(key, merged);
+        Ok(())
+    }
+
+    async fn upsert_edges_batch(&self, rows: Vec<(String, String, Json)>) -> Result<()> {
+        for (src, tgt, data) in rows {
+            self.upsert_edge(&src, &tgt, data).await?;
+        }
+        Ok(())
+    }
+
+    async fn remove_node(&self, node_id: &str) -> Result<()> {
+        let mut scopes = self.shared.scopes.lock().await;
+        let index = scopes.entry(self.scope.clone()).or_default();
+        let touching = index.adjacency.neighbours(node_id);
+
+        let txn = self.shared.db.begin_write().map_err(backend)?;
+        {
+            let mut nodes = txn.open_table(NODES).map_err(backend)?;
+            nodes
+                .remove((self.scope.as_str(), node_id))
+                .map_err(backend)?;
+        }
+        {
+            let mut edges = txn.open_table(EDGES).map_err(backend)?;
+            for (src, dst) in &touching {
+                edges
+                    .remove((self.scope.as_str(), src.as_str(), dst.as_str()))
+                    .map_err(backend)?;
+            }
+        }
+        txn.commit().map_err(backend)?;
+
+        index.nodes.remove(node_id);
+        index.node_order.retain(|id| id != node_id);
+        for (src, dst) in touching {
+            index.edges.remove(&(src, dst));
+        }
+        index.adjacency.remove_node(node_id);
+        Ok(())
+    }
+
+    async fn remove_edge(&self, src: &str, tgt: &str) -> Result<()> {
+        let mut scopes = self.shared.scopes.lock().await;
+        let index = scopes.entry(self.scope.clone()).or_default();
+
+        let txn = self.shared.db.begin_write().map_err(backend)?;
+        {
+            let mut edges = txn.open_table(EDGES).map_err(backend)?;
+            edges
+                .remove((self.scope.as_str(), src, tgt))
+                .map_err(backend)?;
+        }
+        txn.commit().map_err(backend)?;
+
+        index.edges.remove(&(src.to_string(), tgt.to_string()));
+        index.adjacency.remove(src, tgt);
+        Ok(())
+    }
+
+    async fn snapshot(&self) -> Result<GraphSnapshot> {
+        // Built under the lock rather than from a clone: the snapshot is
+        // handed to community detection, so copying the whole index twice
+        // would double the cost of the one call that reads everything.
+        let scopes = self.shared.scopes.lock().await;
+        let Some(index) = scopes.get(&self.scope) else {
+            return Ok(GraphSnapshot {
+                nodes: Vec::new(),
+                edges: Vec::new(),
+            });
+        };
+        let nodes = index
+            .node_order
+            .iter()
+            .map(|id| (id.clone(), index.nodes.get(id).cloned().unwrap_or_default()))
+            .collect();
+        let mut ordered: Vec<(u64, String, String)> = Vec::with_capacity(index.edges.len());
+        for (src, out) in &index.adjacency.out {
+            for (dst, seq) in out {
+                ordered.push((*seq, src.clone(), dst.clone()));
+            }
+        }
+        ordered.sort_by_key(|(seq, _, _)| *seq);
+        let edges = ordered
+            .into_iter()
+            .map(|(_, src, dst)| {
+                let props = index
+                    .edges
+                    .get(&(src.clone(), dst.clone()))
+                    .cloned()
+                    .unwrap_or_default();
+                (src, dst, props)
+            })
+            .collect();
+        Ok(GraphSnapshot { nodes, edges })
+    }
+
+    async fn index_done(&self) -> Result<()> {
+        // Writes commit per call; nothing to flush.
+        Ok(())
+    }
+}
