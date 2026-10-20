@@ -3,7 +3,7 @@
 //! same files, then losing the derived vector index and rebuilding it from the
 //! truth layer.
 //!
-//! Everything runs against real backends (turso KV + turso graph + lancedb) with
+//! Everything runs against real backends (turso KV + redb graph + lancedb) with
 //! a routed mock LLM: no network, no real model download.
 
 use std::sync::Arc;
@@ -16,9 +16,9 @@ use mnemo2u::llm::mock::RoutedLlm;
 use mnemo2u::pipeline::{CommunityMode, InsertOutcome, Pipeline, PipelineOptions};
 use mnemo2u::store::lancedb::LanceVector;
 use mnemo2u::store::memory::MemoryKv;
+use mnemo2u::store::redb_graph::RedbGraph;
 use mnemo2u::store::repair::RepairQueue;
 use mnemo2u::store::turso::TursoKv;
-use mnemo2u::store::turso_graph::TursoGraph;
 use mnemo2u::Tokenizer;
 
 const DOCS: [&str; 2] = [
@@ -69,7 +69,7 @@ fn context_param(mode: QueryMode) -> QueryParam {
 }
 
 /// One "process": its own handles over the same files.
-async fn build(truth: &str, vectors: &str) -> Pipeline {
+async fn build(truth: &str, graph: &str, vectors: &str) -> Pipeline {
     let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new());
     Pipeline {
         full_docs: Arc::new(TursoKv::open(truth, "full_docs").await.expect("full_docs")),
@@ -83,11 +83,7 @@ async fn build(truth: &str, vectors: &str) -> Pipeline {
                 .await
                 .expect("community_reports"),
         ),
-        graph: Arc::new(
-            TursoGraph::open(truth, "entity_graph")
-                .await
-                .expect("graph"),
-        ),
+        graph: Arc::new(RedbGraph::open(graph, "entity_graph").await.expect("graph")),
         entities_vdb: Arc::new(
             LanceVector::open(vectors, "entities_vdb", embedder.clone(), 0.2)
                 .await
@@ -151,6 +147,12 @@ async fn durable_ingest_restart_and_rebuild() {
         .to_str()
         .expect("utf8")
         .to_string();
+    let graph = dir
+        .path()
+        .join("graph.redb")
+        .to_str()
+        .expect("utf8")
+        .to_string();
     let vectors = dir
         .path()
         .join("vectors")
@@ -159,7 +161,7 @@ async fn durable_ingest_restart_and_rebuild() {
         .to_string();
 
     // ---- process 1: ingest ------------------------------------------------
-    let first = build(&truth, &vectors).await;
+    let first = build(&truth, &graph, &vectors).await;
     for doc in DOCS {
         let outcome = first.insert(vec![doc.to_string()]).await.expect("insert");
         assert!(
@@ -181,7 +183,7 @@ async fn durable_ingest_restart_and_rebuild() {
         .is_empty());
 
     // ---- process 2: fresh handles over the same files ---------------------
-    let second = build(&truth, &vectors).await;
+    let second = build(&truth, &graph, &vectors).await;
 
     let naive = second
         .query("ACME cobots", &context_param(QueryMode::Naive))
@@ -212,7 +214,7 @@ async fn durable_ingest_restart_and_rebuild() {
 
     // ---- derived index loss → rebuild from truth --------------------------
     std::fs::remove_dir_all(&vectors).expect("drop the derived vector index");
-    let third = build(&truth, &vectors).await;
+    let third = build(&truth, &graph, &vectors).await;
     let rebuilt = third.rebuild_chunk_vectors().await.expect("rebuild");
     assert!(
         rebuilt >= 2,
