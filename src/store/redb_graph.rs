@@ -20,9 +20,7 @@
 //! the same "rebuildable derived index" rule the vector index follows.
 
 use std::collections::HashMap;
-use std::future::Future;
 use std::path::Path;
-use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex as StdMutex, Weak};
 
 use async_trait::async_trait;
@@ -167,13 +165,6 @@ impl ScopeIndex {
     }
 }
 
-/// The file-write half of a scope change, boxed so it can be awaited without
-/// the compiler having to prove a `Send` bound for a generic closure.
-///
-/// The future borrows the candidate index it is writing, so it carries that
-/// borrow's lifetime rather than being `'static`.
-type BoxedWrite<'a> = Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
-
 /// The state of one graph file, shared by every handle on it.
 struct SharedGraph {
     db: Arc<Database>,
@@ -251,6 +242,135 @@ fn load_state(db: &Database) -> Result<HashMap<String, Arc<ScopeIndex>>> {
         .collect())
 }
 
+/// One change to a scope's index, and the row it writes to the file.
+///
+/// The change is a value rather than a closure: a closure that captures the
+/// index it is about to write runs into the borrow checker's limits when it
+/// crosses an `async` boundary, and spelling the change out keeps the write
+/// path readable — each arm says which row it touches and what it merges.
+enum ScopeChange {
+    /// A node's attributes, merged key by key.
+    Node { id: String, data: Json },
+    /// An edge's attributes, merged key by key.
+    Edge {
+        src: String,
+        tgt: String,
+        data: Json,
+    },
+    /// A node and every edge touching it.
+    RemoveNode { id: String },
+    /// One directed edge.
+    RemoveEdge { src: String, tgt: String },
+}
+
+impl ScopeChange {
+    /// Apply the change to an index.
+    fn apply(&self, index: &mut ScopeIndex) {
+        match self {
+            ScopeChange::Node { id, data } => {
+                let merged = merge_attributes(index.nodes.get(id), data);
+                index.note_node(id);
+                index.nodes.insert(id.clone(), merged);
+            }
+            ScopeChange::Edge { src, tgt, data } => {
+                let key = (src.clone(), tgt.clone());
+                let merged = merge_attributes(index.edges.get(&key), data);
+                if !index.edges.contains_key(&key) {
+                    let seq = index.next_seq;
+                    index.next_seq += 1;
+                    index.adjacency.insert(src, tgt, seq);
+                }
+                index.edges.insert(key, merged);
+            }
+            ScopeChange::RemoveNode { id } => {
+                let touching = index.adjacency.neighbours(id);
+                index.nodes.remove(id);
+                index.node_order.retain(|known| known != id);
+                for (src, dst) in touching {
+                    index.edges.remove(&(src, dst));
+                }
+                index.adjacency.remove_node(id);
+            }
+            ScopeChange::RemoveEdge { src, tgt } => {
+                index.edges.remove(&(src.clone(), tgt.clone()));
+                index.adjacency.remove(src, tgt);
+            }
+        }
+    }
+
+    /// Write the row this change touches to the file.
+    async fn persist(&self, graph: &RedbGraph, candidate: &ScopeIndex) -> Result<()> {
+        let scope = graph.scope.as_str();
+        match self {
+            ScopeChange::Node { id, .. } => {
+                let payload = candidate
+                    .nodes
+                    .get(id)
+                    .map(|value| value.to_string())
+                    .unwrap_or_default();
+                let txn = graph.shared.db.begin_write().map_err(backend)?;
+                {
+                    let mut table = txn.open_table(NODES).map_err(backend)?;
+                    table
+                        .insert((scope, id.as_str()), payload.as_str())
+                        .map_err(backend)?;
+                }
+                txn.commit().map_err(backend)
+            }
+            ScopeChange::Edge { src, tgt, .. } => {
+                let payload = candidate
+                    .edges
+                    .get(&(src.clone(), tgt.clone()))
+                    .map(|value| value.to_string())
+                    .unwrap_or_default();
+                let txn = graph.shared.db.begin_write().map_err(backend)?;
+                {
+                    let mut table = txn.open_table(EDGES).map_err(backend)?;
+                    table
+                        .insert((scope, src.as_str(), tgt.as_str()), payload.as_str())
+                        .map_err(backend)?;
+                }
+                txn.commit().map_err(backend)
+            }
+            ScopeChange::RemoveNode { id } => {
+                // The rows to delete are the ones the *current* index knows
+                // about, so they are read here rather than from the
+                // candidate: a concurrent write may have added an edge this
+                // removal did not see, and the next attempt re-reads.
+                let current = {
+                    let scopes = graph.shared.scopes.read().await;
+                    RedbGraph::scope_index(&scopes, &graph.scope)
+                };
+                let touching = current.adjacency.neighbours(id);
+                let txn = graph.shared.db.begin_write().map_err(backend)?;
+                {
+                    let mut nodes = txn.open_table(NODES).map_err(backend)?;
+                    nodes.remove((scope, id.as_str())).map_err(backend)?;
+                }
+                {
+                    let mut edges = txn.open_table(EDGES).map_err(backend)?;
+                    for (src, dst) in &touching {
+                        edges
+                            .remove((scope, src.as_str(), dst.as_str()))
+                            .map_err(backend)?;
+                    }
+                }
+                txn.commit().map_err(backend)
+            }
+            ScopeChange::RemoveEdge { src, tgt } => {
+                let txn = graph.shared.db.begin_write().map_err(backend)?;
+                {
+                    let mut edges = txn.open_table(EDGES).map_err(backend)?;
+                    edges
+                        .remove((scope, src.as_str(), tgt.as_str()))
+                        .map_err(backend)?;
+                }
+                txn.commit().map_err(backend)
+            }
+        }
+    }
+}
+
 impl RedbGraph {
     /// A reader's view of the scopes: one cheap `Arc` clone, then no lock at
     /// all.
@@ -291,18 +411,14 @@ impl RedbGraph {
     /// index holds, so two writers touching different keys of the same node
     /// both land, and two writers touching the same key end with the one
     /// that committed last.
-    async fn write_scope(
-        &self,
-        mutate: impl Fn(&mut ScopeIndex),
-        persist: impl for<'a> Fn(&'a ScopeIndex) -> BoxedWrite<'a>,
-    ) -> Result<()> {
+    async fn write_scope(&self, change: ScopeChange) -> Result<()> {
         for _ in 0..8 {
             let current = {
                 let scopes = self.shared.scopes.read().await;
-                Self::scope_index(&*scopes, &self.scope)
+                Self::scope_index(&scopes, &self.scope)
             };
             let mut candidate = (*current).clone();
-            mutate(&mut candidate);
+            change.apply(&mut candidate);
             if candidate == *current {
                 // Nothing changed: no row to write, no pointer to swap.
                 return Ok(());
@@ -310,10 +426,10 @@ impl RedbGraph {
 
             // The file write is outside every lock: redb serialises writers,
             // and a reader must not queue behind one.
-            persist(&candidate).await?;
+            change.persist(self, &candidate).await?;
 
             let mut scopes = self.shared.scopes.write().await;
-            let latest = Self::scope_index(&*scopes, &self.scope);
+            let latest = Self::scope_index(&scopes, &self.scope);
             if latest == current {
                 // The new map is a plain `HashMap` — the `Arc` wraps the whole
                 // map, not each scope.
@@ -479,37 +595,10 @@ impl GraphStore for RedbGraph {
     }
 
     async fn upsert_node(&self, node_id: &str, data: Json) -> Result<()> {
-        let scope = self.scope.clone();
-        let node_id = node_id.to_string();
-        self.write_scope(
-            |index| {
-                let merged = merge_attributes(index.nodes.get(&node_id), &data);
-                index.note_node(&node_id);
-                index.nodes.insert(node_id.clone(), merged);
-            },
-            |candidate| {
-                // The closure is called more than once (a conflict sends it
-                // round again), so it borrows what it needs rather than
-                // moving it out.
-                let scope = scope.clone();
-                let node_id = node_id.clone();
-                Box::pin(async move {
-                    let payload = candidate
-                        .nodes
-                        .get(&node_id)
-                        .map(|value| value.to_string())
-                        .unwrap_or_default();
-                    let txn = self.shared.db.begin_write().map_err(backend)?;
-                    {
-                        let mut table = txn.open_table(NODES).map_err(backend)?;
-                        table
-                            .insert((scope.as_str(), node_id.as_str()), payload.as_str())
-                            .map_err(backend)?;
-                    }
-                    txn.commit().map_err(backend)
-                })
-            },
-        )
+        self.write_scope(ScopeChange::Node {
+            id: node_id.to_string(),
+            data,
+        })
         .await
     }
 
@@ -521,44 +610,11 @@ impl GraphStore for RedbGraph {
     }
 
     async fn upsert_edge(&self, src: &str, tgt: &str, data: Json) -> Result<()> {
-        let scope = self.scope.clone();
-        let src = src.to_string();
-        let tgt = tgt.to_string();
-        self.write_scope(
-            |index| {
-                let key = (src.clone(), tgt.clone());
-                let merged = merge_attributes(index.edges.get(&key), &data);
-                if !index.edges.contains_key(&key) {
-                    let seq = index.next_seq;
-                    index.next_seq += 1;
-                    index.adjacency.insert(&src, &tgt, seq);
-                }
-                index.edges.insert(key, merged);
-            },
-            |candidate| {
-                let scope = scope.clone();
-                let src = src.clone();
-                let tgt = tgt.clone();
-                Box::pin(async move {
-                    let payload = candidate
-                        .edges
-                        .get(&(src.clone(), tgt.clone()))
-                        .map(|value| value.to_string())
-                        .unwrap_or_default();
-                    let txn = self.shared.db.begin_write().map_err(backend)?;
-                    {
-                        let mut table = txn.open_table(EDGES).map_err(backend)?;
-                        table
-                            .insert(
-                                (scope.as_str(), src.as_str(), tgt.as_str()),
-                                payload.as_str(),
-                            )
-                            .map_err(backend)?;
-                    }
-                    txn.commit().map_err(backend)
-                })
-            },
-        )
+        self.write_scope(ScopeChange::Edge {
+            src: src.to_string(),
+            tgt: tgt.to_string(),
+            data,
+        })
         .await
     }
 
@@ -570,78 +626,16 @@ impl GraphStore for RedbGraph {
     }
 
     async fn remove_node(&self, node_id: &str) -> Result<()> {
-        let scope = self.scope.clone();
-        let node_id = node_id.to_string();
-        self.write_scope(
-            |index| {
-                let touching = index.adjacency.neighbours(&node_id);
-                index.nodes.remove(&node_id);
-                index.node_order.retain(|id| id != &node_id);
-                for (src, dst) in touching {
-                    index.edges.remove(&(src, dst));
-                }
-                index.adjacency.remove_node(&node_id);
-            },
-            |_candidate| {
-                let scope = scope.clone();
-                let node_id = node_id.clone();
-                Box::pin(async move {
-                    // The rows to delete are the ones the *current* index
-                    // knows about, so they are read here rather than from
-                    // the candidate: a concurrent write may have added an
-                    // edge this removal did not see, and the next attempt
-                    // re-reads.
-                    let current = {
-                        let scopes = self.shared.scopes.read().await;
-                        Self::scope_index(&*scopes, &self.scope)
-                    };
-                    let touching = current.adjacency.neighbours(&node_id);
-                    let txn = self.shared.db.begin_write().map_err(backend)?;
-                    {
-                        let mut nodes = txn.open_table(NODES).map_err(backend)?;
-                        nodes
-                            .remove((scope.as_str(), node_id.as_str()))
-                            .map_err(backend)?;
-                    }
-                    {
-                        let mut edges = txn.open_table(EDGES).map_err(backend)?;
-                        for (src, dst) in &touching {
-                            edges
-                                .remove((scope.as_str(), src.as_str(), dst.as_str()))
-                                .map_err(backend)?;
-                        }
-                    }
-                    txn.commit().map_err(backend)
-                })
-            },
-        )
+        self.write_scope(ScopeChange::RemoveNode {
+            id: node_id.to_string(),
+        })
         .await
     }
     async fn remove_edge(&self, src: &str, tgt: &str) -> Result<()> {
-        let scope = self.scope.clone();
-        let src = src.to_string();
-        let tgt = tgt.to_string();
-        self.write_scope(
-            |index| {
-                index.edges.remove(&(src.clone(), tgt.clone()));
-                index.adjacency.remove(&src, &tgt);
-            },
-            |_candidate| {
-                let scope = scope.clone();
-                let src = src.clone();
-                let tgt = tgt.clone();
-                Box::pin(async move {
-                    let txn = self.shared.db.begin_write().map_err(backend)?;
-                    {
-                        let mut edges = txn.open_table(EDGES).map_err(backend)?;
-                        edges
-                            .remove((scope.as_str(), src.as_str(), tgt.as_str()))
-                            .map_err(backend)?;
-                    }
-                    txn.commit().map_err(backend)
-                })
-            },
-        )
+        self.write_scope(ScopeChange::RemoveEdge {
+            src: src.to_string(),
+            tgt: tgt.to_string(),
+        })
         .await
     }
     async fn snapshot(&self) -> Result<GraphSnapshot> {
