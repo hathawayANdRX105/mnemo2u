@@ -307,7 +307,9 @@ impl RedbGraph {
             let mut scopes = self.shared.scopes.write().await;
             let latest = Self::scope_index(&*scopes, &self.scope);
             if latest == current {
-                let mut next = (*scopes).clone();
+                // The new map is a plain `HashMap` — the `Arc` wraps the whole
+                // map, not each scope.
+                let mut next: HashMap<String, Arc<ScopeIndex>> = (**scopes).clone();
                 next.insert(self.scope.clone(), Arc::new(candidate));
                 *scopes = Arc::new(next);
                 return Ok(());
