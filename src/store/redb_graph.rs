@@ -169,7 +169,10 @@ impl ScopeIndex {
 
 /// The file-write half of a scope change, boxed so it can be awaited without
 /// the compiler having to prove a `Send` bound for a generic closure.
-type BoxedWrite = Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
+///
+/// The future borrows the candidate index it is writing, so it carries that
+/// borrow's lifetime rather than being `'static`.
+type BoxedWrite<'a> = Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
 
 /// The state of one graph file, shared by every handle on it.
 struct SharedGraph {
@@ -291,7 +294,7 @@ impl RedbGraph {
     async fn write_scope(
         &self,
         mutate: impl Fn(&mut ScopeIndex),
-        persist: impl Fn(&ScopeIndex) -> BoxedWrite,
+        persist: impl for<'a> Fn(&'a ScopeIndex) -> BoxedWrite<'a>,
     ) -> Result<()> {
         for _ in 0..8 {
             let current = {
