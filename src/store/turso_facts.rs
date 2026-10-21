@@ -144,6 +144,42 @@ impl FactStore for TursoFactStore {
         Ok(())
     }
 
+    async fn put_many(&self, facts: &[Fact]) -> Result<()> {
+        if facts.is_empty() {
+            return Ok(());
+        }
+        let conn = self.conn.lock().await;
+        // One transaction for the whole batch: the same atomicity the
+        // single-row path gets from autocommit, without a commit per fact.
+        conn.execute_batch("BEGIN").await.map_err(backend)?;
+        for fact in facts {
+            let inserted = conn
+                .execute(
+                    "INSERT OR REPLACE INTO facts
+                        (workspace_id, session_id, task_id, fact_id, body, superseded_by, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        fact.scope.workspace_id.clone(),
+                        norm(&fact.scope.session_id),
+                        norm(&fact.scope.task_id),
+                        fact.id.0.clone(),
+                        serde_json::to_string(fact).map_err(backend)?,
+                        fact.superseded_by.clone().map(|id| id.0),
+                        fact.revision
+                    ],
+                )
+                .await;
+            if let Err(error) = inserted {
+                // The batch is all-or-nothing: a half-written batch would
+                // leave the store holding some of a correction and not the
+                // rest, with no way to tell which.
+                let _ = conn.execute_batch("ROLLBACK").await;
+                return Err(backend(error));
+            }
+        }
+        conn.execute_batch("COMMIT").await.map_err(backend)
+    }
+
     async fn get(&self, scope: &ScopeKey, id: &FactId) -> Result<Option<Fact>> {
         let conn = self.conn.lock().await;
         let (clause, mut scope_params) = Self::scope_clause(scope, 1);
