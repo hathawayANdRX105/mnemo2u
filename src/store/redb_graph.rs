@@ -485,6 +485,11 @@ impl GraphStore for RedbGraph {
                 index.nodes.insert(node_id.clone(), merged);
             },
             |candidate| {
+                // The closure is called more than once (a conflict sends it
+                // round again), so it borrows what it needs rather than
+                // moving it out.
+                let scope = scope.clone();
+                let node_id = node_id.clone();
                 Box::pin(async move {
                     let payload = candidate
                         .nodes
@@ -528,6 +533,9 @@ impl GraphStore for RedbGraph {
                 index.edges.insert(key, merged);
             },
             |candidate| {
+                let scope = scope.clone();
+                let src = src.clone();
+                let tgt = tgt.clone();
                 Box::pin(async move {
                     let payload = candidate
                         .edges
@@ -572,6 +580,8 @@ impl GraphStore for RedbGraph {
                 index.adjacency.remove_node(&node_id);
             },
             |_candidate| {
+                let scope = scope.clone();
+                let node_id = node_id.clone();
                 Box::pin(async move {
                     // The rows to delete are the ones the *current* index
                     // knows about, so they are read here rather than from
@@ -614,6 +624,9 @@ impl GraphStore for RedbGraph {
                 index.adjacency.remove(&src, &tgt);
             },
             |_candidate| {
+                let scope = scope.clone();
+                let src = src.clone();
+                let tgt = tgt.clone();
                 Box::pin(async move {
                     let txn = self.shared.db.begin_write().map_err(backend)?;
                     {
