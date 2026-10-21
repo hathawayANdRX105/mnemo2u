@@ -291,7 +291,7 @@ impl RedbGraph {
         for _ in 0..8 {
             let current = {
                 let scopes = self.shared.scopes.read().await;
-                Self::scope_index(&scopes, &self.scope)
+                Self::scope_index(&*scopes, &self.scope)
             };
             let mut candidate = (*current).clone();
             mutate(&mut candidate);
@@ -305,7 +305,7 @@ impl RedbGraph {
             persist(&candidate).await?;
 
             let mut scopes = self.shared.scopes.write().await;
-            let latest = Self::scope_index(&scopes, &self.scope);
+            let latest = Self::scope_index(&*scopes, &self.scope);
             if latest == current {
                 let mut next = (*scopes).clone();
                 next.insert(self.scope.clone(), Arc::new(candidate));
@@ -567,7 +567,7 @@ impl GraphStore for RedbGraph {
                 // removal did not see, and the next attempt re-reads.
                 let current = {
                     let scopes = self.shared.scopes.read().await;
-                    Self::scope_index(&scopes, &self.scope)
+                    Self::scope_index(&*scopes, &self.scope)
                 };
                 let touching = current.adjacency.neighbours(&node_id);
                 let txn = self.shared.db.begin_write().map_err(backend)?;
