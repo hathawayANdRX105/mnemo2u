@@ -20,6 +20,7 @@
 //! the same "rebuildable derived index" rule the vector index follows.
 
 use std::collections::HashMap;
+use std::ops::AsyncFn;
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex as StdMutex, Weak};
 
@@ -47,7 +48,7 @@ static REGISTRY: LazyLock<StdMutex<HashMap<String, Weak<SharedGraph>>>> =
 /// `MemoryGraph` keeps edges in insertion order and reports adjacency in that
 /// order; redb orders rows by key, so `seq` is what reproduces the reference
 /// ordering without a second table.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 struct Adjacency {
     out: HashMap<String, Vec<(String, u64)>>,
     incoming: HashMap<String, Vec<(String, u64)>>,
@@ -285,7 +286,7 @@ impl RedbGraph {
     async fn write_scope(
         &self,
         mutate: impl Fn(&mut ScopeIndex),
-        persist: impl Fn(&ScopeIndex) -> Result<()>,
+        persist: impl AsyncFn(&ScopeIndex) -> Result<()>,
     ) -> Result<()> {
         for _ in 0..8 {
             let current = {
@@ -301,11 +302,11 @@ impl RedbGraph {
 
             // The file write is outside every lock: redb serialises writers,
             // and a reader must not queue behind one.
-            persist(&candidate)?;
+            persist(&candidate).await?;
 
             let mut scopes = self.shared.scopes.write().await;
             let latest = Self::scope_index(&scopes, &self.scope);
-            if *latest == *current {
+            if latest == current {
                 let mut next = (*scopes).clone();
                 next.insert(self.scope.clone(), Arc::new(candidate));
                 *scopes = Arc::new(next);
@@ -476,7 +477,7 @@ impl GraphStore for RedbGraph {
                 index.note_node(&node_id);
                 index.nodes.insert(node_id.clone(), merged);
             },
-            |candidate| {
+            async |candidate| {
                 let payload = candidate
                     .nodes
                     .get(&node_id)
@@ -517,7 +518,7 @@ impl GraphStore for RedbGraph {
                 }
                 index.edges.insert(key, merged);
             },
-            |candidate| {
+            async |candidate| {
                 let payload = candidate
                     .edges
                     .get(&(src.clone(), tgt.clone()))
@@ -559,7 +560,7 @@ impl GraphStore for RedbGraph {
                 }
                 index.adjacency.remove_node(&node_id);
             },
-            |_candidate| {
+            async |_candidate| {
                 // The rows to delete are the ones the *current* index knows
                 // about, so they are read here rather than from the
                 // candidate: a concurrent write may have added an edge this
@@ -598,7 +599,7 @@ impl GraphStore for RedbGraph {
                 index.edges.remove(&(src.clone(), tgt.clone()));
                 index.adjacency.remove(&src, &tgt);
             },
-            |_candidate| {
+            async |_candidate| {
                 let txn = self.shared.db.begin_write().map_err(backend)?;
                 {
                     let mut edges = txn.open_table(EDGES).map_err(backend)?;
