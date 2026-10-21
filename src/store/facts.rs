@@ -94,6 +94,19 @@ impl FactStore for MemoryFactStore {
         Ok(())
     }
 
+    async fn put_many(&self, facts: &[Fact]) -> Result<()> {
+        // The in-memory store has no transaction to speak of: one lock, one
+        // pass. The batch is still applied as a unit, so a caller that
+        // writes many facts does not release and retake the lock per fact.
+        let mut inner = self.inner.write().expect("fact store lock");
+        for fact in facts {
+            inner
+                .rows
+                .insert((fact.scope.clone(), fact.id.clone()), fact.clone());
+        }
+        Ok(())
+    }
+
     async fn get(&self, scope: &ScopeKey, id: &FactId) -> Result<Option<Fact>> {
         let inner = self.inner.read().expect("fact store lock");
         Ok(inner.rows.get(&(scope.clone(), id.clone())).cloned())

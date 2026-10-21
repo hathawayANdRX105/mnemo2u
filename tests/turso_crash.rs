@@ -147,6 +147,21 @@ impl FactStore for FaultyFactPut {
         self.inner.put(fact).await
     }
 
+    async fn put_many(&self, facts: &[mnemo2u::core::types::Fact]) -> StoreResult<()> {
+        // The armed window counts calls, and a batch is a run of calls: the
+        // same window that fails the third `put` must fail the third fact
+        // of a batch too. Otherwise the crash-recovery test would only
+        // cover the single-row path.
+        for _ in facts {
+            if self.put_window.failing() {
+                return Err(StoreError::Backend(
+                    "injected fact commit failure".to_string(),
+                ));
+            }
+        }
+        self.inner.put_many(facts).await
+    }
+
     async fn get(
         &self,
         key: &ScopeKey,

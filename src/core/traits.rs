@@ -137,6 +137,16 @@ pub trait Embedder: Send + Sync {
 #[async_trait]
 pub trait FactStore: Send + Sync {
     async fn put(&self, fact: &Fact) -> Result<()>;
+    /// 批量写：整批在一个事务里提交，要么全成要么全不成。
+    ///
+    /// The single-row [`Self::put`] commits per call, so writing a batch
+    /// through it costs one commit per fact. On a single-writer engine that
+    /// is a queue of transactions, and one slow row holds up the rest.
+    /// A batch is one transaction: the same rows, the same outcome.
+    ///
+    /// A repeated id inside the batch behaves as it would under repeated
+    /// `put` calls — the last write wins.
+    async fn put_many(&self, facts: &[Fact]) -> Result<()>;
     async fn get(&self, scope: &ScopeKey, id: &FactId) -> Result<Option<Fact>>;
     /// Mark `old` superseded by `new` (the bi-temporal correction path): the
     /// old row keeps its history but leaves `search` results.
