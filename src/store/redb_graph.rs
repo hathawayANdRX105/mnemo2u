@@ -256,7 +256,7 @@ impl RedbGraph {
 
     /// This handle's scope index, or an empty view when the scope has no rows
     /// yet.
-    fn scope_index(scopes: &HashMap<String, Arc<ScopeIndex>>, scope: &str) -> Arc<ScopeIndex> {
+    fn scope_index(scopes: &Arc<HashMap<String, Arc<ScopeIndex>>>, scope: &str) -> Arc<ScopeIndex> {
         scopes
             .get(scope)
             .cloned()
