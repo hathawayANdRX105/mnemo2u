@@ -20,8 +20,9 @@
 //! the same "rebuildable derived index" rule the vector index follows.
 
 use std::collections::HashMap;
-use std::ops::AsyncFn;
+use std::future::Future;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex as StdMutex, Weak};
 
 use async_trait::async_trait;
@@ -166,6 +167,10 @@ impl ScopeIndex {
     }
 }
 
+/// The file-write half of a scope change, boxed so it can be awaited without
+/// the compiler having to prove a `Send` bound for a generic closure.
+type BoxedWrite = Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
+
 /// The state of one graph file, shared by every handle on it.
 struct SharedGraph {
     db: Arc<Database>,
@@ -286,7 +291,7 @@ impl RedbGraph {
     async fn write_scope(
         &self,
         mutate: impl Fn(&mut ScopeIndex),
-        persist: impl AsyncFn(&ScopeIndex) -> Result<()>,
+        persist: impl Fn(&ScopeIndex) -> BoxedWrite,
     ) -> Result<()> {
         for _ in 0..8 {
             let current = {
@@ -479,20 +484,22 @@ impl GraphStore for RedbGraph {
                 index.note_node(&node_id);
                 index.nodes.insert(node_id.clone(), merged);
             },
-            async |candidate| {
-                let payload = candidate
-                    .nodes
-                    .get(&node_id)
-                    .map(|value| value.to_string())
-                    .unwrap_or_default();
-                let txn = self.shared.db.begin_write().map_err(backend)?;
-                {
-                    let mut table = txn.open_table(NODES).map_err(backend)?;
-                    table
-                        .insert((scope.as_str(), node_id.as_str()), payload.as_str())
-                        .map_err(backend)?;
-                }
-                txn.commit().map_err(backend)
+            |candidate| {
+                Box::pin(async move {
+                    let payload = candidate
+                        .nodes
+                        .get(&node_id)
+                        .map(|value| value.to_string())
+                        .unwrap_or_default();
+                    let txn = self.shared.db.begin_write().map_err(backend)?;
+                    {
+                        let mut table = txn.open_table(NODES).map_err(backend)?;
+                        table
+                            .insert((scope.as_str(), node_id.as_str()), payload.as_str())
+                            .map_err(backend)?;
+                    }
+                    txn.commit().map_err(backend)
+                })
             },
         )
         .await
@@ -520,23 +527,25 @@ impl GraphStore for RedbGraph {
                 }
                 index.edges.insert(key, merged);
             },
-            async |candidate| {
-                let payload = candidate
-                    .edges
-                    .get(&(src.clone(), tgt.clone()))
-                    .map(|value| value.to_string())
-                    .unwrap_or_default();
-                let txn = self.shared.db.begin_write().map_err(backend)?;
-                {
-                    let mut table = txn.open_table(EDGES).map_err(backend)?;
-                    table
-                        .insert(
-                            (scope.as_str(), src.as_str(), tgt.as_str()),
-                            payload.as_str(),
-                        )
-                        .map_err(backend)?;
-                }
-                txn.commit().map_err(backend)
+            |candidate| {
+                Box::pin(async move {
+                    let payload = candidate
+                        .edges
+                        .get(&(src.clone(), tgt.clone()))
+                        .map(|value| value.to_string())
+                        .unwrap_or_default();
+                    let txn = self.shared.db.begin_write().map_err(backend)?;
+                    {
+                        let mut table = txn.open_table(EDGES).map_err(backend)?;
+                        table
+                            .insert(
+                                (scope.as_str(), src.as_str(), tgt.as_str()),
+                                payload.as_str(),
+                            )
+                            .map_err(backend)?;
+                    }
+                    txn.commit().map_err(backend)
+                })
             },
         )
         .await
@@ -562,32 +571,35 @@ impl GraphStore for RedbGraph {
                 }
                 index.adjacency.remove_node(&node_id);
             },
-            async |_candidate| {
-                // The rows to delete are the ones the *current* index knows
-                // about, so they are read here rather than from the
-                // candidate: a concurrent write may have added an edge this
-                // removal did not see, and the next attempt re-reads.
-                let current = {
-                    let scopes = self.shared.scopes.read().await;
-                    Self::scope_index(&*scopes, &self.scope)
-                };
-                let touching = current.adjacency.neighbours(&node_id);
-                let txn = self.shared.db.begin_write().map_err(backend)?;
-                {
-                    let mut nodes = txn.open_table(NODES).map_err(backend)?;
-                    nodes
-                        .remove((scope.as_str(), node_id.as_str()))
-                        .map_err(backend)?;
-                }
-                {
-                    let mut edges = txn.open_table(EDGES).map_err(backend)?;
-                    for (src, dst) in &touching {
-                        edges
-                            .remove((scope.as_str(), src.as_str(), dst.as_str()))
+            |_candidate| {
+                Box::pin(async move {
+                    // The rows to delete are the ones the *current* index
+                    // knows about, so they are read here rather than from
+                    // the candidate: a concurrent write may have added an
+                    // edge this removal did not see, and the next attempt
+                    // re-reads.
+                    let current = {
+                        let scopes = self.shared.scopes.read().await;
+                        Self::scope_index(&*scopes, &self.scope)
+                    };
+                    let touching = current.adjacency.neighbours(&node_id);
+                    let txn = self.shared.db.begin_write().map_err(backend)?;
+                    {
+                        let mut nodes = txn.open_table(NODES).map_err(backend)?;
+                        nodes
+                            .remove((scope.as_str(), node_id.as_str()))
                             .map_err(backend)?;
                     }
-                }
-                txn.commit().map_err(backend)
+                    {
+                        let mut edges = txn.open_table(EDGES).map_err(backend)?;
+                        for (src, dst) in &touching {
+                            edges
+                                .remove((scope.as_str(), src.as_str(), dst.as_str()))
+                                .map_err(backend)?;
+                        }
+                    }
+                    txn.commit().map_err(backend)
+                })
             },
         )
         .await
@@ -601,15 +613,17 @@ impl GraphStore for RedbGraph {
                 index.edges.remove(&(src.clone(), tgt.clone()));
                 index.adjacency.remove(&src, &tgt);
             },
-            async |_candidate| {
-                let txn = self.shared.db.begin_write().map_err(backend)?;
-                {
-                    let mut edges = txn.open_table(EDGES).map_err(backend)?;
-                    edges
-                        .remove((scope.as_str(), src.as_str(), tgt.as_str()))
-                        .map_err(backend)?;
-                }
-                txn.commit().map_err(backend)
+            |_candidate| {
+                Box::pin(async move {
+                    let txn = self.shared.db.begin_write().map_err(backend)?;
+                    {
+                        let mut edges = txn.open_table(EDGES).map_err(backend)?;
+                        edges
+                            .remove((scope.as_str(), src.as_str(), tgt.as_str()))
+                            .map_err(backend)?;
+                    }
+                    txn.commit().map_err(backend)
+                })
             },
         )
         .await
