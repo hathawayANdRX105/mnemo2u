@@ -152,7 +152,7 @@ impl FactStore for FaultyFactPut {
         // same window that fails the third `put` must fail the third fact
         // of a batch too. Otherwise the crash-recovery test would only
         // cover the single-row path.
-        for fact in facts {
+        for _ in facts {
             if self.put_window.failing() {
                 return Err(StoreError::Backend(
                     "injected fact commit failure".to_string(),
