@@ -1,0 +1,306 @@
+{
+  "generated_by": "MNEMO_BLESS_LADDER=1 cargo test --test eval_ladder",
+  "ladder": {
+    "criteria_id": "canon-judgments-en-zh",
+    "criteria_snapshot_id": "crit-4edc048acbe48b9ce6328909426c12dd",
+    "curve": [
+      {
+        "accuracy_delta": -0.17391304347826086,
+        "added": [
+          "judge-nano"
+        ],
+        "budget_delta_ram_mb": 200,
+        "ece_delta": 0.21956521739130452,
+        "footprint_delta_mb": 40,
+        "from_tier": "cloud",
+        "gain_per_mb": -0.004347826086956522,
+        "removed": [
+          "judge-cloud"
+        ],
+        "to_tier": "local-nano",
+        "visible": true
+      },
+      {
+        "accuracy_delta": 0.13043478260869568,
+        "added": [
+          "judge-mini"
+        ],
+        "budget_delta_ram_mb": 100,
+        "ece_delta": -0.15086956521739137,
+        "footprint_delta_mb": 60,
+        "from_tier": "local-nano",
+        "gain_per_mb": 0.0021739130434782613,
+        "removed": [
+          "judge-nano"
+        ],
+        "to_tier": "local-mini",
+        "visible": true
+      },
+      {
+        "accuracy_delta": 0.0,
+        "added": [
+          "judge-mini-fp16"
+        ],
+        "budget_delta_ram_mb": 100,
+        "ece_delta": 0.0,
+        "footprint_delta_mb": 80,
+        "from_tier": "local-mini",
+        "gain_per_mb": 0.0,
+        "removed": [
+          "judge-mini"
+        ],
+        "to_tier": "local-mini-fp16",
+        "visible": false
+      }
+    ],
+    "ladder_id": "reference-ladder",
+    "ladder_snapshot_id": "ladder-60225c747f46d0d5c13faf4478fab4fd",
+    "tiers": [
+      {
+        "added": [],
+        "budget": {
+          "disk_mb": 0,
+          "ram_mb": 0
+        },
+        "components": [
+          {
+            "component_id": "judge-cloud",
+            "disk_mb": 0,
+            "kind": "judge",
+            "ram_mb": 0
+          }
+        ],
+        "footprint_disk_mb": 0,
+        "footprint_ram_mb": 0,
+        "label": "remote judge endpoint",
+        "metrics": {
+          "abstain_rate": 0.07692307692307693,
+          "abstained": 2,
+          "accuracy": 1.0,
+          "answered": 24,
+          "compared": 8,
+          "decisions": 26,
+          "ece": 0.04999999999999982,
+          "flip_rate": 0.0,
+          "flips": 0,
+          "latency": {
+            "p50_us": 28,
+            "p95_us": 47,
+            "samples": 26
+          },
+          "peak_rss_bytes": null,
+          "per_op": {
+            "choice": {
+              "accuracy": 1.0,
+              "answered": 8,
+              "decisions": 8,
+              "ece": 0.060000000000000275
+            },
+            "noul": {
+              "accuracy": 1.0,
+              "answered": 8,
+              "decisions": 10,
+              "ece": 0.030000000000000138
+            },
+            "score": {
+              "accuracy": 1.0,
+              "answered": 8,
+              "decisions": 8,
+              "ece": 0.060000000000000275
+            }
+          }
+        },
+        "removed": [],
+        "tier_id": "cloud"
+      },
+      {
+        "added": [
+          "judge-nano"
+        ],
+        "budget": {
+          "disk_mb": 200,
+          "ram_mb": 200
+        },
+        "components": [
+          {
+            "component_id": "judge-nano",
+            "disk_mb": 40,
+            "kind": "judge",
+            "ram_mb": 40
+          }
+        ],
+        "footprint_disk_mb": 40,
+        "footprint_ram_mb": 40,
+        "label": "small local judge",
+        "metrics": {
+          "abstain_rate": 0.1153846153846154,
+          "abstained": 3,
+          "accuracy": 0.8260869565217391,
+          "answered": 23,
+          "compared": 8,
+          "decisions": 26,
+          "ece": 0.26956521739130435,
+          "flip_rate": 0.25,
+          "flips": 2,
+          "latency": {
+            "p50_us": 29,
+            "p95_us": 62,
+            "samples": 26
+          },
+          "peak_rss_bytes": null,
+          "per_op": {
+            "choice": {
+              "accuracy": 0.875,
+              "answered": 8,
+              "decisions": 8,
+              "ece": 0.325
+            },
+            "noul": {
+              "accuracy": 0.75,
+              "answered": 8,
+              "decisions": 10,
+              "ece": 0.2125
+            },
+            "score": {
+              "accuracy": 0.8571428571428571,
+              "answered": 7,
+              "decisions": 8,
+              "ece": 0.27142857142857146
+            }
+          }
+        },
+        "removed": [
+          "judge-cloud"
+        ],
+        "tier_id": "local-nano"
+      },
+      {
+        "added": [
+          "judge-mini"
+        ],
+        "budget": {
+          "disk_mb": 300,
+          "ram_mb": 300
+        },
+        "components": [
+          {
+            "component_id": "judge-mini",
+            "disk_mb": 100,
+            "kind": "judge",
+            "ram_mb": 100
+          }
+        ],
+        "footprint_disk_mb": 100,
+        "footprint_ram_mb": 100,
+        "label": "larger local judge",
+        "metrics": {
+          "abstain_rate": 0.1153846153846154,
+          "abstained": 3,
+          "accuracy": 0.9565217391304348,
+          "answered": 23,
+          "compared": 8,
+          "decisions": 26,
+          "ece": 0.11869565217391298,
+          "flip_rate": 0.125,
+          "flips": 1,
+          "latency": {
+            "p50_us": 16,
+            "p95_us": 44,
+            "samples": 26
+          },
+          "peak_rss_bytes": null,
+          "per_op": {
+            "choice": {
+              "accuracy": 0.875,
+              "answered": 8,
+              "decisions": 8,
+              "ece": 0.14
+            },
+            "noul": {
+              "accuracy": 1.0,
+              "answered": 8,
+              "decisions": 10,
+              "ece": 0.09625000000000024
+            },
+            "score": {
+              "accuracy": 1.0,
+              "answered": 7,
+              "decisions": 8,
+              "ece": 0.12
+            }
+          }
+        },
+        "removed": [
+          "judge-nano"
+        ],
+        "tier_id": "local-mini"
+      },
+      {
+        "added": [
+          "judge-mini-fp16"
+        ],
+        "budget": {
+          "disk_mb": 400,
+          "ram_mb": 400
+        },
+        "components": [
+          {
+            "component_id": "judge-mini-fp16",
+            "disk_mb": 180,
+            "kind": "judge",
+            "ram_mb": 180
+          }
+        ],
+        "footprint_disk_mb": 180,
+        "footprint_ram_mb": 180,
+        "label": "the same judge in a wider build",
+        "metrics": {
+          "abstain_rate": 0.1153846153846154,
+          "abstained": 3,
+          "accuracy": 0.9565217391304348,
+          "answered": 23,
+          "compared": 8,
+          "decisions": 26,
+          "ece": 0.11869565217391298,
+          "flip_rate": 0.125,
+          "flips": 1,
+          "latency": {
+            "p50_us": 27,
+            "p95_us": 54,
+            "samples": 26
+          },
+          "peak_rss_bytes": null,
+          "per_op": {
+            "choice": {
+              "accuracy": 0.875,
+              "answered": 8,
+              "decisions": 8,
+              "ece": 0.14
+            },
+            "noul": {
+              "accuracy": 1.0,
+              "answered": 8,
+              "decisions": 10,
+              "ece": 0.09625000000000024
+            },
+            "score": {
+              "accuracy": 1.0,
+              "answered": 7,
+              "decisions": 8,
+              "ece": 0.12
+            }
+          }
+        },
+        "removed": [
+          "judge-mini"
+        ],
+        "tier_id": "local-mini-fp16"
+      }
+    ],
+    "visibility": {
+      "min_accuracy_delta": 0.01,
+      "min_ece_delta": 0.01
+    }
+  },
+  "note": "accuracy, calibration error, flip rate, abstain rate and the curve are compared exactly; latency and peak RSS are recorded and not compared (a wall-clock reading is a property of the machine, not of the assembly)"
+}

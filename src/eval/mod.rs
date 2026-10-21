@@ -30,9 +30,18 @@
 //! the two published shapes, mapped onto the same [`Case`] contract and driven
 //! by the same runner. Neither dataset is committed wholesale — only the
 //! slices the gate replays.
+//!
+//! The memory ladder (stage doc 07) is the other half of this module: a
+//! frozen set of judgment criteria, a ladder of component tiers, and the
+//! marginal-gain-per-MB curve the tiers are read off. It lives in [`ladder`],
+//! and the criteria and mock components it ships with in [`ladder_cases`].
+//! The two surfaces answer different questions and share no numbers: [`Case`]
+//! measures retrieval, the ladder measures judgment.
 
 pub mod cases;
 pub mod external;
+pub mod ladder;
+pub mod ladder_cases;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
