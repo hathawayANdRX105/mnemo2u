@@ -4,6 +4,7 @@ todo/
 
 # golden-fixture regeneration venv (test-only tool, see README)
 tests/.venvs/
+crates/*/tests/.venvs/
 .ruff_cache/
 __pycache__/
 .wt/

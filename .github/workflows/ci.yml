@@ -34,26 +34,29 @@ jobs:
       - name: System dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler pkg-config libssl-dev
       - uses: Swatinem/rust-cache@v2
+      # `--workspace`: the repo root is a package (the facade) *and* the
+      # workspace root, so a bare `cargo test` would cover the facade only and
+      # skip every member crate.
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
       # `--no-fail-fast`: report every failing test binary in one run instead of
       # one per 15-minute CI cycle.
       - name: Test
-        run: cargo test --all-targets --no-fail-fast
+        run: cargo test --workspace --all-targets --no-fail-fast
       # Real-backend smoke for the read-path diagnosis (stage doc 07): the
       # probe opens the durable Turso stores and fails the job when either
       # attribution terminal stops holding.
       - name: Smoke (diag probe)
-        run: cargo run --quiet --example diag_probe
+        run: cargo run -p mnemo-core --quiet --example diag_probe
       # Real-backend smoke for the tuning surface (stage doc 08 S2): two eval
       # cases into a scoreboard, plus the knob set the attribution names for a
       # ranked-out miss. Fails the job when a case stops passing or when a
       # stage's knob set stops being the one the registry states.
       - name: Smoke (tune probe)
-        run: cargo run --quiet --example tune_probe
+        run: cargo run -p mnemo-core --quiet --example tune_probe
       # Real-backend smoke for the tuning search loop (stage doc 08 S3): runs a
       # full coordinate-descent search over the injectable knobs and fails the
       # job when the default assembly stops passing or the search does not
       # terminate.
       - name: Smoke (tune search probe)
-        run: cargo run --quiet --example tune_search_probe
+        run: cargo run -p mnemo-core --quiet --example tune_search_probe

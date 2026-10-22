@@ -4,7 +4,7 @@
 Python: `md5(str((model, messages)).encode())` — `_utils.py:216`.
 
 Usage:
-    tests/.venvs/bin/python scripts/gen_hash.py > tests/fixtures/hash_golden.json
+    crates/mnemo-core/tests/.venvs/bin/python scripts/gen_hash.py > crates/mnemo-core/tests/fixtures/hash_golden.json
 """
 
 import hashlib
