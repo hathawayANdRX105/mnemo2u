@@ -1,0 +1,16 @@
+[package]
+name = "mnemo2u"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Memory/RAG library for coding harnesses: graph relations + vector facts + Turso truth, Jev as judge"
+publish = false
+
+[dependencies]
+mnemo-core = { path = "../mnemo-core" }
+
+[features]
+default = []
+
+[dev-dependencies]
+tempfile = "3"
