@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "bin/*"]
+# `craft/` holds the task specializations: each crate bends the generic memory
+# engine toward one kind of work (a craft). It is added to members only once a
+# crate lands here — Cargo fails on a glob that matches nothing.
+members = ["crates/*", "craft/*", "bin/*"]
 
 [workspace.package]
 version = "0.1.0"

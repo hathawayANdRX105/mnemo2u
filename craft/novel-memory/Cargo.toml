@@ -1,0 +1,20 @@
+[package]
+name = "novel-memory"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Narrative memory craft: story-time coordinates and fact slots for fiction"
+publish = false
+
+[dependencies]
+mnemo2u = { path = "../../crates/mnemo2u" }
+anyhow = "1"
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true }
