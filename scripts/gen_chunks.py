@@ -7,7 +7,7 @@ get_chunks :94-108); only the imports are reduced to `tiktoken` so the script
 runs without the reference package's heavy dependencies.
 
 Usage:
-    tests/.venvs/bin/python scripts/gen_chunks.py > tests/fixtures/chunk_golden.json
+    crates/mnemo-core/tests/.venvs/bin/python scripts/gen_chunks.py > crates/mnemo-core/tests/fixtures/chunk_golden.json
 """
 
 import hashlib

@@ -17,7 +17,7 @@ The `describe` cases need the real BPE (the budget arithmetic is measured in
 tokens), so the script runs under the venv README §golden describes.
 
 Usage:
-    tests/.venvs/bin/python scripts/gen_report.py > tests/fixtures/report_golden.json
+    crates/mnemo-core/tests/.venvs/bin/python scripts/gen_report.py > crates/mnemo-core/tests/fixtures/report_golden.json
 """
 
 import json
@@ -669,8 +669,8 @@ def main():
 
     json.dump(
         {
-            "generator": "tests/.venvs/bin/python scripts/gen_report.py > "
-            "tests/fixtures/report_golden.json",
+            "generator": "crates/mnemo-core/tests/.venvs/bin/python scripts/gen_report.py > "
+            "crates/mnemo-core/tests/fixtures/report_golden.json",
             "reference": {
                 "module": "nano_graphrag/_op.py",
                 "functions": [

@@ -11,7 +11,7 @@ The functions below are copied verbatim from `refs/LightRAG/lightrag`:
 `split_string_by_multi_markers` :3997). Only the standard library is needed.
 
 Usage:
-    python3 scripts/gen_extraction.py > tests/fixtures/extraction_golden.json
+    python3 scripts/gen_extraction.py > crates/mnemo-core/tests/fixtures/extraction_golden.json
 """
 
 import html

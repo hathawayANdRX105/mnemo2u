@@ -4976,18 +4976,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "mnemo2u"
+name = "mnemo-core"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",
  "async-trait",
- "clap",
  "fastembed",
  "futures",
  "lancedb",
  "leiden-rs",
  "md-5",
+ "mnemo2u",
  "petgraph",
  "redb",
  "regex",
@@ -5000,8 +5000,25 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-subscriber",
  "turso",
+]
+
+[[package]]
+name = "mnemo2u"
+version = "0.1.0"
+dependencies = [
+ "mnemo-core",
+ "tempfile",
+]
+
+[[package]]
+name = "mnemo2u-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "mnemo2u",
+ "tokio",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -18,7 +18,7 @@ token-based (tiktoken). The fixture keeps every case far from the boundaries
 count — a lower bound on the token count — makes the same decision.
 
 Usage:
-    python3 scripts/gen_merge.py > tests/fixtures/merge_golden.json
+    python3 scripts/gen_merge.py > crates/mnemo-core/tests/fixtures/merge_golden.json
 """
 
 import copy

@@ -3,9 +3,9 @@
 
 Loads `refs/LightRAG/lightrag/prompt.py` standalone (its only import is the
 logger, stubbed below) and writes every prompt we port into
-`src/graph/prompts/<key>.txt`, preserving the text byte for byte. The text
-keeps the reference's `{placeholder}` syntax and doubled braces; fill them
-with `crate::core::text::fill_template`.
+`crates/mnemo-core/src/graph/prompts/<key>.txt`, preserving the text byte for
+byte. The text keeps the reference's `{placeholder}` syntax and doubled braces;
+fill them with `crate::core::text::fill_template`.
 
 Usage:
     python3 scripts/gen_prompts.py
@@ -20,7 +20,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REF_PROMPT = pathlib.Path(os.environ.get("LIGHTRAG_REF", "/home/hathaway/projects/mnemo2u/todo/refs/LightRAG/lightrag/prompt.py"))
-OUT_DIR = ROOT / "src" / "graph" / "prompts"
+OUT_DIR = ROOT / "crates" / "mnemo-core" / "src" / "graph" / "prompts"
 
 KEYS = [
     "entity_extraction_system_prompt",
