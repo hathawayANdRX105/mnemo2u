@@ -34,9 +34,8 @@ jobs:
       - name: System dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler pkg-config libssl-dev
       - uses: Swatinem/rust-cache@v2
-      # `--workspace`: the repo root is a package (the facade) *and* the
-      # workspace root, so a bare `cargo test` would cover the facade only and
-      # skip every member crate.
+      # `--workspace`: the repo root is a virtual manifest, and every member
+      # crate (the facade, the core, the CLI) has to be covered.
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       # `--no-fail-fast`: report every failing test binary in one run instead of

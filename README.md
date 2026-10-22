@@ -88,22 +88,27 @@ locally, not committed).
 
 ## Layout
 
-The repo is a Cargo workspace. The root package is the **facade** — the
-published surface of the library — and the workspace root:
+The repo is a Cargo workspace. The root manifest is **virtual** — it lists the
+members and the shared dependency versions, and carries no code of its own:
 
 ```
-Cargo.toml              # package `mnemo2u` (facade) + workspace root
-src/lib.rs              # the facade: re-exports mnemo-core's module tree
-crates/mnemo-core/      # the implementation, its tests and its examples
-bin/mnemo2u/            # the operational CLI (package `mnemo2u-cli`)
+Cargo.toml              # virtual workspace manifest
+crates/
+  mnemo2u/              # the facade: the published surface of the library
+  mnemo-core/           # the implementation, its tests and its examples
+bin/
+  mnemo2u/              # the operational CLI (package `mnemo2u-cli`)
 ```
 
 The facade re-exports `mnemo-core` under the module paths the library has
 always published (`mnemo2u::core::traits::*`, `mnemo2u::store::*`, …), so
-every downstream consumer — including path dependencies such as
-`mnemo2u = { path = "../mnemo2u" }` — keeps compiling unchanged. A path
-dependency cannot point at a virtual manifest, which is why the root is a
-package rather than a bare workspace.
+every downstream consumer keeps compiling unchanged. A path dependency must
+point at a package, not at a virtual manifest, so a consumer of this repo
+depends on the facade crate directly:
+
+```toml
+mnemo2u = { path = "../mnemo2u/crates/mnemo2u" }
+```
 
 The implementation crate's integration tests exercise the library through the
 facade (`mnemo2u::…`), not through `mnemo_core::…`: that published surface is

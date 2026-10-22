@@ -53,4 +53,4 @@ tempfile = "3"
 # depends on, so the contract is what the tests must pin. The dev-dependency
 # closes a cycle (facade -> core -> facade), which Cargo allows because the
 # back edge is a dev-dependency only.
-mnemo2u = { path = "../.." }
+mnemo2u = { path = "../mnemo2u" }

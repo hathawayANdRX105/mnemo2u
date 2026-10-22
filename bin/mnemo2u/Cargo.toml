@@ -8,13 +8,13 @@ publish = false
 
 # The binary is named `mnemo2u` (the command users type) while the package is
 # named `mnemo2u-cli`: a package and a crate cannot share a name inside one
-# workspace, and `mnemo2u` is taken by the facade crate at the repo root.
+# workspace, and `mnemo2u` is taken by the facade crate under `crates/`.
 [[bin]]
 name = "mnemo2u"
 path = "src/main.rs"
 
 [dependencies]
-mnemo2u = { path = "../.." }
+mnemo2u = { path = "../../crates/mnemo2u" }
 clap = { workspace = true }
 tokio = { workspace = true }
 tracing-subscriber = { workspace = true }

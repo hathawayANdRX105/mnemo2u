@@ -1,18 +1,3 @@
-[package]
-name = "mnemo2u"
-version = "0.1.0"
-edition = "2021"
-license = "MIT"
-description = "Memory/RAG library for coding harnesses: graph relations + vector facts + Turso truth, Jev as judge"
-publish = false
-
-# The root package is the facade: it re-exports `mnemo-core` under the module
-# paths the library has always published (`mnemo2u::core::traits::*`,
-# `mnemo2u::store::*`, ...), so downstream path dependencies keep resolving.
-#
-# Being a package *and* the workspace root is deliberate: a path dependency
-# (`mnemo2u = { path = "../mnemo2u" }`) cannot point at a virtual manifest,
-# and this root package is what keeps that dependency working.
 [workspace]
 resolver = "2"
 members = ["crates/*", "bin/*"]
@@ -58,12 +43,3 @@ futures = "0.3"
 # local embeddings (ONNX)
 fastembed = "7"
 redb = "4.4.0"
-
-[dependencies]
-mnemo-core = { path = "crates/mnemo-core" }
-
-[features]
-default = []
-
-[dev-dependencies]
-tempfile = "3"
