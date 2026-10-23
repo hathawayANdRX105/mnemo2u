@@ -93,7 +93,7 @@ pub async fn run(cmd: &MemoryCmd, paths: &Paths, config: &Config) -> Result<i32>
             let backend = open_backend(novel_dir, paths, config).await?;
             let hits = query::relations(&backend, &scope_of(novel_dir), entity).await?;
             if hits.is_empty() {
-                println!("no relations found for `{entity}`");
+                println!("没有找到与 `{entity}` 相关的关系。");
             } else {
                 for hit in &hits {
                     println!("{}", hit.line());
@@ -107,7 +107,7 @@ pub async fn run(cmd: &MemoryCmd, paths: &Paths, config: &Config) -> Result<i32>
             let backend = open_backend(novel_dir, paths, config).await?;
             let hits = query::timeline(&backend, &scope_of(novel_dir), story.as_deref()).await?;
             if hits.is_empty() {
-                println!("no facts; run the index subcommand first");
+                println!("没有事实。先跑 `sentinel memory index`。");
             } else {
                 for hit in &hits {
                     println!("{}", hit.line());
@@ -156,12 +156,12 @@ async fn index(novel_dir: &Path, dry_run: bool, paths: &Paths, config: &Config) 
         for slot in &scanned.slots {
             by_layer[layer_index(slot.layer)] += 1;
         }
-        println!("setting  {}", by_layer[0]);
-        println!("fact     {}", by_layer[1]);
-        println!("relation {}", by_layer[2]);
-        println!("edges    {}", scanned.edges.len());
-        println!("units    {}", scanned.units.len());
-        println!("(dry-run: nothing written)");
+        println!("设定 {} 条", by_layer[0]);
+        println!("事实 {} 条", by_layer[1]);
+        println!("关系 {} 条", by_layer[2]);
+        println!("关系边 {} 条", scanned.edges.len());
+        println!("story 单元 {} 个", scanned.units.len());
+        println!("（dry-run：未落盘）");
         return Ok(0);
     }
 
@@ -169,12 +169,12 @@ async fn index(novel_dir: &Path, dry_run: bool, paths: &Paths, config: &Config) 
     let indexer = Indexer::new(&backend, scope_of(novel_dir), config.clone());
     let report = indexer.index(&scanned).await?;
 
-    println!("written    {}", report.written);
-    println!("unchanged  {}", report.unchanged);
-    println!("superseded {}", report.superseded);
-    println!("edges      {}", report.edges);
+    println!("写入 {} 条", report.written);
+    println!("幂等 {} 条", report.unchanged);
+    println!("修正 {} 条", report.superseded);
+    println!("关系边 {} 条", report.edges);
     for (layer, count) in &report.by_layer {
-        println!("{layer} {count}");
+        println!("{layer} {count} 条");
     }
     Ok(0)
 }
@@ -202,7 +202,7 @@ fn print_hits(hits: &[Hit], as_json: bool) {
         return;
     }
     if hits.is_empty() {
-        println!("no hits");
+        println!("没有命中。");
         return;
     }
     for hit in hits {

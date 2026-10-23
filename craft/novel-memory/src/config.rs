@@ -129,11 +129,15 @@ fn default_embedding_model() -> String {
 }
 
 fn default_created_at_base() -> i64 {
-    1_700_000_000_000
+    0
 }
 
 fn default_story_fact_sections() -> Vec<String> {
-    vec!["事实".to_string(), "Facts".to_string()]
+    vec![
+        "核心事件".to_string(),
+        "粗章节负载".to_string(),
+        "主要角色与功能".to_string(),
+    ]
 }
 
 fn default_card_related_field() -> String {

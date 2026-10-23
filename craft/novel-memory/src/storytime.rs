@@ -271,11 +271,15 @@ impl Layer {
     }
 
     /// The layer's label.
+    ///
+    /// These strings are **stored data**, not display chrome: they become the
+    /// fact's `kind`, so changing them would make every fact written by an
+    /// earlier version unrecognisable. They stay as they are.
     pub fn label(&self) -> &'static str {
         match self {
-            Layer::Setting => "setting",
-            Layer::Fact => "fact",
-            Layer::Relation => "relation",
+            Layer::Setting => "设定",
+            Layer::Fact => "事实",
+            Layer::Relation => "关系",
         }
     }
 }
