@@ -97,7 +97,10 @@ crates/                 # the memory engine itself
   mnemo2u/              # the facade: the published surface of the library
   mnemo-core/           # the implementation, its tests and its examples
 craft/                  # the task specializations
-  novel-memory/         # the narrative memory craft
+  narrative-core/       # the narrative kernel: story time and slot hashing
+  novel-memory/         # the novel craft
+  tavern-memory/        # the tavern craft
+  coding-memory/        # the coding craft
 bin/
   mnemo2u/              # the operational CLI (package `mnemo2u-cli`)
 ```
@@ -108,11 +111,15 @@ Two layers, one direction of dependency:
   three stores, the graph and vector indexes, the query paths, the evaluation
   harness. It knows nothing about fiction.
 - `craft/` holds one crate per **kind of work**: each bends that engine toward
-  a craft. `novel-memory` is the first — story-time coordinates, a corpus scan
-  that turns a novel directory into fact and edge slots, the three-store
-  assembly and the read paths. The tavern craft will sit on the same narrative
-  kernel, because a tavern session is a story too and its canon is the same
-  three layers.
+  a craft. `novel-memory` scans a novel directory into fact slots and reads
+  them back. `tavern-memory` keeps a character's canon and reports the events
+  that contradict it. `coding-memory` remembers what a coding session did,
+  the rules the project learned, and the procedures worth repeating.
+
+The three fiction crafts share `narrative-core`: story-time coordinates and
+the slot-key-plus-hash scheme. A tavern session is a story too, and its canon
+is the same three layers, so the kernel is its own crate rather than part of
+the novel one — they are two crafts on one kernel, not one on the other.
 
 A crate in `crates/` never depends on a crate in `craft/`. The other direction
 is the whole point: the specializations build on the engine, and the engine
