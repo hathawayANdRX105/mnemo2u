@@ -1,0 +1,67 @@
+{
+  "novel": "novel1",
+  "stories": 1,
+  "story_paths": [
+    "tests/fixtures/consistency/novel1/drafts"
+  ],
+  "template_candidates": [
+    {
+      "bucket": "sentence_length",
+      "name": "短句密度",
+      "count": 2,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/consistency/novel1/drafts"
+      ],
+      "chapter_total": 2,
+      "sample": "L4 6字：任务结束，交差",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    }
+  ],
+  "template_families": [
+    {
+      "name": "短句密度",
+      "count": 2,
+      "story_count": 1,
+      "chapter_total": 2,
+      "sample": "L4 6字：任务结束，交差",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/consistency/novel1/drafts"
+      ],
+      "buckets": [
+        "sentence_length"
+      ],
+      "bucket_families": [
+        "narrative_signal"
+      ]
+    }
+  ],
+  "term_candidates": [],
+  "keep_candidates": [
+    {
+      "bucket": "keep_candidates",
+      "name": "章末收束未模板化",
+      "count": 2,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/consistency/novel1/drafts"
+      ],
+      "chapter_total": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "章末没有落入现有意象/流程词模板，说明结尾功能有继续发展的空间。"
+      ]
+    }
+  ],
+  "deposition_targets": [],
+  "learning_anchors": [],
+  "writeback_queue": []
+}

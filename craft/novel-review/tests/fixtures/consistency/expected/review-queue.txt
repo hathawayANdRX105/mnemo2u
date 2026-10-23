@@ -1,0 +1,47 @@
+## Review Queue
+- story: `all`
+- feedback_log: `{{NOVEL}}/research/consistency/review-feedback.jsonl`
+- pending_total: `3`
+
+### story1 :: goal_state_drift :: 陆沉 :: confidence=high
+- focus: 先回看 fact cue 和上下文段，判断这是真跳变还是阶段推进。
+- summary: assigned=交给,任务 ; changed=目标变成 ; completed=收尾
+- command: `sentinel consistency feedback-add novel1 --category goal_state_drift --story story1 --title '陆沉' --decision watch --summary-contains 'assigned=交给,任务'`
+- evidence:
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_assigned` cue=`交给`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_assigned` cue=`交给`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_completed` cue=`收尾`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_completed` cue=`收尾`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+
+### story1 :: relationship_tone_shift :: 陆沉 :: confidence=high
+- focus: 先回看 fact cue 和上下文段，判断这是真跳变还是阶段推进。
+- summary: close=接住,接应 ; distant=提防,怀疑
+- command: `sentinel consistency feedback-add novel1 --category relationship_tone_shift --story story1 --title '陆沉' --decision watch --summary-contains 'close=接住,接应'`
+- evidence:
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`提防`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`怀疑`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`提防`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`怀疑`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+### story1 :: injury_state_jump :: 陆沉 :: confidence=medium
+- focus: 先回看 fact cue 和上下文段，判断这是真跳变还是阶段推进。
+- summary: injury=擦伤 -> 稳住,止住,还能打
+- command: `sentinel consistency feedback-add novel1 --category injury_state_jump --story story1 --title '陆沉' --decision watch --summary-contains 'injury=擦伤'`
+- evidence:
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_negative` cue=`擦伤`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_stable` cue=`稳住`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_stable` cue=`止住`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_stable` cue=`还能打`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+

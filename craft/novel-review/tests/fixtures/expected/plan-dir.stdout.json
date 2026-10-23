@@ -1,0 +1,209 @@
+[
+  {
+    "source": "tests/fixtures/plan/arc-plan.md",
+    "type": "arc-plan",
+    "status": "WARN",
+    "warnings": [
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：Arc 定位",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：Arc 必须完成的事",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：Arc 不在本段解决的事",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：Story 排布",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：角色出场与功能时序",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：Arc 结束后的状态",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：当前风险与空缺",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "thin_story_layout",
+        "message": "Story 排布条目过少，Arc 推进骨架偏薄",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "foreshadow_sparse",
+        "message": "伏笔表里的编号偏少，建议统一编号并补齐",
+        "snippet": ""
+      }
+    ]
+  },
+  {
+    "source": "tests/fixtures/plan/chapter-plan.md",
+    "type": "chapter-plan",
+    "status": "WARN",
+    "warnings": [
+      {
+        "line_no": 7,
+        "kind": "abstract_lookpoint",
+        "message": "Scene 字段疑似滑回抽象气氛描述",
+        "snippet": "- 看点：气氛压抑，主角很坚定"
+      },
+      {
+        "line_no": 8,
+        "kind": "style_leak",
+        "message": "规划字段里混入写法建议或读者效果",
+        "snippet": "- 节奏：慢热，保持写法上的悬疑感"
+      },
+      {
+        "line_no": 9,
+        "kind": "thin_judgement",
+        "message": "字段内容像判断句，不像推进点",
+        "snippet": "- 状态变化：局势更复杂"
+      },
+      {
+        "line_no": 5,
+        "kind": "abstract_lookpoint",
+        "message": "看点更像气氛词或人物态度，缺少可拍出来的戏",
+        "snippet": "气氛压抑，主角很坚定"
+      },
+      {
+        "line_no": 5,
+        "kind": "thin_lookpoint",
+        "message": "看点过短，像标签不是内容",
+        "snippet": "气氛压抑，主角很坚定"
+      },
+      {
+        "line_no": 5,
+        "kind": "rhythm_style_leak",
+        "message": "节奏字段混入写法要求",
+        "snippet": "慢热，保持写法上的悬疑感"
+      },
+      {
+        "line_no": 5,
+        "kind": "thin_change",
+        "message": "状态变化太抽象，缺少局势或关系上的具体变化",
+        "snippet": "局势更复杂"
+      },
+      {
+        "line_no": 11,
+        "kind": "scene_field",
+        "message": "Scene 2北厂门口 缺少字段：看点",
+        "snippet": "Scene 2北厂门口"
+      },
+      {
+        "line_no": 11,
+        "kind": "scene_field",
+        "message": "Scene 2北厂门口 缺少字段：节奏",
+        "snippet": "Scene 2北厂门口"
+      },
+      {
+        "line_no": 11,
+        "kind": "scene_field",
+        "message": "Scene 2北厂门口 缺少字段：状态变化",
+        "snippet": "Scene 2北厂门口"
+      },
+      {
+        "line_no": 11,
+        "kind": "thin_lookpoint",
+        "message": "看点为空，只有字段名没有戏",
+        "snippet": "看点"
+      },
+      {
+        "line_no": 14,
+        "kind": "scene_field",
+        "message": "Scene 3栖城登记处 缺少字段：看点",
+        "snippet": "Scene 3栖城登记处"
+      },
+      {
+        "line_no": 14,
+        "kind": "scene_field",
+        "message": "Scene 3栖城登记处 缺少字段：节奏",
+        "snippet": "Scene 3栖城登记处"
+      },
+      {
+        "line_no": 14,
+        "kind": "scene_field",
+        "message": "Scene 3栖城登记处 缺少字段：状态变化",
+        "snippet": "Scene 3栖城登记处"
+      },
+      {
+        "line_no": 14,
+        "kind": "thin_lookpoint",
+        "message": "看点为空，只有字段名没有戏",
+        "snippet": "看点"
+      },
+      {
+        "line_no": 0,
+        "kind": "repeated_scene_function",
+        "message": "多个 Scene 都在围绕“查证”推进，施工图可能过于单调",
+        "snippet": "Scene 1西区窗口 / Scene 2北厂门口"
+      },
+      {
+        "line_no": 0,
+        "kind": "scene_function_monotony",
+        "message": "多个 Scene 都在承担 `info` 功能，章节施工图的功能切换偏少",
+        "snippet": "info x2/3"
+      }
+    ]
+  },
+  {
+    "source": "tests/fixtures/plan/clean-plan.md",
+    "type": "arc-plan",
+    "status": "OK",
+    "warnings": []
+  },
+  {
+    "source": "tests/fixtures/plan/story-plan.md",
+    "type": "story-plan",
+    "status": "WARN",
+    "warnings": [
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：核心冲突",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_heading",
+        "message": "缺少必备标题：视角与信息边界",
+        "snippet": ""
+      },
+      {
+        "line_no": 0,
+        "kind": "event_monotony",
+        "message": "核心事件过度依赖同一类推进动词，后续章节容易全部写成‘继续调查/继续解释’",
+        "snippet": "发现 x2"
+      },
+      {
+        "line_no": 0,
+        "kind": "missing_environment_witness",
+        "message": "Story 在讨论制度/阶级/城市压力，但没有明确安排配角、小事故、手续或环境证词来承接",
+        "snippet": ""
+      }
+    ]
+  }
+]

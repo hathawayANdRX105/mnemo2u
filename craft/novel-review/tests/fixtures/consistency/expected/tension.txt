@@ -1,0 +1,2 @@
+story1 :: 信号枪 [items] :: equipment=裂开,失灵 -> 亮起,接口,护住
+story1 :: 陆沉 [characters] :: injury=擦伤 -> 稳住,止住,还能打

@@ -1,0 +1,10 @@
+## Same Document Alias Mixing
+tests/fixtures/consistency/novel1/chapter-plan/ch05.md :: 陆沉 [characters] aliases=陆沉,阿沉
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md :: 陆沉 [characters] aliases=陆沉,阿沉
+tests/fixtures/consistency/novel1/drafts/story1-ch02.md :: 陆沉 [characters] aliases=陆沉,阿沉
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md :: 陆沉 [characters] aliases=陆沉,阿沉
+
+## Draft State Tension Candidates
+story1 :: 信号枪 [items] equipment=裂开,失灵 -> 亮起,接口,护住
+story1 :: 陆沉 [characters] injury=擦伤 -> 稳住,止住,还能打
+

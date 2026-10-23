@@ -1,0 +1,3 @@
+tests/fixtures/stats-draft/novel-b/draft-stats/learning/ch01-冷线.md
+tests/fixtures/stats-draft/novel-b/draft-stats/learning/ch02-水声.md
+tests/fixtures/stats-draft/novel-b/draft-stats/learning/SUMMARY.md

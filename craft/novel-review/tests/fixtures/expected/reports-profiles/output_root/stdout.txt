@@ -1,0 +1,5 @@
+out/novel-a/draft-stats/profiles/ch01-信号.md
+out/novel-a/draft-stats/profiles/ch02-断桥.md
+out/novel-a/draft-stats/profiles/ch03-灰港.md
+out/novel-a/draft-stats/profiles/ch04-旧闸.md
+out/novel-a/draft-stats/profiles/SUMMARY.md

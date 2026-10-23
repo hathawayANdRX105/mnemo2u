@@ -1,0 +1,1 @@
+{"conflict_key": "equipment_state_jump||story1||信号枪||items||equipment=裂开,失灵 -> 亮起,接口,护住", "category": "equipment_state_jump", "story": "story1", "title": "信号枪", "entity_category": "items", "summary": "equipment=裂开,失灵 -> 亮起,接口,护住", "decision": "watch", "facet": "state_progression", "note": "复核", "updated_at": "{{TS}}"}

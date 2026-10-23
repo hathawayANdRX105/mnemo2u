@@ -1,0 +1,160 @@
+{
+  "story": "tests/fixtures/catalog-cbk/novel-b/drafts/arc9/story9",
+  "chapters": 2,
+  "template_bank_candidates": [
+    {
+      "bucket": "patterns",
+      "name": "把字操作句",
+      "count": 2,
+      "sample": "他抬头。冷线的尽头滴了一下。他把袖子挽起来，蹲下去。他听见墙里有水。水声从冷线的那一头传过来，很轻。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "像/活像模板",
+      "count": 2,
+      "sample": "风从门外进来。门外的港口灰得像一块擦不净的布。他在门口站了很久，才把终端重新拿出来。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "得像",
+      "count": 2,
+      "sample": "风从门外进来。门外的港口灰得像一块擦不净的布。他在门口站了很久，才把终端重新拿出来。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "punctuation",
+      "name": "？",
+      "count": 2,
+      "sample": "\"哪头？\"她问。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "sentence_length",
+      "name": "短句密度",
+      "count": 2,
+      "sample": "L5 3字：\"线动了",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "fatigue_window",
+      "name": "局部疲劳窗口",
+      "count": 2,
+      "sample": "\"线动了 | \"她说 | 他抬头 | 冷线的尽头滴了一下 | 他把袖子挽起来，蹲下去",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "短并列三拍",
+      "count": 1,
+      "sample": "冷线从墙里出来，经过三扇门，停在他的桌角。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "肯定判断/解释腔",
+      "count": 1,
+      "sample": "\"那是什么？\"",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "ba_operation_context",
+      "name": "动作操作",
+      "count": 1,
+      "sample": "他把手掌贴在墙上",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "dialogue",
+      "name": "连续短对白",
+      "count": 1,
+      "sample": "\"你摸到过这个温度吗？\"她问。 | \"没有。\" | \"那是什么？\" | \"是线在烧。\"",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "dialogue",
+      "name": "短句对白块",
+      "count": 1,
+      "sample": "\"你摸到过这个温度吗？\"她问。 | \"没有。\" | \"那是什么？\" | \"是线在烧。\"",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    }
+  ],
+  "term_bank_candidates": [
+    {
+      "bucket": "learned_filter",
+      "name": "终端",
+      "count": 1,
+      "sample": "风从门外进来。门外的港口灰得像一块擦不净的布。他在门口站了很久，才把终端重新拿出来。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "抬头",
+      "count": 1,
+      "sample": "他抬头。冷线的尽头滴了一下。他把袖子挽起来，蹲下去。他听见墙里有水。水声从冷线的那一头传过来，很轻。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "停在",
+      "count": 1,
+      "sample": "冷线从墙里出来，经过三扇门，停在他的桌角。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "一下",
+      "count": 1,
+      "sample": "他抬头。冷线的尽头滴了一下。他把袖子挽起来，蹲下去。他听见墙里有水。水声从冷线的那一头传过来，很轻。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "看着",
+      "count": 1,
+      "sample": "水声重新响起来。比刚才粗。他退后一步，看着冷线的尽头。冷线在抖。抖得像一根绷紧的弦。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    }
+  ],
+  "keep_candidates": [
+    {
+      "name": "章末收束未模板化",
+      "count": 2,
+      "reason": "章末没有落入现有意象/流程词模板，说明结尾功能有继续发展的空间。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    },
+    {
+      "name": "场面功能有切换",
+      "count": 2,
+      "reason": "粗分块没有被单一对白或说明吃满，说明这一章至少在尝试做功能接力。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    },
+    {
+      "name": "局部排比可视作风格点缀",
+      "count": 1,
+      "reason": "检测到少量 AA/BB 或短分句节奏，但还没形成模板疲劳，可以先按风格候选保留。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    }
+  ],
+  "deposition_targets": []
+}

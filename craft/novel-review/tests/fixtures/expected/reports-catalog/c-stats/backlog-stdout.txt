@@ -1,0 +1,4 @@
+tests/fixtures/catalog-cbk/novel-a/draft-stats/arc1/story1/template-backlog/SUMMARY.md
+tests/fixtures/catalog-cbk/novel-a/draft-stats/arc1/story1/template-backlog/CANDIDATES.json
+tests/fixtures/catalog-cbk/novel-a/draft-stats/arc1/story2/template-backlog/SUMMARY.md
+tests/fixtures/catalog-cbk/novel-a/draft-stats/arc1/story2/template-backlog/CANDIDATES.json

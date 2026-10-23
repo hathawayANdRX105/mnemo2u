@@ -1,0 +1,92 @@
+Entity Facts: 陆沉 (characters)
+
+tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 story=`story1` matched=`陆沉` fact=`goal_assigned` cue=`交给`
+信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+
+tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 story=`story1` matched=`陆沉` fact=`goal_completed` cue=`收尾`
+信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+
+tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 story=`story1` matched=`阿沉` fact=`goal_assigned` cue=`交给`
+信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+
+tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 story=`story1` matched=`阿沉` fact=`goal_completed` cue=`收尾`
+信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+
+tests/fixtures/consistency/novel1/concept/cards/characters/陆沉.md:10-10 story=`-` matched=`陆沉` fact=`goal_assigned` cue=`负责`
+陆沉是深潜站的老队员，负责信号枪的维护与射击。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`陆沉` fact=`injury_stable` cue=`稳住`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`陆沉` fact=`injury_stable` cue=`止住`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`陆沉` fact=`goal_assigned` cue=`任务`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`陆沉` fact=`goal_assigned` cue=`交给`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`陆沉` fact=`goal_changed` cue=`目标变成`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`陆沉` fact=`relationship_distant` cue=`提防`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`陆沉` fact=`relationship_distant` cue=`怀疑`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`阿沉` fact=`injury_negative` cue=`擦伤`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`阿沉` fact=`injury_stable` cue=`还能打`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`阿沉` fact=`relationship_distant` cue=`提防`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 story=`story1` matched=`阿沉` fact=`relationship_distant` cue=`怀疑`
+信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch02.md:3-4 story=`story1` matched=`陆沉` fact=`relationship_close` cue=`接住`
+陆沉接住阿沉，接应靠岸。信号枪亮起，他护住枪身。 任务结束，交差。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch02.md:3-4 story=`story1` matched=`陆沉` fact=`relationship_close` cue=`接应`
+陆沉接住阿沉，接应靠岸。信号枪亮起，他护住枪身。 任务结束，交差。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch02.md:3-4 story=`story1` matched=`阿沉` fact=`relationship_close` cue=`接住`
+陆沉接住阿沉，接应靠岸。信号枪亮起，他护住枪身。 任务结束，交差。
+
+tests/fixtures/consistency/novel1/drafts/story1-ch02.md:3-4 story=`story1` matched=`阿沉` fact=`relationship_close` cue=`接应`
+陆沉接住阿沉，接应靠岸。信号枪亮起，他护住枪身。 任务结束，交差。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`equipment_active` cue=`展开`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`equipment_active` cue=`展开快`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`equipment_active` cue=`护住`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`goal_assigned` cue=`任务`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`goal_assigned` cue=`负责`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`relationship_close` cue=`护住`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`relationship_close` cue=`信任`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`陆沉` fact=`relationship_close` cue=`并肩`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`阿沉` fact=`equipment_active` cue=`展开`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+
+tests/fixtures/consistency/novel1/story-plan/story1-plan.md:3-5 story=`-` matched=`阿沉` fact=`equipment_active` cue=`展开快`
+任务：陆沉负责在撤离窗口内护住信号枪，阿沉展开快枪体。 目标是完成撤离，改口换成掩护。 陆沉信任阿沉，两人并肩进闸。
+

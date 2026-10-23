@@ -1,0 +1,2 @@
+{{NOVEL}}/research/consistency/review-feedback.jsonl
+equipment_state_jump :: story1 :: 信号枪 :: decision=watch

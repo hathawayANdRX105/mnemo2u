@@ -1,0 +1,2 @@
+陆沉 [characters] mentions=13 names=阿沉 | 陆沉 | 陆队长
+信号枪 [items] mentions=7 names=信号枪

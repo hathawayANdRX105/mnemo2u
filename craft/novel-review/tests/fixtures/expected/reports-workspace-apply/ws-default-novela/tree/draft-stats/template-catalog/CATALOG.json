@@ -1,0 +1,718 @@
+{
+  "novel": "novel-a",
+  "stories": 2,
+  "story_paths": [
+    "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+    "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+  ],
+  "template_candidates": [
+    {
+      "bucket": "patterns",
+      "name": "把字操作句",
+      "count": 4,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "sentence_length",
+      "name": "短句密度",
+      "count": 4,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "L3 4字：终端亮了",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "punctuation",
+      "name": "？",
+      "count": 4,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "\"信号在哪？\"她问。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "ba_operation_context",
+      "name": "动作操作",
+      "count": 3,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "他把伞收起来",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "fatigue_window",
+      "name": "局部疲劳窗口",
+      "count": 3,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "\"她问 | \"铁 | \"什么样的铁 | \"旧的铁 | 他把手贴在桥面上",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "patterns",
+      "name": "线索面板词",
+      "count": 3,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "夜落在港口上。灯落在桥上。冷光落在他的肩上。他继续排查。新分组已建立。首屏的灰字还没有变。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "patterns",
+      "name": "像/活像模板",
+      "count": 2,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "patterns",
+      "name": "得像",
+      "count": 2,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "他把手贴在桥面上。桥面是凉的，凉得像一整条河。他慢慢后退。他慢慢蹲下。他慢慢把耳朵贴上去。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "custom_template",
+      "name": "短并列三拍",
+      "count": 2,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "dialogue_axis_gap",
+      "name": "对白转轴缺口",
+      "count": 2,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 2,
+      "sample": "\"它在数 | \"她说 | \"数什么 | \"数我们",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "custom_template",
+      "name": "重叠词节奏",
+      "count": 2,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "chapter_total": 2,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "tokens",
+      "name": "因为",
+      "count": 1,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 2,
+      "sample": "\"因为桥在这里。\"",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "tokens",
+      "name": "然后",
+      "count": 1,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "chapter_total": 2,
+      "sample": "然后他走。然后他停。然后他又走。接着他抬头。接着他压低声音。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "ending",
+      "name": "章末模板",
+      "count": 1,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 2,
+      "sample": "么在数。一步。两步。停。三步。  \"数完了会怎样？\"她问。  \"不知道。\"他把终端揣回怀里，\"但第七区的灯会亮。\"  第七区没有亮。灰字还跳。他新建了一组日志。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    },
+    {
+      "bucket": "custom_template",
+      "name": "说完就",
+      "count": 1,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "chapter_total": 2,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ]
+    }
+  ],
+  "template_families": [
+    {
+      "name": "把字操作句",
+      "count": 4,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "patterns"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "短句密度",
+      "count": 4,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "L3 4字：终端亮了",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "sentence_length"
+      ],
+      "bucket_families": [
+        "narrative_signal"
+      ]
+    },
+    {
+      "name": "？",
+      "count": 4,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "\"信号在哪？\"她问。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "punctuation"
+      ],
+      "bucket_families": [
+        "narrative_signal"
+      ]
+    },
+    {
+      "name": "动作操作",
+      "count": 3,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "他把伞收起来",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "ba_operation_context"
+      ],
+      "bucket_families": [
+        "narrative_signal"
+      ]
+    },
+    {
+      "name": "局部疲劳窗口",
+      "count": 3,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "\"她问 | \"铁 | \"什么样的铁 | \"旧的铁 | 他把手贴在桥面上",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "fatigue_window"
+      ],
+      "bucket_families": [
+        "narrative_signal"
+      ]
+    },
+    {
+      "name": "线索面板词",
+      "count": 3,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "夜落在港口上。灯落在桥上。冷光落在他的肩上。他继续排查。新分组已建立。首屏的灰字还没有变。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "patterns"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "像/活像模板",
+      "count": 2,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "patterns"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "得像",
+      "count": 2,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "他把手贴在桥面上。桥面是凉的，凉得像一整条河。他慢慢后退。他慢慢蹲下。他慢慢把耳朵贴上去。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "patterns"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "短并列三拍",
+      "count": 2,
+      "story_count": 2,
+      "chapter_total": 4,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "custom_template"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "对白转轴缺口",
+      "count": 2,
+      "story_count": 1,
+      "chapter_total": 2,
+      "sample": "\"它在数 | \"她说 | \"数什么 | \"数我们",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "dialogue_axis_gap"
+      ],
+      "bucket_families": [
+        "dialogue_axis_gap"
+      ]
+    },
+    {
+      "name": "重叠词节奏",
+      "count": 2,
+      "story_count": 1,
+      "chapter_total": 2,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "buckets": [
+        "custom_template"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "因为",
+      "count": 1,
+      "story_count": 1,
+      "chapter_total": 2,
+      "sample": "\"因为桥在这里。\"",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "tokens"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "然后",
+      "count": 1,
+      "story_count": 1,
+      "chapter_total": 2,
+      "sample": "然后他走。然后他停。然后他又走。接着他抬头。接着他压低声音。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "buckets": [
+        "tokens"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    },
+    {
+      "name": "章末模板",
+      "count": 1,
+      "story_count": 1,
+      "chapter_total": 2,
+      "sample": "么在数。一步。两步。停。三步。  \"数完了会怎样？\"她问。  \"不知道。\"他把终端揣回怀里，\"但第七区的灯会亮。\"  第七区没有亮。灰字还跳。他新建了一组日志。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "buckets": [
+        "ending"
+      ],
+      "bucket_families": [
+        "ending"
+      ]
+    },
+    {
+      "name": "说完就",
+      "count": 1,
+      "story_count": 1,
+      "chapter_total": 2,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "跨章重复出现，优先作为模板库候选继续人工筛选。"
+      ],
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "buckets": [
+        "custom_template"
+      ],
+      "bucket_families": [
+        "template_family"
+      ]
+    }
+  ],
+  "term_candidates": [
+    {
+      "bucket": "learned_filter",
+      "name": "终端",
+      "count": 4,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "终端亮了。终端又亮了。终端还在亮。他盯着那行灰字，像盯着一口深井。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reasons": [
+        "跨章重复出现，更像词项或短语，需要进词库观察。"
+      ]
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "屏幕",
+      "count": 2,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reasons": [
+        "跨章重复出现，更像词项或短语，需要进词库观察。"
+      ]
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "一下",
+      "count": 2,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 2,
+      "sample": "他不知道她在说什么。但他觉得她说得对。他把终端举到雾里。灰字在雾里跳了一下。第三屏亮了。第四屏也亮了。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reasons": [
+        "跨章重复出现，更像词项或短语，需要进词库观察。"
+      ]
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "冷光",
+      "count": 1,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "chapter_total": 2,
+      "sample": "夜落在港口上。灯落在桥上。冷光落在他的肩上。他继续排查。新分组已建立。首屏的灰字还没有变。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reasons": [
+        "跨章重复出现，更像词项或短语，需要进词库观察。"
+      ]
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "抬头",
+      "count": 1,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1"
+      ],
+      "chapter_total": 2,
+      "sample": "然后他走。然后他停。然后他又走。接着他抬头。接着他压低声音。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reasons": [
+        "跨章重复出现，更像词项或短语，需要进词库观察。"
+      ]
+    }
+  ],
+  "keep_candidates": [
+    {
+      "bucket": "keep_candidates",
+      "name": "场面功能有切换",
+      "count": 4,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "粗分块没有被单一对白或说明吃满，说明这一章至少在尝试做功能接力。"
+      ]
+    },
+    {
+      "bucket": "keep_candidates",
+      "name": "局部排比可视作风格点缀",
+      "count": 3,
+      "story_count": 2,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 4,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "检测到少量 AA/BB 或短分句节奏，但还没形成模板疲劳，可以先按风格候选保留。"
+      ]
+    },
+    {
+      "bucket": "keep_candidates",
+      "name": "动作段有后果反馈",
+      "count": 1,
+      "story_count": 1,
+      "stories": [
+        "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2"
+      ],
+      "chapter_total": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reasons": [
+        "冲突段不只累计动作动词，也带出了结果、伤害或位移反馈，可以视作紧凑度候选。"
+      ]
+    }
+  ],
+  "deposition_targets": [
+    {
+      "target": "novel1/rules/draft.md",
+      "count": 2
+    },
+    {
+      "target": "skills/review-guide.md",
+      "count": 2
+    },
+    {
+      "target": "configs/rules/review.yaml#draft.tracked_terms",
+      "count": 1
+    }
+  ],
+  "learning_anchors": [
+    {
+      "kind": "keep",
+      "name": "场面功能有切换",
+      "bucket": "keep_candidates",
+      "count": 4,
+      "story_count": 2,
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "多条 Story 都在把它当加分或保留候选，说明审查不该一刀切地误杀这类文笔设计。"
+    },
+    {
+      "kind": "keep",
+      "name": "局部排比可视作风格点缀",
+      "bucket": "keep_candidates",
+      "count": 3,
+      "story_count": 2,
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "多条 Story 都在把它当加分或保留候选，说明审查不该一刀切地误杀这类文笔设计。"
+    }
+  ],
+  "writeback_queue": []
+}

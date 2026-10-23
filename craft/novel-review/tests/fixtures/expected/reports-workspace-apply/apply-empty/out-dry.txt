@@ -1,0 +1,10 @@
+# Template Candidate Writeback Dry Run
+
+- catalog: `tests/fixtures/apply-inputs/c2.json`
+- novel: `novel-a`
+- stories: `4`
+- queue_items: `0`
+- mode: `dry-run` (no files modified)
+
+## State Summary
+

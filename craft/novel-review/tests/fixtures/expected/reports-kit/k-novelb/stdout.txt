@@ -1,0 +1,6 @@
+tests/fixtures/catalog-cbk/novel-b/draft-stats/arc9/story9/scorecards/SUMMARY.md
+tests/fixtures/catalog-cbk/novel-b/draft-stats/arc9/story9/learning/SUMMARY.md
+tests/fixtures/catalog-cbk/novel-b/draft-stats/arc9/story9/profiles/SUMMARY.md
+tests/fixtures/catalog-cbk/novel-b/draft-stats/arc9/story9/template-backlog/SUMMARY.md
+tests/fixtures/catalog-cbk/novel-b/draft-stats/arc9/story9/template-backlog/CANDIDATES.json
+tests/fixtures/catalog-cbk/novel-b/draft-stats/arc9/story9/review-kit/SUMMARY.md

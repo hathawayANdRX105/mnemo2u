@@ -1,0 +1,41 @@
+# Template Candidate Writeback Dry Run
+
+- catalog: `tests/fixtures/apply-inputs/c1.yaml`
+- novel: `novel-a`
+- stories: `4`
+- queue_items: `7`
+- mode: `dry-run` (no files modified)
+
+## State Summary
+- `candidate` x3
+- `bank` x1
+- `review` x1
+- `hardcoded` x1
+- `manual` x1
+
+## Would add to configs/rules/review.yaml#draft.inactive_template_candidates
+- `candidate` `new_template` `tpl_cold_light` -> `configs/rules/review.yaml#draft.template_rules` stories=`story1` count=`3`
+  reason: 冷光 出现 3 次
+- `candidate` `new_template` `短句密度` -> `configs/rules/review.yaml#draft.template_rules` stories=`story2` count=`2`
+  reason: 已有候选 更新备注
+
+## Would add to configs/rules/review.yaml#draft.tracked_terms
+- `candidate` `new_term` `终端站` -> `configs/rules/review.yaml#draft.tracked_terms` stories=`story1` count=`5`
+  reason: 高频新词
+
+## Would recalibrate existing bank entries
+- `bank` `existing_term` `雷德` -> `configs/rules/review.yaml#draft.tracked_terms` stories=`story1` count=`8`
+  reason: 再度出现
+
+## Needs script recalibration
+- `hardcoded` `script` `s1` -> `src/stats/draft.rs` stories=`story2` count=`1`
+  reason: 脚本标定
+
+## Would update guide or rule docs
+- `review` `guide` `g1` -> `novel1/rules/draft.md` stories=`story1` count=`1`
+  reason: 规则文档
+
+## Needs manual routing
+- `manual` `other` `m1` -> `external/vendor` stories=`story1` count=`1`
+  reason: 待人工
+

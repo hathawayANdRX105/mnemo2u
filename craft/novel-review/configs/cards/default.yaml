@@ -1,0 +1,17 @@
+cards:
+  - id: lin-yue
+    kind: character
+    keywords: ["林越", "越哥哥"]
+    content: |
+      林越：前朝余孽，凡尔登法典编纂者，惯用左手短刀。
+      动机：查明旧闸一夜之间封河的原因。弱点：不会对苏晚撒谎。
+  - id: capital
+    kind: world
+    keywords: ["京城"]
+    content: |
+      京城：皇城与外城以旧闸分隔，宵禁由侍卫执行。
+      连年大旱，粮价三月翻两倍。
+  - id: rule-no-direct-quote
+    kind: rule
+    content: |
+      规则：正文不得直接引用设定卡文本；设定须化为场面元素呈现。

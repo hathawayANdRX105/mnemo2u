@@ -1,0 +1,1 @@
+tests/fixtures/catalog-cbk/novel-a/AUDIT.md

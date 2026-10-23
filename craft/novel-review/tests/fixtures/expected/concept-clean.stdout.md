@@ -1,0 +1,7 @@
+# 张远.md
+
+- status: `OK`
+- warnings: `0`
+
+无警告。
+

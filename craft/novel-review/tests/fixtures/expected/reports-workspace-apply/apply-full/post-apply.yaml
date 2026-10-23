@@ -1,0 +1,1832 @@
+memory:
+  embedding_model: BAAI/bge-m3
+  created_at_base: 0
+  story_fact_sections:
+  - 核心事件
+  - 粗章节负载
+  - 主要角色与功能
+  card_related_field: 关联卡片
+  card_relation_section: 关系
+paths:
+  cards: concept/cards
+  drafts: drafts
+  arc_plan: arc-plan
+  story_plan: story-plan
+  chapter_plan: chapter-plan
+draft:
+  regex_rules:
+    tokens:
+    - name: 不是
+      pattern: 不是
+      max_per_10k: 12.0
+      note: 高频否定判断
+      register: literary,webnovel
+    - name: 只是
+      pattern: 只是
+      max_per_10k: 8.0
+      note: 弱转折口头禅
+      register: literary
+    - name: 而是
+      pattern: 而是
+      max_per_10k: 6.0
+      note: 二分强调
+      register: webnovel
+    - name: 因为
+      pattern: 因为
+      max_per_10k: 10.0
+      note: 因果直说
+      register: common
+    - name: 所以
+      pattern: 所以
+      max_per_10k: 10.0
+      note: 因果直说
+      register: literary
+    - name: 可是
+      pattern: 可是
+      max_per_10k: 6.0
+      note: 口语转折
+      register: common
+    - name: 却
+      pattern: 却
+      max_per_10k: 18.0
+      note: 常见逆接
+      register: literary
+    - name: 然后
+      pattern: 然后
+      max_per_10k: 8.0
+      note: 流水账连接
+      register: literary,lightnovel,webnovel
+    - name: 于是
+      pattern: 于是
+      max_per_10k: 5.0
+      note: 流程化推进
+      register: literary,webnovel
+    - name: 问题在于
+      pattern: 问题在于
+      max_per_10k: 2.5
+      note: 解释腔总结句
+    - name: 仿佛
+      pattern: 仿佛
+      max_per_10k: 6.0
+      note: 高频比喻触发词
+      register: literary
+    - name: 像是
+      pattern: 像是
+      max_per_10k: 7.0
+      note: 抽象判断过渡
+    - name: 谈不上
+      pattern: 谈不上
+      max_per_10k: 3.0
+      note: 修正型弱否定
+    - name: 算不上
+      pattern: 算不上
+      max_per_10k: 3.0
+      note: 修正型弱否定
+    - name: 不
+      pattern: 不
+      max_per_10k: 120.0
+      note: 功能词总量观察
+      register: common
+    - name: 是
+      pattern: 是
+      max_per_10k: 170.0
+      note: 功能词总量观察
+      register: literary
+    patterns:
+    - name: pi_status_bar
+      label: Pi竖线状态栏
+      pattern: 【Pi】[^\n]*｜[^\n]*
+      max_per_10k: 1.5
+      note: Pi 输出像系统状态栏，容易挤掉角色反应
+    - name: pi_menu_prompt
+      label: Pi是否菜单
+      pattern: 【Pi】\s*是否[^\n]+
+      max_per_10k: 1.0
+      note: Pi 像按钮确认框，削弱搭档感
+    - name: clue_dashboard_terms
+      label: 线索面板词
+      pattern: (?:归档|首屏|标签|重合|关联|归进同一组|挂上|缓存|待比对|坐标|频段|线索)
+      max_per_10k: 18.0
+      note: 线索被面板词收拢时，场面会像任务列表
+    - name: short_conclusion_pair
+      label: 这不是X是Y
+      pattern: 这不是[^。！？\n]{1,20}[。！？\n]+[^。！？\n]{0,20}是[^。！？\n]{1,30}
+      max_per_10k: 1.0
+      note: 短结论对会替读者完成推理
+    - name: assertive_judgement
+      label: 肯定判断/解释腔
+      pattern: (?:这是|那是|这里是|真正|其实|显然|说白了|换句话说|有些事|有些东西)[^。！？\n]{0,36}
+      max_per_10k: 8.0
+      note: 肯定判断和解释腔过密时，旁白会替场面下结论
+    - name: ba_operation
+      label: 把字操作句
+      pattern: 把[^。！？\n]{1,30}
+      max_per_10k: 60.0
+      note: 把字句过密时，场面容易变成操作日志
+    - name: simile_template
+      label: 像/活像模板
+      pattern: (?:活像|像是|像[^，。！？\n]{0,16}(?:一样|似的|似|有人|一块|一头|一根|一道|一只))
+      max_per_10k: 18.0
+      note: 比喻模板过密时，旁白会替代真实动作
+      register: literary
+    - name: negation_contrast
+      label: 不是A而是B
+      pattern: 不是[^。！？\n]{0,40}(?:而是|是)[^。！？\n]{0,40}
+      max_per_10k: 4.0
+      note: 典型模板对照句
+      register: literary,lightnovel,webnovel
+    - name: negation_soft_turn
+      label: 不是A只是B/更像B
+      pattern: 不是[^。！？\n]{0,40}(?:只是|更像|倒像|倒是|问题在于)[^。！？\n]{0,40}
+      max_per_10k: 4.0
+      note: AI 感较强的软转折
+    - name: double_negative_list
+      label: 没有A也没有B
+      pattern: 没有[^。！？\n]{0,24}也没有[^。！？\n]{0,24}
+      max_per_10k: 2.5
+      note: 并列否定反复使用会发木
+      register: webnovel
+    - name: affirm_then_negative
+      label: 肯定后否定
+      pattern: (?:当然|确实|的确|明明)[^。！？\n]{0,30}不(?:是|会|能|该|像)
+      max_per_10k: 3.0
+      note: 先肯定再自我转折
+      register: webnovel
+    - name: negative_then_affirm
+      label: 否定后肯定
+      pattern: 不(?:是|会|能|该)[^。！？\n]{0,30}(?:而是|反而|却|倒)
+      max_per_10k: 4.0
+      note: 否定后再拉回主判断
+      register: literary,lightnovel,webnovel
+    - name: degree_to_extent
+      label: 高到/近到/痛得
+      pattern: '[\u4e00-\u9fffA-Za-z]{1,12}(?:高到|近到|低到|冷到|痛得|热得|亮得|黑得|静得|吵得)[^。！？\n]{0,28}'
+      max_per_10k: 5.0
+      note: 程度句式连续出现会模板化
+    - name: dash_pair
+      label: aa - bb
+      pattern: '[A-Za-z\u4e00-\u9fff]{1,20}\s*[-—]\s*[A-Za-z\u4e00-\u9fff]{1,20}'
+      max_per_10k: 1.5
+      note: 并列对照或定义句
+    - name: simile_yiyang
+      label: 像……一样
+      pattern: 像[^。！？\n]{0,24}一样
+      max_per_10k: 3.5
+      note: 明喻模板
+      register: literary,webnovel
+    - name: simile_side
+      label: 像……似的/那样
+      pattern: 像[^。！？\n]{0,24}(?:似的|那样)
+      max_per_10k: 4.0
+      note: 明喻模板
+    - name: de_like
+      label: 得像
+      pattern: '[\u4e00-\u9fffA-Za-z]{1,12}得像[^。！？\n]{0,24}'
+      max_per_10k: 4.0
+      note: 程度强化模板
+    - name: problem_statement
+      label: 问题在于/这就是
+      pattern: (?:问题在于|这就是|那就是|这不是|那不是)[^。！？\n]{0,24}
+      max_per_10k: 5.0
+      note: 课堂总结式判断句
+      register: literary,webnovel
+    phrases:
+    - name: 不是因为
+      pattern: 不是因为
+      max_per_10k: 2.0
+      note: 解释型起手
+      register: webnovel
+    - name: 问题不在
+      pattern: 问题不在
+      max_per_10k: 2.0
+      note: 课堂判断句
+    - name: 看起来
+      pattern: 看起来
+      max_per_10k: 4.0
+      note: 判断先于场面
+    - name: 更像
+      pattern: 更像
+      max_per_10k: 4.0
+      note: 软修正骨架
+    - name: 像是
+      pattern: 像是
+      max_per_10k: 7.0
+      note: 抽象过渡
+      register: literary
+    - name: 至少
+      pattern: 至少
+      max_per_10k: 5.0
+      note: 保守判断口头禅
+    - name: 忽然
+      pattern: 忽然
+      max_per_10k: 5.0
+      note: 突发提示词
+    modifiers:
+    - name: 微微
+      pattern: 微微
+      max_per_10k: 6.0
+      note: 黏糊副词，容易把动作写虚
+    - name: 轻轻
+      pattern: 轻轻
+      max_per_10k: 6.0
+      note: 黏糊副词，容易削弱力度
+    - name: 慢慢
+      pattern: 慢慢
+      max_per_10k: 6.0
+      note: 推进副词重复会拖慢节奏
+      register: literary
+    - name: 有点
+      pattern: 有点
+      max_per_10k: 5.0
+      note: 弱判断口头禅
+    - name: 一点点
+      pattern: 一点点
+      max_per_10k: 2.5
+      note: 程度补语过密会发腻
+    - name: 越来越
+      pattern: 越来越
+      max_per_10k: 4.0
+      note: 趋势句式重复
+      register: literary
+    - name: 显得
+      pattern: 显得
+      max_per_10k: 4.0
+      note: 作者替场面下判断
+    - name: 过于
+      pattern: 过于
+      max_per_10k: 3.0
+      note: 说明腔强判断
+    - name: 几乎
+      pattern: 几乎
+      max_per_10k: 6.0
+      note: 保守强调词
+    - name: 几乎没有
+      pattern: 几乎没有
+      max_per_10k: 2.0
+      note: 双层弱否定
+      register: literary
+    punctuation:
+    - name: ！
+      pattern: ！
+      max_per_10k: 6.0
+      note: 感叹号过多会显得用力过猛
+      register: common
+    - name: ？
+      pattern: ？
+      max_per_10k: 10.0
+      note: 问号过多会把对话写成盘问
+      register: common
+    - name: ……
+      pattern: ……
+      max_per_10k: 10.0
+      note: 省略号容易养成口头禅
+      register: literary,lightnovel
+    - name: ——
+      pattern: ——
+      max_per_10k: 4.0
+      note: 破折号太多会拉出解释腔
+      register: literary,lightnovel
+    - name: ：
+      pattern: ：
+      max_per_10k: 18.0
+      note: 冒号过多常见于说明式文本
+      register: common
+    punctuation_combos:
+    - name: ？！/！？
+      pattern: (?:？！|！？)
+      max_per_10k: 1.5
+      note: 强情绪标点组合
+      register: lightnovel
+    - name: ！！
+      pattern: ！！
+      max_per_10k: 1.0
+      note: 双感叹号
+    - name: ？？
+      pattern: ？？
+      max_per_10k: 1.0
+      note: 双问号
+  template_rules:
+  - name: 不是A而是B
+    pattern: 不是[^。！？\n]{0,40}而是[^。！？\n]{0,40}
+    note: 二分强调模板，适合硬查
+    max_per_10k: 3.5
+    category: contrast
+  - name: 不是A只是B
+    pattern: 不是[^。！？\n]{0,40}只是[^。！？\n]{0,40}
+    note: 修正式否定，容易写成 AI 腔
+    max_per_10k: 2.5
+    category: contrast
+  - name: 不是A更像B
+    pattern: 不是[^。！？\n]{0,40}更像[^。！？\n]{0,40}
+    note: 软转折模板，重复时会很假
+    max_per_10k: 2.5
+    category: contrast
+  - name: 没有A也没有B
+    pattern: 没有[^。！？\n]{0,24}也没有[^。！？\n]{0,24}
+    note: 并列否定模板
+    max_per_10k: 2.0
+    category: negation
+  - name: 高到近到痛得到
+    pattern: '[\u4e00-\u9fffA-Za-z]{1,12}(?:高到|近到|低到|冷到|热到|痛得|亮得|黑得|静得|吵得)[^。！？\n]{0,28}'
+    note: 程度推进模板
+    max_per_10k: 4.5
+    category: degree
+  - name: 得像
+    pattern: '[\u4e00-\u9fffA-Za-z]{1,12}得像[^。！？\n]{0,24}'
+    note: 程度比喻骨架；对白里少量可保留，旁白连续回收时更容易露手势
+    max_per_10k: 4.2
+    category: degree
+  - name: 像是想
+    pattern: 像是想[^。！？\n]{0,30}
+    note: 旁白代替动作判断
+    max_per_10k: 2.5
+    category: judgement
+  - name: 看起来像
+    pattern: 看起来[^。！？\n]{0,20}像[^。！？\n]{0,20}
+    note: 判断先于画面
+    max_per_10k: 2.0
+    category: judgement
+  - name: 说完就
+    pattern: '[\u4e00-\u9fffA-Za-z]{1,12}说完就[^。！？\n]{0,24}'
+    note: 说明式动作尾巴
+    max_per_10k: 2.0
+    category: action
+  - name: 问完就
+    pattern: '[\u4e00-\u9fffA-Za-z]{1,12}问完就[^。！？\n]{0,24}'
+    note: 说明式动作尾巴
+    max_per_10k: 1.5
+    category: action
+  - name: 问题不在
+    pattern: 问题不在[^。！？\n]{0,30}
+    note: 课堂式判断骨架
+    max_per_10k: 2.0
+    category: judgement
+  - name: 像某种
+    pattern: 像某种[^。！？\n]{0,30}
+    note: 万能比喻骨架
+    max_per_10k: 2.5
+    category: judgement
+  - name: 显得很
+    pattern: 显得很[^。！？\n]{0,20}
+    note: 作者直接下判断
+    max_per_10k: 2.0
+    category: judgement
+  - name: 越来越像
+    pattern: 越来越像[^。！？\n]{0,24}
+    note: 趋势判断模板
+    max_per_10k: 2.0
+    category: judgement
+  - name: 几乎没有
+    pattern: 几乎没有[^。！？\n]{0,24}
+    note: 双层弱否定
+    max_per_10k: 2.0
+    category: negation
+  - name: 像在
+    pattern: 像在[^。！？\n]{0,30}
+    note: 旁白代行动作判断
+    max_per_10k: 3.0
+    category: judgement
+  - name: 越A越B
+    pattern: 越[^。！？\n]{0,18}越[^。！？\n]{0,18}
+    note: 递进判断骨架，连续使用会发板
+    max_per_10k: 2.5
+    category: progression
+  - name: 一A就B
+    pattern: '[一刚才只要][^。！？\n]{0,18}就[^。！？\n]{0,18}'
+    note: 因果直连骨架；动作推进里可少量用，连续出现才会把叙事写得过顺
+    max_per_10k: 2.9
+    category: progression
+  - name: 有些并不
+    pattern: 有些[^。！？\n]{0,18}并不[^。！？\n]{0,18}
+    note: 判断修正式句法
+    max_per_10k: 1.8
+    category: judgement
+  - name: 从来不会只会
+    pattern: 从来不会[^。！？\n]{0,24}只会[^。！？\n]{0,24}
+    note: 强判断二分骨架
+    max_per_10k: 1.6
+    category: contrast
+  - name: 先后最后
+    pattern: 先[^。！？\n]{0,18}后[^。！？\n]{0,18}最后[^。！？\n]{0,18}
+    note: 流程说明书骨架
+    max_per_10k: 1.5
+    category: flow
+  - name: 要是那才
+    pattern: 要是[^。！？\n]{0,24}那才[^。！？\n]{0,24}
+    note: 假设强调骨架
+    max_per_10k: 1.5
+    category: contrast
+  - name: 不是问题是问题
+    pattern: 不是[^。！？\n]{0,18}的问题[^。！？\n]{0,12}是[^。！？\n]{0,18}的问题
+    note: 课堂总结式判断
+    max_per_10k: 1.5
+    category: judgement
+  - name: 短并列三拍
+    pattern: (?:[^，。！？\n]{2,16}[，；、]){2}[^，。！？\n]{2,16}
+    note: 从现有草稿复盘出的 AA/BB 式短排比；场景铺陈和情绪加压可留少量，连续两段以上再视作清单化风险
+    max_per_10k: 2.6
+    category: learned-reflection
+  - name: 重叠词节奏
+    pattern: (?:一([\u4e00-\u9fff])\1|([\u4e00-\u9fff])\2([\u4e00-\u9fff])\3|([\u4e00-\u9fff]{2})\4)
+    note: AA/AABB/ABAB式重叠词；少量能提供口气和质感，密集回收才判为手癖
+    max_per_10k: 3.8
+    category: learned-reflection
+  inactive_template_candidates:
+  - name: 动作操作
+    pattern: ''
+    note: 同名家族跨 Story 稳定出现，适合进入模板库或至少进入候选审阅清单。
+    max_per_10k: 5.0
+    category: auto_generated
+    enabled: false
+  - name: 短句密度
+    pattern: ''
+    note: 已有候选 更新备注
+    max_per_10k: 5.0
+    category: auto_generated
+    enabled: false
+  - name: 局部疲劳窗口
+    pattern: ''
+    note: 同名家族跨 Story 稳定出现，适合进入模板库或至少进入候选审阅清单。
+    max_per_10k: 5.0
+    category: auto_generated
+    enabled: false
+  - name: tpl_cold_light
+    pattern: ''
+    note: 冷光 出现 3 次
+    max_per_10k: 5.0
+    category: auto_generated
+    enabled: false
+  tracked_terms:
+  - category: characters
+    term: 雷德
+    max_per_10k: 28.0
+    note: 主角姓名过密时，叙述会变成点名册
+  - category: characters
+    term: 莉莉安
+    max_per_10k: 28.0
+    note: 双人戏容易把名字喊太满
+  - category: characters
+    term: 艾德琳
+    max_per_10k: 18.0
+    note: 强角色出场时要避免名字刷屏
+  - category: characters
+    term: 斯卡文德
+    max_per_10k: 16.0
+    note: 机体名重复过多会盖过场面感
+  - category: characters
+    term: Pi
+    max_per_10k: 24.0
+    note: Pi 提示多时容易挤占正文
+  - category: places
+    term: 栖城
+    max_per_10k: 18.0
+    note: 地名重复过多说明场面词不够丰富
+  - category: places
+    term: 公会
+    max_per_10k: 18.0
+    note: 制度和场面词需要替换，不要只剩公会
+  - category: places
+    term: 学院
+    max_per_10k: 18.0
+    note: 学院相关描述应有更多具体地点词
+  - category: places
+    term: 城外
+    max_per_10k: 14.0
+    note: 环境描述不能只靠城外这个统称
+  - category: devices
+    term: 终端
+    max_per_10k: 18.0
+    note: 系统文本过密时要查是否在偷写说明
+  - category: devices
+    term: 屏幕
+    max_per_10k: 14.0
+    note: 视觉载体要和其他感官信息轮换
+  - category: devices
+    term: 护甲
+    max_per_10k: 14.0
+    note: 装备词重复过多会显得记账
+  - category: devices
+    term: 机体
+    max_per_10k: 10.0
+    note: 机械体需要动作和气质词分担
+  - category: actions
+    term: 看了一眼
+    max_per_10k: 8.0
+    note: 动作替代词不够时会反复出现
+  - category: actions
+    term: 抬头
+    max_per_10k: 10.0
+    note: 常见功能动作，需要和别的动作轮换
+  - category: actions
+    term: 低声
+    max_per_10k: 10.0
+    note: 语气副词过密会削弱真正的低声场面
+  - category: actions
+    term: 笑了一下
+    max_per_10k: 8.0
+    note: 人物状态描写容易模板化
+  - category: actions
+    term: 没说话
+    max_per_10k: 6.0
+    note: 沉默不能总用同一句写
+  - category: actions
+    term: 看着
+    max_per_10k: 10.0
+    note: 持续盯视动作过密时，段落会发僵
+  - category: actions
+    term: 偏头
+    max_per_10k: 8.0
+    note: 段首小动作重复会像机械镜头调度
+  - category: atmosphere
+    term: 安静
+    max_per_10k: 8.0
+    note: 安静类形容词重复会失去压迫感
+  - category: atmosphere
+    term: 宁静
+    max_per_10k: 4.0
+    note: 同义氛围词需要分散使用
+  - category: atmosphere
+    term: 压抑
+    max_per_10k: 6.0
+    note: 氛围判断要多交给细节
+  - category: style
+    term: 得很
+    max_per_10k: 9.5
+    note: 程度尾巴反复出现时，语气会开始发滑；对白里偶发可留，旁白密集回收优先处理
+  - category: actions
+    term: 停在
+    max_per_10k: 6.0
+    note: 视线或动作总写成停在，场面容易发僵
+  - category: style
+    term: 冷光
+    max_per_10k: 8.0
+    note: 冷意象重复过多会让章末和氛围收束发木
+  - category: style
+    term: 夜色
+    max_per_10k: 8.0
+    note: 夜色类收束反复出现时，章末会模板化
+  - category: style
+    term: 高墙
+    max_per_10k: 8.0
+    note: 高墙意象频繁回收时，容易替代真实剧情收束
+  - category: style
+    term: 脉搏
+    max_per_10k: 4.0
+    note: 宏大比喻词一旦回收过多，会显出作者用力
+  - category: style
+    term: 忽然觉得
+    max_per_10k: 2.0
+    note: 判断先于画面，容易把旁白写成总结句
+  - category: style
+    term: 像某种
+    max_per_10k: 5.0
+    note: 万能比喻骨架重复时，画面会变空
+  - category: style
+    term: 微微
+    max_per_10k: 6.0
+    note: 黏糊副词高频时，动作会越来越虚
+  - category: style
+    term: 轻轻
+    max_per_10k: 6.0
+    note: 轻描副词反复出现时，力度会被冲掉
+  - category: style
+    term: 慢慢
+    max_per_10k: 6.0
+    note: 推进副词太密时，叙述会拖
+  - category: style
+    term: 有点
+    max_per_10k: 5.0
+    note: 弱判断口头禅
+  - category: style
+    term: 显得
+    max_per_10k: 4.0
+    note: 作者判断词过密，场面自己说话的空间会变少
+  - category: style
+    term: 过于
+    max_per_10k: 3.0
+    note: 说明腔强判断
+  - category: style
+    term: 直接
+    max_per_10k: 7.0
+    note: 推进副词过密会显得太直给
+  - category: style
+    term: 立刻
+    max_per_10k: 6.0
+    note: 即时反应词连续出现会发硬
+  - category: style
+    term: 一下
+    max_per_10k: 10.0
+    note: 弱化动作的小尾巴，过多会发黏
+  - category: style
+    term: 一瞬
+    max_per_10k: 4.0
+    note: 时间切片词重复会显得作者在举牌
+  - category: style
+    term: 本能
+    max_per_10k: 3.0
+    note: 心理判断词过多会替角色下结论
+  - term: 终端站
+    category: location
+    max_per_10k: 10.0
+    note: 高频新词
+  thresholds:
+    short_sentence_max_chars: 8
+    very_short_sentence_max_chars: 4
+    short_sentence_run_max_chars: 12
+    short_sentence_run_min: 3
+    tracked_term_window_size: 8
+    tracked_term_window_min_top: 3
+    tracked_term_window_min_total: 5
+    tracked_term_window_min_category: 4
+    learned_filter_limit: 24
+  learned_term_window:
+    categories:
+    - actions
+    - characters
+    - devices
+    - learned_term
+    - places
+    noise_suffixes:
+    - 把
+    - 说
+    - 看
+    - 没
+    - 在
+    - 内
+    - 外
+    - 上
+    - 下
+    - 里
+    - 面
+    - 前
+    - 后
+    - 旁
+    - 边
+    - 时
+    noise_prefixes:
+    - 的
+    - 了
+    - 把
+    - 在
+    - 说
+    - 看
+    - 没
+    - 不
+    noise_chars:
+    - 了
+    - 的
+    attribution_suffixes:
+    - 道
+    - 说
+    - 问
+    - 曰
+    - 念
+    - 听
+    - 笑
+    - 叹
+    - 喝
+    - 叫
+    - 吼
+    - 喊
+    - 嘟囔
+    - 回答
+    - 吩咐
+  markdown_noise_line:
+    pattern: ^\s*(?:#|\||[-*]\s*(?:状态|所属分类|卡片 ID|别名|首次生效|当前位置|时间线状态|关联卡片|看点|状态变化|伏笔动作|节奏|本章功能|章节钩子|推荐章数|定位|核心冲突|核心事件|章数|Scene|字段|章节|目的)[:：])
+  connective_sentence_patterns:
+  - label: 不是…
+    pattern: ^不是
+  - label: 只是…
+    pattern: ^只是
+  - label: 因为…
+    pattern: ^因为
+  - label: 所以…
+    pattern: ^所以
+  - label: 可是…
+    pattern: ^可是
+  - label: 然后…
+    pattern: ^然后
+  - label: 于是…
+    pattern: ^于是
+  - label: 问题不在…
+    pattern: ^问题不在
+  - label: 问题在于…
+    pattern: ^问题在于
+  - label: 至少…
+    pattern: ^至少
+  - label: 看起来…
+    pattern: ^看起来
+  - label: 像是…
+    pattern: ^像是
+  - label: 仿佛…
+    pattern: ^仿佛
+  - label: 忽然…
+    pattern: ^忽然
+  speaker:
+    patterns:
+    - ([A-Za-z\u4e00-\u9fff·]{1,12})(?:说|问|骂|回道|低声说|开口|嘟囔|笑着说|冷笑道)
+    line_patterns:
+    - (?:“[^”]{0,120}”)([A-Za-z\u4e00-\u9fff·]{1,12})(?:说|问|回道|低声说|开口|嘟囔|笑着说|冷笑道)
+    - ([A-Za-z\u4e00-\u9fff·]{1,12})(?:说|问|回道|低声说|开口|嘟囔|笑着说|冷笑道)[：:,，]?(?:“[^”]{0,120}”)?
+    suffixes:
+    - 低声
+    - 轻声
+    - 冷声
+    - 哑声
+    - 低低
+    - 轻轻
+    - 冷冷
+    - 平静地
+    - 低低地
+    - 轻轻地
+    - 冷冷地
+    - 哑着嗓子
+    - 笑着
+    - 冷笑着
+    - 盯着她
+    - 盯着他
+    - 看着她
+    - 看着他
+  lexicon:
+    word_stoplist:
+    - 一下
+    - 一个
+    - 一次
+    - 一眼
+    - 下来
+    - 不是
+    - 东西
+    - 了一
+    - 什么
+    - 他们
+    - 你们
+    - 出来
+    - 只是
+    - 因为
+    - 她们
+    - 如果
+    - 已经
+    - 我们
+    - 所以
+    - 时候
+    - 来的
+    - 然后
+    - 的人
+    - 第一
+    - 而是
+    - 自己
+    - 还是
+    - 这个
+    - 这样
+    - 那个
+    - 那种
+    corpus_stop_terms:
+    - 一下
+    - 一个
+    - 一次
+    - 一眼
+    - 下来
+    - 下来的
+    - 不会
+    - 不是
+    - 不能
+    - 东西
+    - 两人
+    - 主角
+    - 主角团
+    - 也不
+    - 也没
+    - 了一
+    - 了一下
+    - 了一声
+    - 什么
+    - 他们
+    - 你们
+    - 出来
+    - 出来的
+    - 功能
+    - 变化
+    - 只是
+    - 因为
+    - 场景变化
+    - 她们
+    - 如果
+    - 已经
+    - 我们
+    - 所以
+    - 时候
+    - 来的
+    - 没有
+    - 然后
+    - 状态
+    - 状态变
+    - 的东西
+    - 的人
+    - 目标
+    - 目标让
+    - 知道
+    - 确认
+    - 第一
+    - 第一次
+    - 继续
+    - 而是
+    - 自己
+    - 还是
+    - 还有
+    - 还没
+    - 这个
+    - 这样
+    - 那个
+    - 那种
+    - 都没
+    structure_chars: 不会停像先再却又只听太就并很想把是没看笑而能被要让说走还都问
+    subject_leads:
+    - 雷德
+    - 莉莉安
+    - 雷诺
+    - 阿芙
+    - Pi
+    - 他
+    - 她
+    - 他们
+    - 她们
+    paragraph_leads:
+    - 雷德
+    - 莉莉安
+    - 他
+    - 她
+    - 他们
+    - 她们
+    - Pi
+    - 公会
+    - 学院
+    - 栖城
+    - 这座城
+    - 高架
+    - 屏幕
+    - 终端
+    allowed_short_corpus_terms:
+    - Pi
+    - 他
+    - 他们
+    - 公会
+    - 四联
+    - 她
+    - 她们
+    - 学院
+    - 屏幕
+    - 栖城
+    - 灰棚
+    - 终端
+    - 莉莉安
+    - 蓝渊
+    - 这座城
+    - 阿芙
+    - 雨果
+    - 雷德
+    - 雷诺
+    - 高架
+    ending_image_terms:
+    - 夜
+    - 灯
+    - 冷光
+    - 高墙
+    - 蓝光
+    - 风
+    - 轨
+    - 桥
+    - 城
+    - 灰
+    ending_flow_terms:
+    - 已建立
+    - 新分组
+    - 首屏
+    - 挂上
+    - 继续
+    - 下一次
+    - 下一步
+    - 看账
+    - 记录
+    judgement_endings:
+    - 不对劲
+    - 有问题
+    - 不简单
+    - 更麻烦
+    - 不正常
+    - 不干净
+    - 不可信
+    fatigue_window_judgement_terms:
+    - 不是
+    - 只是
+    - 而是
+    - 这是
+    - 那是
+    - 这里是
+    - 真正
+    - 其实
+    - 显然
+    - 问题在于
+    - 说白了
+    - 换句话说
+    - 更像
+    - 像是
+    - 至少
+    fatigue_window_sticky_terms:
+    - 微微
+    - 轻轻
+    - 慢慢
+    - 有点
+    - 一点点
+    - 显得
+    - 过于
+    - 几乎
+    judgement_context_terms:
+    - 不是
+    - 只是
+    - 而是
+    - 这是
+    - 那是
+    - 这就是
+    - 那就是
+    - 真正
+    - 其实
+    - 显然
+    - 问题在于
+    - 问题不在
+    - 说白了
+    - 换句话说
+    - 更像
+    - 像是
+    - 至少
+    short_role_info_terms:
+    - 编号
+    - 资格
+    - 登记
+    - 记录
+    - 归档
+    - 坐标
+    - 线索
+    - 证据
+    - 系统
+    - 流程
+    - 接待
+    - 名单
+    - 封片
+    - 频段
+    short_role_emotion_terms:
+    - 笑
+    - 骂
+    - 怕
+    - 急
+    - 烦
+    - 冷
+    - 僵
+    - 沉默
+    - 愣
+    - 怔
+    - 慌
+    ba_clue_terms:
+    - 线索
+    - 证据
+    - 坐标
+    - 记录
+    - 归档
+    - 名单
+    - 编号
+    - 芯片
+    - 纸证
+    - 水印
+    - 短讯
+    - 标签
+    - 封存
+    - 材料
+    - 名字
+    - 口供
+    - 封袋
+    - 封套
+    ba_emotion_terms:
+    - 脸
+    - 目光
+    - 视线
+    - 声音
+    - 心
+    - 喉咙
+    - 手指
+    - 嘴角
+    - 笑
+    - 怒
+    - 骂
+    - 怕
+    - 慌
+    - 沉默
+    ba_scene_terms:
+    - 门
+    - 灯
+    - 坡道
+    - 柜台
+    - 车
+    - 人群
+    - 空间
+    - 影子
+    - 光
+    - 雨
+    - 风
+    - 灰
+    - 地面
+    - 房间
+    - 归档室
+    ba_scene_verbs:
+    - 照成
+    - 压成
+    - 挤成
+    - 推开
+    - 染成
+    - 拖长
+    - 映
+    - 亮
+    ba_tool_terms:
+    - 终端
+    - 屏幕
+    - 设备
+    - 护甲
+    - 机体
+    - 登记板
+    - 台灯
+    - 抽屉
+    - 拐杖
+    - 门牌
+    - 枪
+    - 刀
+    - 车
+    - 灯管
+    dialogue_axis_action_terms:
+    - 看
+    - 瞟
+    - 递
+    - 推
+    - 放
+    - 收
+    - 按
+    - 握
+    - 敲
+    - 踢
+    - 塞
+    - 抬
+    - 侧
+    - 停
+    - 退
+    - 走
+    - 转
+    - 绕
+    - 端
+    - 吞
+    - 望
+    - 避开
+    - 弯
+    - 碰
+    - 杯
+    - 指腹
+    - 停住
+    dialogue_axis_env_terms:
+    - 门
+    - 灯
+    - 雨
+    - 风
+    - 广播
+    - 人群
+    - 车
+    - 地面
+    - 柜台
+    - 坡道
+    - 房间
+    - 归档室
+    dialogue_axis_device_terms:
+    - Pi
+    - 终端
+    - 屏幕
+    - 设备
+    - 广播
+    - 灯管
+    dialogue_axis_third_party_terms:
+    - 老太太
+    - 年轻男人
+    - 管理员
+    - 路人
+    - 人群
+    - 护卫
+    - 校务部
+    - 清路员
+    adjective_hints:
+    - 高
+    - 低
+    - 亮
+    - 暗
+    - 冷
+    - 热
+    - 快
+    - 慢
+    - 硬
+    - 软
+    - 重
+    - 轻
+    - 窄
+    - 宽
+    - 深
+    - 浅
+    - 紧
+    - 松
+    - 稳
+    - 乱
+    - 白
+    - 黑
+    - 蓝
+    - 红
+    - 灰
+    verb_hints:
+    - 看
+    - 盯
+    - 压
+    - 推
+    - 拽
+    - 扯
+    - 敲
+    - 抬
+    - 收
+    - 贴
+    - 撞
+    - 咬
+    - 笑
+    - 骂
+    - 拖
+    - 冲
+    - 站
+    - 走
+    - 扫
+    - 亮
+    - 响
+    - 挂
+    - 挤
+    - 滚
+    scene_break_leads:
+    - 几分钟后
+    - 片刻后
+    - 过了一会
+    - 过了一阵
+    - 与此同时
+    - 另一边
+    - 回到
+    - 等到
+    - 随后
+    - 不久
+    - 门外
+    - 楼下
+    - 楼上
+    - 街口
+    - 转过
+    paragraph_info_terms:
+    - 线索
+    - 证据
+    - 编号
+    - 记录
+    - 归档
+    - 名单
+    - 解释
+    - 说明
+    - 原因
+    - 流程
+    - 登记
+    - 口供
+    - 手续
+    - 坐标
+    mental_state_terms:
+    - 觉得
+    - 以为
+    - 知道
+    - 意识到
+    - 想起
+    - 想到
+    - 记得
+    - 明白
+    - 怀疑
+    - 担心
+    - 后悔
+    - 希望
+    - 害怕
+    - 清楚
+    - 不安
+    dialogue_emotion_rules:
+      pressure:
+      - 别
+      - 快
+      - 马上
+      - 立刻
+      - 继续
+      - 给我
+      - 闭嘴
+      - 别动
+      - 别废话
+      - 听着
+      - 回答
+      - 扣好
+      - 冒头
+      evasion:
+      - 等等
+      - 回头
+      - 以后
+      - 先别
+      - 算了
+      - 没什么
+      - 不急
+      - 暂时
+      defense:
+      - 不是
+      - 没有
+      - 我没
+      - 别误会
+      - 不至于
+      - 用不着
+      - 别这么看
+      warmth:
+      - 谢谢
+      - 辛苦
+      - 小心
+      - 慢点
+      - 没事
+      - 我在
+      - 放心
+      - 先坐
+      hostility:
+      - 滚
+      - 烦
+      - 蠢
+      - 混账
+      - 冷笑
+      - 冷冷地说
+      - 心情差
+      - 骂
+      - 闭嘴
+      - 少来
+      fear:
+      - 危险
+      - 糟了
+      - 别过来
+      - 快跑
+      - 出事
+      - 小心
+      - 撑住
+    character_name_stoplist:
+    - 人群
+    - 低声
+    - 冷声
+    - 嗓音
+    - 嘴角
+    - 声音
+    - 对方
+    - 屏幕
+    - 广播
+    - 有人
+    - 终端
+    - 自己
+    - 设备
+    - 语气
+    - 路人
+    - 轻声
+    - 这边
+    - 那边
+    tone_rules:
+      cold:
+      - 冷
+      - 冷光
+      - 寒
+      - 冰
+      - 凉
+      - 白光
+      - 蓝光
+      grime:
+      - 灰
+      - 脏
+      - 污
+      - 锈
+      - 霉
+      - 旧
+      - 油
+      - 潮
+      pressure:
+      - 压
+      - 逼
+      - 挤
+      - 闷
+      - 窄
+      - 沉
+      - 堵
+      - 绷
+      quiet:
+      - 静
+      - 空
+      - 轻
+      - 停
+      - 慢
+      - 无声
+      - 屏住
+      warmth:
+      - 热
+      - 暖
+      - 软
+      - 亮
+      - 火
+      - 掌心
+      - 呼气
+      uncanny:
+      - 怪
+      - 诡
+      - 异
+      - 影
+      - 回声
+      - 失真
+      - 发毛
+    battle_action_terms:
+    - 砸
+    - 撞
+    - 扑
+    - 冲
+    - 压
+    - 拽
+    - 踢
+    - 挥
+    - 挡
+    - 闪
+    - 躲
+    - 扑开
+    - 掀
+    - 翻
+    - 顶
+    - 卡住
+    battle_result_terms:
+    - 退
+    - 倒
+    - 停住
+    - 失衡
+    - 滑开
+    - 摔
+    - 裂开
+    - 偏了
+    - 挡住
+    - 卡住
+    - 躲开
+    battle_damage_terms:
+    - 血
+    - 伤
+    - 疼
+    - 裂
+    - 断
+    - 麻
+    - 震
+    - 烫
+    - 擦伤
+    - 咳
+    battle_movement_terms:
+    - 前
+    - 后
+    - 侧
+    - 翻
+    - 退
+    - 扑
+    - 压
+    - 拐
+    - 撞
+    - 跃
+  ending_labels:
+    rules:
+      action_aftershock:
+      - 余波
+      - 撤离
+      - 转移
+      - 追上
+      - 追过去
+      - 补位
+      - 压上
+      - 开火
+      - 扑上
+      - 冲了出去
+      new_info:
+      - 新线索
+      - 线索
+      - 名单
+      - 坐标
+      - 消息
+      - 证词
+      - 照片
+      - 记录
+      - 档案
+      - 答案缺口
+      external_threat:
+      - 追兵
+      - 火力
+      - 危险
+      - 异响
+      - 封锁
+      - 拦截
+      - 爆发
+      - 警报
+      - 敌人
+      - 逼近
+      relationship_turn:
+      - 关系
+      - 信任
+      - 对视
+      - 沉默
+      - 翻脸
+      - 松口
+      - 护住
+      - 分歧
+      - 看向
+      - 握紧
+      procedure_pressure:
+      - 手续
+      - 账单
+      - 窗口
+      - 排队
+      - 权限
+      - 资格
+      - 通报
+      - 登记
+      - 流程
+      - 下一步
+      - 继续
+      foreshadow_flash:
+      - 伏笔
+      - 异常
+      - 不该出现
+      - 旧标记
+      - 熟悉
+      - 多了一处
+      - 闪回
+      - 不对劲
+      self_realization:
+      - 意识到
+      - 明白
+      - 知道
+      - 想起
+      - 终于懂
+      - 看清
+      - 忽然觉得
+    display:
+      action_aftershock: 动作余波
+      new_info: 新信息
+      external_threat: 外部威胁
+      relationship_turn: 关系转向
+      procedure_pressure: 系统流程
+      foreshadow_flash: 伏笔闪现
+      self_realization: 自我判断
+      imagery_coda: 意象压轴
+      mixed: 混合收束
+      unclear: 未归类
+plan:
+  required_headings:
+    arc-plan:
+    - - Arc 定位
+    - - Arc 必须完成的事
+    - - Arc 不在本段解决的事
+    - - 核心故事线
+      - 故事线总览
+    - - Story 排布
+    - - 角色出场与功能时序
+      - 角色出场时序
+    - - Arc 结束后的状态
+      - Arc 末状态
+    - - 伏笔表
+    - - 当前风险与空缺
+      - 风险与空缺
+    story-plan:
+    - - 定位
+    - - 起点状态
+    - - 终点状态
+    - - 核心冲突
+    - - 视角与信息边界
+    - - 核心事件
+    - - 粗章节负载
+    - - 主要角色与功能
+    - - 伏笔处理
+    - - 与前后 Story 的衔接
+    chapter-plan:
+    - - 本章功能
+  scene_field_groups:
+  - - 目标
+  - - 看点
+  - - 节奏
+  - - 状态变化
+    - 角色状态变化
+  chapter_ending_group:
+  - 章节收尾
+  - 章节钩子
+  sections:
+    story_layout: Story 排布
+    foreshadow_table: 伏笔表
+    story_events: 核心事件
+    story_loads: 粗章节负载
+    story_roles: 主要角色与功能
+    story_environment:
+    - 核心事件
+    - 粗章节负载
+    - 主要角色与功能
+    - 与前后 Story 的衔接
+    chapter_function: 本章功能
+    lookpoint: 看点
+    rhythm: 节奏
+    state_change: 状态变化
+    scene_function_fields:
+    - 目标
+    - 看点
+    - 状态变化
+    - 角色状态变化
+  thresholds:
+    story_layout_min_items: 3
+    foreshadow_min_ids: 2
+    story_events_min_items: 3
+    lookpoint_short_max_chars: 10
+    scene_body_max_chars: 520
+    scene_prose_mark_min: 10
+    scene_dialogue_prose_mark_min: 4
+    thin_change_max_chars: 16
+    scene_monotony_min_scenes: 3
+    scene_monotony_max_missing: 1
+  regex:
+    style_leak:
+      pattern: (作者|读者|观众|正文|文风|写法|好看|爽点|悬疑感|节奏感|氛围感|像小说家一样写|让读者)
+    abstract_lookpoint:
+      pattern: (很坚定|很压抑|很可爱|气氛|氛围|更有感觉|更好看|有张力|有味道|沉稳|冷静|好笑)
+    answer_leak:
+      pattern: (幕后黑手|其实是|实际是|本质上是|确认是|确定是|真相就是|答案就是)
+    scene_leak:
+      pattern: \bScene\b|场景划分|章节安排|ch\d+
+      ignore_case: true
+    prose_leak:
+      pattern: '[。！？]{2,}|“.+?”'
+    judgement:
+      pattern: (局势更复杂|关系更近|更严重|更麻烦|不对劲|有问题|不简单)
+    hookish:
+      pattern: (钩子|悬念|吊一下|故意留白给读者)
+    foreshadow_id:
+      pattern: F-\d{2}
+    rhythm_style_leak:
+      pattern: (文风|像小说|写得|好看|悬疑)
+    story_prose_leak:
+      pattern: 完整正文
+  lookpoint_weak_terms:
+  - 冷静
+  - 压抑
+  - 可爱
+  - 坚定
+  - 好看
+  - 有味道
+  - 有感觉
+  - 气氛
+  - 氛围
+  lookpoint_strong_terms:
+  - 交易
+  - 交涉
+  - 关系
+  - 冲突
+  - 危机
+  - 反转
+  - 命令
+  - 埋伏
+  - 对峙
+  - 战斗
+  - 手续
+  - 抢人
+  - 证词
+  - 账单
+  - 追逐
+  ending_weak_terms:
+  - 意识到
+  - 明白了
+  - 知道事情严重
+  - 看着城市
+  - 看着高墙
+  - 夜色
+  - 冷光
+  environment_pressure_terms:
+  - 上层
+  - 价格
+  - 企业
+  - 体制
+  - 公会
+  - 制度
+  - 学院
+  - 安保
+  - 底层
+  - 手续
+  - 权限
+  - 栖城
+  - 腐败
+  - 资格
+  - 阶级
+  environment_witness_terms:
+  - 交易
+  - 伤员
+  - 公告
+  - 外包
+  - 学生
+  - 安检
+  - 小贩
+  - 工人
+  - 广播
+  - 手续
+  - 护士
+  - 排队
+  - 柜台
+  - 清洁
+  - 病人
+  - 窗口
+  - 街边
+  - 账单
+  - 路人
+  - 配角
+  - 队列
+  generic_progress_terms:
+  - 分析
+  - 发现
+  - 对话
+  - 整理
+  - 查证
+  - 确认
+  - 解释
+  - 讨论
+  - 记录
+  - 说明
+  - 调查
+  role_function_terms:
+  - 交易
+  - 保护
+  - 对照
+  - 引路
+  - 拆台
+  - 拖延
+  - 推动
+  - 揭露
+  - 救援
+  - 施压
+  - 背书
+  - 见证
+  - 试探
+  - 误导
+  - 阻拦
+  function_rules:
+    chapter:
+      conflict:
+      - 冲突
+      - 对峙
+      - 追逐
+      - 埋伏
+      - 抢人
+      - 战斗
+      - 拦截
+      - 施压
+      investigation:
+      - 调查
+      - 查证
+      - 确认
+      - 追线
+      - 翻找
+      - 取证
+      - 排查
+      - 盘问
+      relationship:
+      - 关系
+      - 和解
+      - 试探
+      - 拉近
+      - 疏远
+      - 对照
+      - 搭档
+      - 信任
+      procedure:
+      - 手续
+      - 安检
+      - 账单
+      - 排队
+      - 交易
+      - 登记
+      - 通行
+      - 窗口
+      exposition:
+      - 解释
+      - 说明
+      - 交代
+      - 讲清
+      - 复盘
+      - 讨论
+      - 分析
+      movement:
+      - 转场
+      - 出城
+      - 进城
+      - 潜入
+      - 撤离
+      - 赶路
+      - 进入
+      - 离开
+    ending:
+      action_aftershock:
+      - 余波
+      - 补位
+      - 撤离
+      - 追上
+      - 转移
+      - 继续追
+      - 压上
+      new_info:
+      - 新线索
+      - 新名字
+      - 证词
+      - 坐标
+      - 名单
+      - 照片
+      - 消息
+      - 答案缺口
+      external_threat:
+      - 追兵
+      - 火力
+      - 危险
+      - 更大东西
+      - 异响
+      - 封锁
+      - 拦截
+      - 爆发
+      relationship_turn:
+      - 关系
+      - 信任
+      - 对视
+      - 沉默
+      - 翻脸
+      - 松口
+      - 护住
+      - 分歧
+      procedure_pressure:
+      - 手续
+      - 账单
+      - 窗口
+      - 排队
+      - 权限
+      - 资格
+      - 通报
+      - 登记
+      foreshadow_flash:
+      - 伏笔
+      - 异常
+      - 不该出现
+      - 旧标记
+      - 熟悉
+      - 多了一处
+      - 闪回
+      self_realization:
+      - 意识到
+      - 明白
+      - 知道
+      - 想起
+      - 终于懂
+      - 看清
+    scene:
+      conflict:
+      - 冲突
+      - 对峙
+      - 施压
+      - 拦
+      - 逼
+      - 追
+      - 火力
+      - 抢
+      info:
+      - 解释
+      - 说明
+      - 确认
+      - 调查
+      - 查证
+      - 证词
+      - 线索
+      - 记录
+      relationship:
+      - 试探
+      - 关系
+      - 搭档
+      - 信任
+      - 疏远
+      - 和解
+      - 对照
+      procedure:
+      - 手续
+      - 窗口
+      - 安检
+      - 交易
+      - 账单
+      - 排队
+      - 登记
+      movement:
+      - 进
+      - 出
+      - 赶到
+      - 潜入
+      - 转场
+      - 离开
+      - 抵达
