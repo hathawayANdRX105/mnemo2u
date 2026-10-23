@@ -91,7 +91,7 @@
 ## Suggested Order
 1. 先修 `draft` 里 `gate=FAIL`、`recommendation=targeted_rewrite` 的章节，再看 `pairs / triples`
 2. 再修 `chapter-plan` 与 `story-plan` 的字段错位和空字段
-3. 如果某章评分里 `一致性准备度` 明显偏低，先跑 `sentinel consistency suspects` 再决定是否只是局部误写
-4. 如果已经锁定某条 Story，要逐条复核一致性候选，直接跑 `sentinel consistency review-queue novel1 --story storyN`
-5. 做完一轮局部复核后，立刻跑 `sentinel consistency feedback-summary novel1 --story storyN` 看这一条 Story 是否开始收敛
+3. 如果某章评分里 `一致性准备度` 明显偏低，先跑 `novel-review consistency suspects` 再决定是否只是局部误写
+4. 如果已经锁定某条 Story，要逐条复核一致性候选，直接跑 `novel-review consistency review-queue novel1 --story storyN`
+5. 做完一轮局部复核后，立刻跑 `novel-review consistency feedback-summary novel1 --story storyN` 看这一条 Story 是否开始收敛
 6. 最后补 `concept` 缺口，避免下游继续空转

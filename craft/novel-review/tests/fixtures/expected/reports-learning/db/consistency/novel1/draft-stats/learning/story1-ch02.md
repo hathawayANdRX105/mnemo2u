@@ -32,8 +32,8 @@
 - designed_keep=`0`
 - watch=`1`
 - pending=`3`
-- review_queue: `sentinel consistency review-queue novel1 --story story1`
-- feedback_summary: `sentinel consistency feedback-summary novel1 --story story1`
+- review_queue: `novel-review consistency review-queue novel1 --story story1`
+- feedback_summary: `novel-review consistency feedback-summary novel1 --story story1`
 - facets:
   - `state_progression` x1
 - pending rows:
@@ -42,11 +42,11 @@
   - `injury_state_jump` `陆沉` confidence=`medium` injury=擦伤 -> 稳住,止住,还能打
 - pending actions:
   - `goal_state_drift` `陆沉` confidence=`high`：先回看 fact cue 和上下文段，判断这是真跳变还是阶段推进。
-  - command: `sentinel consistency feedback-add novel1 --category goal_state_drift --story story1 --title '陆沉' --decision watch --summary-contains 'assigned=交给,任务'`
+  - command: `novel-review consistency feedback-add novel1 --category goal_state_drift --story story1 --title '陆沉' --decision watch --summary-contains 'assigned=交给,任务'`
   - `relationship_tone_shift` `陆沉` confidence=`high`：先回看 fact cue 和上下文段，判断这是真跳变还是阶段推进。
-  - command: `sentinel consistency feedback-add novel1 --category relationship_tone_shift --story story1 --title '陆沉' --decision watch --summary-contains 'close=接住,接应'`
+  - command: `novel-review consistency feedback-add novel1 --category relationship_tone_shift --story story1 --title '陆沉' --decision watch --summary-contains 'close=接住,接应'`
   - `injury_state_jump` `陆沉` confidence=`medium`：先回看 fact cue 和上下文段，判断这是真跳变还是阶段推进。
-  - command: `sentinel consistency feedback-add novel1 --category injury_state_jump --story story1 --title '陆沉' --decision watch --summary-contains 'injury=擦伤'`
+  - command: `novel-review consistency feedback-add novel1 --category injury_state_jump --story story1 --title '陆沉' --decision watch --summary-contains 'injury=擦伤'`
 
 ## Plan Alignment Review
 - 无 plan-draft 对齐快照
