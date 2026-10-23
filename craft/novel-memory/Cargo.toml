@@ -3,11 +3,15 @@ name = "novel-memory"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Narrative memory craft: story-time coordinates and fact slots for fiction"
+description = "The novel craft: scan a novel directory into narrative fact slots"
 publish = false
 
 [dependencies]
 mnemo2u = { path = "../../crates/mnemo2u" }
+# The narrative kernel: story-time coordinates and slot hashing. The tavern
+# craft sits on the same kernel, so it is its own crate rather than part of
+# this one.
+narrative-core = { path = "../narrative-core" }
 anyhow = "1"
 clap = { workspace = true }
 serde = { workspace = true }
