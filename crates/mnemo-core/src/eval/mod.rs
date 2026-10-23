@@ -318,17 +318,6 @@ fn now_seconds() -> i64 {
         .unwrap_or(0)
 }
 
-/// The snapshot id: a hash over everything that defines the effective run —
-/// corpus, queries, scale *and* the frozen thresholds — so neither a silent
-/// corpus edit nor a loosened criterion can pass a frozen expectation.
-/// The snapshot hash: case id, corpus, queries, scale and the frozen
-/// thresholds.
-///
-/// The conditions are hashed field by field rather than as a whole, so adding
-/// a field that is not a frozen threshold — `target_recall` is the first — does
-/// not rotate every existing case's snapshot. A rotated snapshot would rewrite
-/// the S2 baseline fixture, which is a frozen contract.
-
 /// Serialize a JSON value with object keys sorted at every level.
 ///
 /// `serde_json`'s `preserve_order` feature changes `Value`'s object-key
@@ -364,6 +353,16 @@ fn canonical_json(value: &serde_json::Value) -> String {
     }
 }
 
+/// The snapshot id: a hash over everything that defines the effective run —
+/// corpus, queries, scale *and* the frozen thresholds — so neither a silent
+/// corpus edit nor a loosened criterion can pass a frozen expectation.
+/// The snapshot hash: case id, corpus, queries, scale and the frozen
+/// thresholds.
+///
+/// The conditions are hashed field by field rather than as a whole, so adding
+/// a field that is not a frozen threshold — `target_recall` is the first — does
+/// not rotate every existing case's snapshot. A rotated snapshot would rewrite
+/// the S2 baseline fixture, which is a frozen contract.
 pub fn snapshot_id(
     case_id: &str,
     turns: &[Turn],
