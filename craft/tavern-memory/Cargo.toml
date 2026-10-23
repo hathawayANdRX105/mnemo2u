@@ -1,0 +1,24 @@
+[package]
+name = "tavern-memory"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Tavern craft: canon facts and conflict detection for roleplay sessions"
+publish = false
+
+[dependencies]
+# The narrative kernel: story-time coordinates and the slot-key-plus-hash
+# scheme. A tavern session is a story too, and its canon is the same three
+# layers, so the tavern craft sits on the same kernel as the novel craft —
+# not on the novel craft itself.
+narrative-core = { path = "../narrative-core" }
+mnemo2u = { path = "../../crates/mnemo2u" }
+anyhow = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true }

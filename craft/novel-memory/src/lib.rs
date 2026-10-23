@@ -1,8 +1,9 @@
 //! The novel craft: bend the generic memory engine toward fiction.
 //!
-//! This crate is the **narrative kernel** that the novel craft and the tavern
-//! craft both sit on. A tavern session is a story too — its events need the
-//! same story-time ordering, and its canon is the same three layers.
+//! The narrative kernel — story-time coordinates and slot hashing — lives in
+//! `narrative-core`, which the tavern craft sits on too. This crate adds what
+//! is specific to a novel: the corpus scan, the three-store assembly, the
+//! read paths and the subcommands.
 //!
 //! The three layers, and where each comes from:
 //!
@@ -20,10 +21,14 @@
 pub mod cli;
 pub mod config;
 pub mod corpus;
-pub mod hash;
 pub mod query;
 pub mod store;
-pub mod storytime;
+
+// The kernel is re-exported, so a consumer of the novel craft still finds
+// `novel_memory::storytime::*` and `novel_memory::hash::*` where it did
+// before the kernel became its own crate.
+pub use narrative_core::hash;
+pub use narrative_core::storytime;
 
 pub use cli::{run, MemoryCmd};
 pub use config::{Config, Paths};
