@@ -98,7 +98,8 @@ crates/                 # the memory engine itself
   mnemo-core/           # the implementation, its tests and its examples
 craft/                  # the task specializations
   narrative-core/       # the narrative kernel: story time and slot hashing
-  novel-memory/         # the novel craft
+  novel-memory/         # the memory craft for a novel
+  novel-review/         # the review craft: audit, statistics, consistency reports
   tavern-memory/        # the tavern craft
   coding-memory/        # the coding craft
 bin/
@@ -112,14 +113,19 @@ Two layers, one direction of dependency:
   harness. It knows nothing about fiction.
 - `craft/` holds one crate per **kind of work**: each bends that engine toward
   a craft. `novel-memory` scans a novel directory into fact slots and reads
-  them back. `tavern-memory` keeps a character's canon and reports the events
-  that contradict it. `coding-memory` remembers what a coding session did,
-  the rules the project learned, and the procedures worth repeating.
+  them back. `novel-review` audits the same novel against its rules and emits
+  reports, statistics trees and a consistency index. `tavern-memory` keeps a
+  character's canon and reports the events that contradict it.
+  `coding-memory` remembers what a coding session did, the rules the project
+  learned, and the procedures worth repeating.
 
-The three fiction crafts share `narrative-core`: story-time coordinates and
-the slot-key-plus-hash scheme. A tavern session is a story too, and its canon
-is the same three layers, so the kernel is its own crate rather than part of
-the novel one — they are two crafts on one kernel, not one on the other.
+The two fiction crafts on the memory side share `narrative-core`: story-time
+coordinates and the slot-key-plus-hash scheme. A tavern session is a story too,
+and its canon is the same three layers, so the kernel is its own crate rather
+than part of the novel one — they are two crafts on one kernel, not one on the
+other. `novel-review` sits beside `novel-memory` without depending on it: it
+reads the novel from disk; only its CLI carries the `memory` subcommand that
+indexes the same corpus.
 
 A crate in `crates/` never depends on a crate in `craft/`. The other direction
 is the whole point: the specializations build on the engine, and the engine
