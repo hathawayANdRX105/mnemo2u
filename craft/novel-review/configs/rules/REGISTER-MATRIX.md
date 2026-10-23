@@ -11,7 +11,7 @@
 | webnovel | 明朝那些事儿 ch1、鬼吹灯 ch1、天龙八部 ch1 | 2k–23k | 网文范式（三个子类） |
 | ai | novel/novel1/drafts 42 章 | — | 真阳性锚点（用户确认 AI 写） |
 
-跑法：`sentinel audit-draft <file> --no-corpus-learning --format json`，取 `hard_flags`，
+跑法：`novel-review audit-draft <file> --no-corpus-learning --format json`，取 `hard_flags`，
 按 `count / chars * 10000` 归一（或规则自带 `per_10k`），人写取类别均值、AI 取章均值。
 
 ## 结论：三类规则

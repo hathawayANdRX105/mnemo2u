@@ -1,5 +1,5 @@
 memory:
-  # 记忆层（sentinel memory）配置。三层：设定 / 事实 / 关系，落进 mnemo2u。
+  # 记忆层（novel-review memory）配置。三层：设定 / 事实 / 关系，落进 mnemo2u。
   # 本地 ONNX embedding 模型（fastembed）。中文小说用 bge-m3（1024 维）；
   # 首次使用会下载到本地缓存，之后离线推理——小说数据不出本机。
   embedding_model: BAAI/bge-m3
