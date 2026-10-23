@@ -93,12 +93,30 @@ members and the shared dependency versions, and carries no code of its own:
 
 ```
 Cargo.toml              # virtual workspace manifest
-crates/
+crates/                 # the memory engine itself
   mnemo2u/              # the facade: the published surface of the library
   mnemo-core/           # the implementation, its tests and its examples
+craft/                  # the task specializations
+  novel-memory/         # the narrative memory craft
 bin/
   mnemo2u/              # the operational CLI (package `mnemo2u-cli`)
 ```
+
+Two layers, one direction of dependency:
+
+- `crates/` is the **generic** memory engine: the bitemporal fact model, the
+  three stores, the graph and vector indexes, the query paths, the evaluation
+  harness. It knows nothing about fiction.
+- `craft/` holds one crate per **kind of work**: each bends that engine toward
+  a craft. `novel-memory` is the first — story-time coordinates, a corpus scan
+  that turns a novel directory into fact and edge slots, the three-store
+  assembly and the read paths. The tavern craft will sit on the same narrative
+  kernel, because a tavern session is a story too and its canon is the same
+  three layers.
+
+A crate in `crates/` never depends on a crate in `craft/`. The other direction
+is the whole point: the specializations build on the engine, and the engine
+stays free of what any one craft happens to need.
 
 The facade re-exports `mnemo-core` under the module paths the library has
 always published (`mnemo2u::core::traits::*`, `mnemo2u::store::*`, …), so
@@ -108,6 +126,12 @@ depends on the facade crate directly:
 
 ```toml
 mnemo2u = { path = "../mnemo2u/crates/mnemo2u" }
+```
+
+A craft crate is depended on the same way:
+
+```toml
+novel-memory = { path = "../mnemo2u/craft/novel-memory" }
 ```
 
 The implementation crate's integration tests exercise the library through the
