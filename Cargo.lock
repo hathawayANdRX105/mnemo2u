@@ -1173,6 +1173,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "coding-memory"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mnemo2u",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5112,6 +5125,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
+name = "narrative-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tempfile",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5223,6 +5244,7 @@ dependencies = [
  "anyhow",
  "clap",
  "mnemo2u",
+ "narrative-core",
  "serde",
  "serde_json",
  "tempfile",
@@ -7533,6 +7555,20 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "tavern-memory"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mnemo2u",
+ "narrative-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+]
 
 [[package]]
 name = "tempfile"
