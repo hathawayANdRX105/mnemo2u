@@ -31,39 +31,39 @@ use crate::storytime::Layer;
 /// rules file, so it can be driven from any binary.
 #[derive(Subcommand)]
 pub enum MemoryCmd {
-    /// Scan a novel directory and write the setting / fact / relation layers.
+    /// 扫小说目录，把设定 / 事实 / 关系写进 mnemo2u
     Index {
-        /// The novel directory (e.g. `novel1`).
+        /// 小说目录（例如 novel1）
         novel_dir: PathBuf,
-        /// Report what would be written, without touching the stores.
+        /// 只报告将要写什么，不落盘
         #[arg(long)]
         dry_run: bool,
     },
-    /// Semantic search.
+    /// 语义检索
     Query {
-        /// The novel directory.
+        /// 小说目录（例如 novel1）
         novel_dir: PathBuf,
-        /// The question.
+        /// 问题
         question: String,
-        /// How many hits (default 10).
+        /// 返回条数（默认 10）
         #[arg(long, default_value_t = 10)]
         top: usize,
-        /// Emit JSON.
+        /// 以 JSON 输出
         #[arg(long)]
         json: bool,
     },
-    /// The relations of one entity.
+    /// 某实体的关系
     Relations {
-        /// The novel directory.
+        /// 小说目录（例如 novel1）
         novel_dir: PathBuf,
-        /// The entity name (a card title or alias).
+        /// 实体名（卡片标题或别名）
         entity: String,
     },
-    /// The fact stream in story order.
+    /// 按 story 时间线的事实流
     Timeline {
-        /// The novel directory.
+        /// 小说目录（例如 novel1）
         novel_dir: PathBuf,
-        /// Restrict to one story (a story number).
+        /// 只看某一个 story（story 序号）
         #[arg(long, value_name = "N")]
         story: Option<String>,
     },
