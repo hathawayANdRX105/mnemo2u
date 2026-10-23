@@ -1,0 +1,5 @@
+tests/fixtures/stats-draft/novel-a/draft-stats/scorecards/ch01-信号.md
+tests/fixtures/stats-draft/novel-a/draft-stats/scorecards/ch02-断桥.md
+tests/fixtures/stats-draft/novel-a/draft-stats/scorecards/ch03-灰港.md
+tests/fixtures/stats-draft/novel-a/draft-stats/scorecards/ch04-旧闸.md
+tests/fixtures/stats-draft/novel-a/draft-stats/scorecards/SUMMARY.md

@@ -318,6 +318,41 @@ fn now_seconds() -> i64 {
         .unwrap_or(0)
 }
 
+/// Serialize a JSON value with object keys sorted at every level.
+///
+/// `serde_json`'s `preserve_order` feature changes `Value`'s object-key
+/// order from sorted to insertion. Cargo unifies features across a
+/// workspace, so a crate elsewhere in the repo can flip that feature for
+/// this crate too and silently rotate every snapshot hash — which would
+/// rewrite the frozen baseline. Canonicalising here makes the hash
+/// independent of the feature, at any level of the payload.
+fn canonical_json(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries: Vec<(String, String)> = map
+                .iter()
+                .map(|(key, value)| (key.clone(), canonical_json(value)))
+                .collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            let inner = entries
+                .iter()
+                .map(|(key, value)| format!("{key:?}:{value}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{{{inner}}}")
+        }
+        serde_json::Value::Array(values) => {
+            let inner = values
+                .iter()
+                .map(canonical_json)
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("[{inner}]")
+        }
+        other => other.to_string(),
+    }
+}
+
 /// The snapshot id: a hash over everything that defines the effective run —
 /// corpus, queries, scale *and* the frozen thresholds — so neither a silent
 /// corpus edit nor a loosened criterion can pass a frozen expectation.
@@ -347,7 +382,7 @@ pub fn snapshot_id(
             "expect_top_hit": conditions.expect_top_hit,
         },
     });
-    crate::core::text::compute_mdhash_id(&payload.to_string(), "snap-")
+    crate::core::text::compute_mdhash_id(&canonical_json(&payload), "snap-")
 }
 
 /// [`snapshot_id`] with the case's relations in the hash.
@@ -382,7 +417,7 @@ pub fn snapshot_id_with_edges(
         },
         "edges": edges,
     });
-    crate::core::text::compute_mdhash_id(&payload.to_string(), "snap-")
+    crate::core::text::compute_mdhash_id(&canonical_json(&payload), "snap-")
 }
 
 /// The distractor corpus for one scale: `scale` unrelated sessions, four

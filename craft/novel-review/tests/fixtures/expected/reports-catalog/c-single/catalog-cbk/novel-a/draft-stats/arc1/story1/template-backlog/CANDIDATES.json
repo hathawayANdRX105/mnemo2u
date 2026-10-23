@@ -1,0 +1,130 @@
+{
+  "story": "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+  "chapters": 1,
+  "template_bank_candidates": [
+    {
+      "bucket": "patterns",
+      "name": "把字操作句",
+      "count": 1,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "像/活像模板",
+      "count": 1,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "说完就",
+      "count": 1,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "短并列三拍",
+      "count": 1,
+      "sample": "他说完就不再开口。雨开始落下来，落在桥面上，落在轨道上，落在他没合拢的领口里。他把伞收起来。他把外套披在她肩上。他把那只旧终端揣进怀里。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "重叠词节奏",
+      "count": 1,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "tokens",
+      "name": "然后",
+      "count": 1,
+      "sample": "然后他走。然后他停。然后他又走。接着他抬头。接着他压低声音。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "punctuation",
+      "name": "？",
+      "count": 1,
+      "sample": "\"信号在哪？\"她问。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "sentence_length",
+      "name": "短句密度",
+      "count": 1,
+      "sample": "L3 4字：终端亮了",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "ba_operation_context",
+      "name": "动作操作",
+      "count": 1,
+      "sample": "他把伞收起来",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    }
+  ],
+  "term_bank_candidates": [
+    {
+      "bucket": "learned_filter",
+      "name": "终端",
+      "count": 1,
+      "sample": "终端亮了。终端又亮了。终端还在亮。他盯着那行灰字，像盯着一口深井。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "屏幕",
+      "count": 1,
+      "sample": "第七区的灯一排一排暗下去。屏幕上的灰字重新跳出来。他继续排查。他新建了一组日志。桥在远处亮着蓝光。夜色像一块压下来的灰布，铺满整个港口。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "抬头",
+      "count": 1,
+      "sample": "然后他走。然后他停。然后他又走。接着他抬头。接着他压低声音。",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    }
+  ],
+  "keep_candidates": [
+    {
+      "name": "局部排比可视作风格点缀",
+      "count": 1,
+      "reason": "检测到少量 AA/BB 或短分句节奏，但还没形成模板疲劳，可以先按风格候选保留。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    },
+    {
+      "name": "场面功能有切换",
+      "count": 1,
+      "reason": "粗分块没有被单一对白或说明吃满，说明这一章至少在尝试做功能接力。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    }
+  ],
+  "deposition_targets": [
+    {
+      "target": "skills/review-guide.md",
+      "count": 1
+    },
+    {
+      "target": "novel1/rules/draft.md",
+      "count": 1
+    }
+  ]
+}

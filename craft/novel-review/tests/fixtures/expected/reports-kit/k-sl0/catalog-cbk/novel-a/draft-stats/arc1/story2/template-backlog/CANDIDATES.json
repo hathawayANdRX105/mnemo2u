@@ -1,0 +1,152 @@
+{
+  "story": "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story2",
+  "chapters": 2,
+  "template_bank_candidates": [
+    {
+      "bucket": "patterns",
+      "name": "线索面板词",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "把字操作句",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "punctuation",
+      "name": "？",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "sentence_length",
+      "name": "短句密度",
+      "count": 2,
+      "sample": "L3 5字：他走进灰港",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "fatigue_window",
+      "name": "局部疲劳窗口",
+      "count": 2,
+      "sample": "他新建了一组日志 | 他把旧日志归档 | 他把第三屏拉出来 | \"为什么是这里 | \"她问",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "dialogue_axis_gap",
+      "name": "对白转轴缺口",
+      "count": 2,
+      "sample": "\"它在数 | \"她说 | \"数什么 | \"数我们",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "像/活像模板",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "得像",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "tokens",
+      "name": "因为",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "ba_operation_context",
+      "name": "动作操作",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "短并列三拍",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "ending",
+      "name": "章末模板",
+      "count": 1,
+      "sample": "么在数。一步。两步。停。三步。  \"数完了会怎样？\"她问。  \"不知道。\"他把终端揣回怀里，\"但第七区的灯会亮。\"  第七区没有亮。灰字还跳。他新建了一组日志。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    }
+  ],
+  "term_bank_candidates": [
+    {
+      "bucket": "learned_filter",
+      "name": "终端",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "一下",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "屏幕",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    }
+  ],
+  "keep_candidates": [
+    {
+      "name": "场面功能有切换",
+      "count": 2,
+      "reason": "粗分块没有被单一对白或说明吃满，说明这一章至少在尝试做功能接力。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    },
+    {
+      "name": "动作段有后果反馈",
+      "count": 1,
+      "reason": "冲突段不只累计动作动词，也带出了结果、伤害或位移反馈，可以视作紧凑度候选。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    },
+    {
+      "name": "局部排比可视作风格点缀",
+      "count": 1,
+      "reason": "检测到少量 AA/BB 或短分句节奏，但还没形成模板疲劳，可以先按风格候选保留。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    }
+  ],
+  "deposition_targets": []
+}

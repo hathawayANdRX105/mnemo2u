@@ -1,0 +1,2 @@
+信号枪 [items] :: injury_negative=裂开 ; equipment_damaged=裂开,失灵 ; equipment_active=亮起,接口,护住 ; relationship_close=护住
+陆沉 [characters] :: injury_negative=擦伤 ; injury_stable=稳住,止住,还能打 ; goal_assigned=交给,任务 ; goal_changed=目标变成 ; goal_completed=收尾 ; relationship_close=接住,接应 ; relationship_distant=提防,怀疑

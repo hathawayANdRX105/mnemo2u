@@ -1,0 +1,162 @@
+{
+  "story": "tests/fixtures/catalog-cbk/novel-a/drafts/arc1/story1",
+  "chapters": 2,
+  "template_bank_candidates": [
+    {
+      "bucket": "patterns",
+      "name": "把字操作句",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "重叠词节奏",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "punctuation",
+      "name": "？",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "sentence_length",
+      "name": "短句密度",
+      "count": 2,
+      "sample": "L3 4字：终端亮了",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "ba_operation_context",
+      "name": "动作操作",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "像/活像模板",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "说完就",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "custom_template",
+      "name": "短并列三拍",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "tokens",
+      "name": "然后",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "线索面板词",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "patterns",
+      "name": "得像",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    },
+    {
+      "bucket": "fatigue_window",
+      "name": "局部疲劳窗口",
+      "count": 1,
+      "sample": "\"她问 | \"铁 | \"什么样的铁 | \"旧的铁 | 他把手贴在桥面上",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "reason": "跨章重复出现，优先作为模板库候选继续人工筛选。"
+    }
+  ],
+  "term_bank_candidates": [
+    {
+      "bucket": "learned_filter",
+      "name": "终端",
+      "count": 2,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "屏幕",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "抬头",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    },
+    {
+      "bucket": "learned_filter",
+      "name": "冷光",
+      "count": 1,
+      "sample": "",
+      "suggested_target": "configs/rules/review.yaml#draft.tracked_terms",
+      "reason": "跨章重复出现，更像词项或短语，需要进词库观察。"
+    }
+  ],
+  "keep_candidates": [
+    {
+      "name": "局部排比可视作风格点缀",
+      "count": 2,
+      "reason": "检测到少量 AA/BB 或短分句节奏，但还没形成模板疲劳，可以先按风格候选保留。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    },
+    {
+      "name": "场面功能有切换",
+      "count": 2,
+      "reason": "粗分块没有被单一对白或说明吃满，说明这一章至少在尝试做功能接力。",
+      "suggested_target": "configs/rules/review.yaml#draft.template_rules",
+      "action": "designed_keep_review"
+    }
+  ],
+  "deposition_targets": [
+    {
+      "target": "novel1/rules/draft.md",
+      "count": 2
+    },
+    {
+      "target": "configs/rules/review.yaml#draft.tracked_terms",
+      "count": 1
+    }
+  ]
+}

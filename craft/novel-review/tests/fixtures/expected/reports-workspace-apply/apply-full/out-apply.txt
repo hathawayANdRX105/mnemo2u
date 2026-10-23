@@ -1,0 +1,9 @@
+Applying writeback actions...
+Added to configs/rules/review.yaml#draft.inactive_template_candidates: tpl_cold_light
+Added to configs/rules/review.yaml#draft.inactive_template_candidates: 短句密度
+Added to configs/rules/review.yaml#draft.tracked_terms: 终端站
+Skipping action: bank_recalibration for 雷德 (not implemented)
+Skipping action: guide_or_rule for g1 (not implemented)
+Skipping action: script_recalibration for s1 (not implemented)
+Skipping action: manual_review for m1 (not implemented)
+Applied successfully.

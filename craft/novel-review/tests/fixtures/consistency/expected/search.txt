@@ -1,0 +1,3 @@
+tests/fixtures/consistency/novel1/concept/cards/items/信号枪.md:1-1
+# 信号枪
+

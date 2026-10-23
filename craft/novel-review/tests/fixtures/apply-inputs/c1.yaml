@@ -1,0 +1,54 @@
+novel: novel-a
+stories: 4
+writeback_queue:
+  - state: candidate
+    kind: new_template
+    name: tpl_cold_light
+    target: configs/rules/review.yaml#draft.template_rules
+    stories: story1
+    count: 3
+    reason: 冷光 出现 3 次
+  - state: candidate
+    kind: new_template
+    name: 短句密度
+    target: configs/rules/review.yaml#draft.template_rules
+    stories: story2
+    count: 2
+    reason: 已有候选 更新备注
+  - state: candidate
+    kind: new_term
+    name: 终端站
+    target: configs/rules/review.yaml#draft.tracked_terms
+    stories: story1
+    count: 5
+    category: location
+    reason: 高频新词
+  - state: bank
+    kind: existing_term
+    name: 雷德
+    target: configs/rules/review.yaml#draft.tracked_terms
+    stories: story1
+    count: 8
+    reason: 再度出现
+    max_per_10k: 12
+  - state: review
+    kind: guide
+    name: g1
+    target: novel1/rules/draft.md
+    stories: story1
+    count: 1
+    reason: 规则文档
+  - state: hardcoded
+    kind: script
+    name: s1
+    target: src/stats/draft.rs
+    stories: story2
+    count: 1
+    reason: 脚本标定
+  - state: manual
+    kind: other
+    name: m1
+    target: external/vendor
+    stories: story1
+    count: 1
+    reason: 待人工

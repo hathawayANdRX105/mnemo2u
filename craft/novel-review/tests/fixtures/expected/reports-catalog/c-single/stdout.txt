@@ -1,0 +1,2 @@
+tests/fixtures/catalog-cbk/novel-a/draft-stats/template-catalog/SUMMARY.md
+tests/fixtures/catalog-cbk/novel-a/draft-stats/template-catalog/CATALOG.json

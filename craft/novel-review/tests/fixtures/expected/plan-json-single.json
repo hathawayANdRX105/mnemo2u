@@ -1,0 +1,8 @@
+[
+  {
+    "source": "tests/fixtures/plan/clean-plan.md",
+    "type": "arc-plan",
+    "status": "OK",
+    "warnings": []
+  }
+]

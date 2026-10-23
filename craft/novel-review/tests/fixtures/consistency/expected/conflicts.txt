@@ -1,0 +1,44 @@
+## equipment_state_jump
+story1 :: 信号枪 [items] :: confidence=high support=draft_docs=2 :: equipment=裂开,失灵 -> 亮起,接口,护住
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`equipment_active` cue=`亮起`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`equipment_active` cue=`接口`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`equipment_active` cue=`接口`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`equipment_damaged` cue=`裂开`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+## goal_state_drift
+story1 :: 陆沉 [characters] :: confidence=high support=draft_docs=1 upstream_docs=1 :: assigned=交给,任务 ; changed=目标变成 ; completed=收尾
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_assigned` cue=`交给`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_assigned` cue=`交给`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_completed` cue=`收尾`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+  - tests/fixtures/consistency/novel1/chapter-plan/ch05.md:3-4 fact=`goal_completed` cue=`收尾`
+  -   信号枪接口亮起的窗口只有三十秒。 陆沉把收尾交给阿沉。
+
+## injury_state_jump
+story1 :: 陆沉 [characters] :: confidence=medium support=draft_docs=1 :: injury=擦伤 -> 稳住,止住,还能打
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_negative` cue=`擦伤`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_stable` cue=`稳住`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_stable` cue=`止住`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`injury_stable` cue=`还能打`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+
+## relationship_tone_shift
+story1 :: 陆沉 [characters] :: confidence=high support=draft_docs=2 :: close=接住,接应 ; distant=提防,怀疑
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`提防`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`怀疑`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`提防`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+  - tests/fixtures/consistency/novel1/drafts/story1-ch01.md:3-6 fact=`relationship_distant` cue=`怀疑`
+  -   信号枪裂开了，接口失灵。陆沉稳住伤势，血止住了。 阿沉擦伤缠住，但还能打。 陆沉提防阿沉，怀疑他泄密。 任务交给陆沉，目标变成先走。
+

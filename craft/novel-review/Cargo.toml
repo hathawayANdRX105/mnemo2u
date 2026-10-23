@@ -1,0 +1,36 @@
+[package]
+name = "novel-review"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "The review craft: audit, statistics and consistency reports for a novel corpus"
+publish = false
+
+# The package carries both the library and its CLI: the review tool is one
+# thing, and splitting them apart would only move the wiring somewhere else.
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = { version = "1", features = ["preserve_order"] }
+fancy-regex = "0.13"
+glob = "0.3.4"
+chrono = { version = "0.4.45", features = ["clock"] }
+ureq = "2"
+rusqlite = { version = "0.37", features = ["bundled"] }
+# The `memory` subcommand drives the novel-memory craft: the review tool's
+# rules file is where the corpus layout is configured, so its CLI can also
+# index that corpus into the three stores.
+novel-memory = { path = "../novel-memory" }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true }
+
+[[bin]]
+name = "novel-review"
+path = "src/main.rs"

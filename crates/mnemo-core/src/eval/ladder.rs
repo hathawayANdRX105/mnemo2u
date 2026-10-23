@@ -262,7 +262,7 @@ impl Criteria {
 /// The freeze hash of a criteria set: every row, question, option and gold.
 pub fn criteria_snapshot_id(rows: &[CriterionRow]) -> String {
     let payload = serde_json::json!({ "rows": rows });
-    crate::core::text::compute_mdhash_id(&payload.to_string(), "crit-")
+    crate::core::text::compute_mdhash_id(&super::canonical_json(&payload), "crit-")
 }
 
 /// Check one question's internal consistency.
@@ -557,7 +557,7 @@ pub fn ladder_snapshot_id(tiers: &[Tier], visibility: &VisibilityPolicy) -> Stri
         "tiers": tiers,
         "visibility": visibility,
     });
-    crate::core::text::compute_mdhash_id(&payload.to_string(), "ladder-")
+    crate::core::text::compute_mdhash_id(&super::canonical_json(&payload), "ladder-")
 }
 
 /// One judgment, asked of one component.
