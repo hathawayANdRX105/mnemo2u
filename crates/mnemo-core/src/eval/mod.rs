@@ -328,6 +328,7 @@ fn now_seconds() -> i64 {
 /// a field that is not a frozen threshold — `target_recall` is the first — does
 /// not rotate every existing case's snapshot. A rotated snapshot would rewrite
 /// the S2 baseline fixture, which is a frozen contract.
+
 /// Serialize a JSON value with object keys sorted at every level.
 ///
 /// `serde_json`'s `preserve_order` feature changes `Value`'s object-key
