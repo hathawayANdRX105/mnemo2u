@@ -120,7 +120,7 @@ pub async fn run(cmd: &MemoryCmd, paths: &Paths, config: &Config) -> Result<i32>
 
 /// The novel directory → the root of the three memory stores.
 fn memo_root(novel_dir: &Path, paths: &Paths) -> PathBuf {
-    novel_dir.join(&paths.memo_root)
+    paths.memo_root(novel_dir)
 }
 
 /// The novel directory → the scope.

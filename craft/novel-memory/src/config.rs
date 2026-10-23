@@ -10,19 +10,80 @@ use serde::{Deserialize, Serialize};
 /// Where the corpus directories live inside one novel directory.
 ///
 /// The craft never assumes the directory names: the caller says what this
-/// novel calls them, exactly as the review rules do for the corpus.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// novel calls them. The defaults match the layout the review rules ship with,
+/// so a caller that does not care gets a working setup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Paths {
     /// Concept-card directory (may be nested).
+    #[serde(default = "default_cards_dir")]
     pub cards: String,
     /// Draft directory.
+    #[serde(default = "default_drafts_dir")]
     pub drafts: String,
+    /// Arc-level outline directory.
+    #[serde(default = "default_arc_plan_dir")]
+    pub arc_plan: String,
     /// Story-outline directory (one file per story unit).
+    #[serde(default = "default_story_plan_dir")]
     pub story_plan: String,
     /// Chapter-outline directory.
+    #[serde(default = "default_chapter_plan_dir")]
     pub chapter_plan: String,
-    /// Where the three memory stores are written, relative to the novel directory.
-    pub memo_root: String,
+    /// Tool-output directory, relative to the novel directory: the consistency
+    /// index and the three memory stores both land here.
+    #[serde(default = "default_research_dir")]
+    pub research: String,
+}
+
+impl Default for Paths {
+    fn default() -> Self {
+        Self {
+            cards: default_cards_dir(),
+            drafts: default_drafts_dir(),
+            arc_plan: default_arc_plan_dir(),
+            story_plan: default_story_plan_dir(),
+            chapter_plan: default_chapter_plan_dir(),
+            research: default_research_dir(),
+        }
+    }
+}
+
+impl Paths {
+    /// Where the three memory stores go for one novel.
+    #[must_use]
+    pub fn memo_root(&self, novel_dir: &std::path::Path) -> std::path::PathBuf {
+        novel_dir.join(&self.research).join("memo")
+    }
+
+    /// The glob pattern for concept cards.
+    #[must_use]
+    pub fn cards_glob(&self) -> String {
+        format!("{}/**/*.md", self.cards)
+    }
+}
+
+fn default_cards_dir() -> String {
+    "concept/cards".to_string()
+}
+
+fn default_drafts_dir() -> String {
+    "drafts".to_string()
+}
+
+fn default_arc_plan_dir() -> String {
+    "arc-plan".to_string()
+}
+
+fn default_story_plan_dir() -> String {
+    "story-plan".to_string()
+}
+
+fn default_chapter_plan_dir() -> String {
+    "chapter-plan".to_string()
+}
+
+fn default_research_dir() -> String {
+    "research".to_string()
 }
 
 /// How the corpus is read and what counts as a fact.
