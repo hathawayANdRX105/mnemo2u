@@ -23,6 +23,15 @@
 //! The kinds are the engine's existing vocabulary — `semantic`, `episodic`,
 //! `procedural`. The craft does not widen it.
 
+pub mod config;
+pub mod store;
+
+pub use config::Config;
+pub use store::{
+    content_hash, default_store_root, event_id, hash_of_event_id, plan, Coder, MemoryBackend,
+    SessionRecord, WritePlan, WriteReport,
+};
+
 use mnemo2u::core::types::{Fact, FactId, RelKind, ScopeKey, SourceRef, TrustState};
 
 /// The scope of one coding task.
@@ -149,8 +158,6 @@ pub struct Rule {
 ///
 /// The body is the three-part text the engine's procedure contract asks for:
 /// what the steps are, what they need, and what a good outcome looks like.
-/// A procedure is only worth having once it has been used, so the usage count
-/// and the last outcome travel with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Procedure {
     /// The slot key.
@@ -163,9 +170,20 @@ pub struct Procedure {
     pub inputs: Vec<String>,
     /// The expected outcome.
     pub expected: String,
+    /// The rule this procedure was made from, when it came from one.
+    ///
+    /// The link is what lets a recall answer "which rule produced these steps",
+    /// which is the first question asked of a procedure that went wrong.
+    pub derived_from: Option<String>,
     /// How many times the procedure was used.
+    ///
+    /// The caller's to keep, not the store's: the written fact carries the
+    /// procedure's *definition*, and re-writing it on every use would build a
+    /// supersede chain out of a counter that is not part of the procedure. A
+    /// harness tracks the record in its own session store.
     pub used_count: u64,
-    /// What the last use produced.
+    /// What the last use produced. Also the caller's to keep — see
+    /// [`Procedure::used_count`].
     pub last_outcome: Option<String>,
 }
 
