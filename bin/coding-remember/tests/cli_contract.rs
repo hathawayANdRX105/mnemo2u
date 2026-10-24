@@ -11,8 +11,8 @@
 
 use clap::Parser;
 use coding_memory::store::SessionRecord;
+use coding_memory::ScopeKey;
 use coding_remember::cli::{scope_of_from_flags, Cli, Command};
-use mnemo2u::core::types::ScopeKey;
 
 /// The scope a set of flags resolves to. The unwrap is safe: the flags are
 /// literals in these tests, and the only failure path is a malformed store path.

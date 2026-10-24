@@ -23,8 +23,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use coding_memory::store::{Reader, SessionRecord, WriteReport};
+use coding_memory::ScopeKey;
 use coding_memory::{Coder, Config, MemoryBackend, TaskScope};
-use mnemo2u::core::types::ScopeKey;
 
 /// Write and recall a coding session's memory.
 #[derive(Debug, Parser)]
@@ -163,7 +163,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             let scope = scope_of_from_flags(&project, session.as_deref(), topic.as_deref())?;
 
             let mut out = serde_json::Map::new();
-            let mut push = |label: &str, facts: Vec<mnemo2u::core::types::Fact>| {
+            let mut push = |label: &str, facts: Vec<coding_memory::Fact>| {
                 out.insert(
                     label.to_string(),
                     serde_json::to_value(facts).unwrap_or_default(),

@@ -32,7 +32,18 @@ pub use store::{
     Reader, SessionRecord, WritePlan, WriteReport,
 };
 
-use mnemo2u::core::types::{Fact, FactId, RelKind, ScopeKey, SourceRef, TrustState};
+// The engine types this craft's own API is written in, forwarded so a caller
+// deals with one crate rather than two.
+//
+// This is not politeness. `bin/` depends on `craft/`, and a craft that made its
+// caller import the engine directly would quietly widen the layering the repo
+// says it keeps — the consumer would then know about `mnemo2u` without meaning
+// to. Re-exporting keeps "the craft is the interface" literally true, and it
+// costs four lines.
+pub use mnemo2u::core::traits::{
+    Embedder, FactEdgeStore, FactStore, FactVectorStore, LexicalStore,
+};
+pub use mnemo2u::core::types::{Edge, Fact, FactId, RelKind, ScopeKey, SourceRef, TrustState};
 
 /// The scope of one coding task.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
