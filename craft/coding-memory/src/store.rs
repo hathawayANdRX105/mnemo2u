@@ -203,12 +203,13 @@ pub fn plan(session: &SessionRecord, scope: &TaskScope, created_at_base: i64) ->
     }
 
     for rule in &session.rules {
-        // Project knowledge: the session id goes, the topic stays.
-        let fact_scope = ScopeKey {
-            workspace_id: scope.project.clone(),
-            session_id: None,
-            task_id: scope.topic.clone(),
-        };
+        // The session id stays. `ScopeKey::admits` is strict in the direction
+        // that bites: a query that *names* a session sees only rows stored with
+        // that same session, so a stored `None` is invisible to the session
+        // that wrote it — the tavern craft learned that the hard way. Keeping it
+        // costs nothing: a project-wide recall names no session, and `None` on
+        // the query side admits everything. So this way both readers work.
+        let fact_scope = scope.to_scope_key();
         written.facts.push(fact(
             FactId(rule.key.clone()),
             fact_scope,
@@ -221,11 +222,8 @@ pub fn plan(session: &SessionRecord, scope: &TaskScope, created_at_base: i64) ->
     }
 
     for procedure in &session.procedures {
-        let fact_scope = ScopeKey {
-            workspace_id: scope.project.clone(),
-            session_id: None,
-            task_id: scope.topic.clone(),
-        };
+        // Same as a rule: the session stays. See the note above.
+        let fact_scope = scope.to_scope_key();
         written.facts.push(fact(
             FactId(procedure.key.clone()),
             fact_scope,
@@ -237,26 +235,47 @@ pub fn plan(session: &SessionRecord, scope: &TaskScope, created_at_base: i64) ->
         ));
     }
 
+    // Edge endpoints are fact **ids**, not slot keys. A rule's `derived_from`
+    // names the episode's slot key, and an episode written from a turn is
+    // filed under `turn:<turn_id>` — so the endpoint has to be resolved, or
+    // the edge points at a row that does not exist.
+    let episode_fact_ids: std::collections::HashMap<&str, String> = session
+        .episodes
+        .iter()
+        .map(|episode| (episode.key.as_str(), episode.fact_id()))
+        .collect();
+    let rule_fact_ids: std::collections::HashMap<&str, &str> = session
+        .rules
+        .iter()
+        .map(|rule| (rule.key.as_str(), rule.key.as_str()))
+        .collect();
+
     for rule in &session.rules {
         if let Some(episode_key) = &rule.derived_from {
-            written.edges.push(Edge {
-                src: FactId(rule.key.clone()),
-                dst: FactId(episode_key.clone()),
-                rel: crate::rule_depends_on_kind(),
-                weight: 1.0,
-                source_event_id: rule.key.clone(),
-            });
+            // An unresolvable endpoint means the episode is not in this
+            // record: skip the edge rather than write a dangling one.
+            if let Some(episode_fact_id) = episode_fact_ids.get(episode_key.as_str()) {
+                written.edges.push(Edge {
+                    src: FactId(rule.key.clone()),
+                    dst: FactId(episode_fact_id.clone()),
+                    rel: crate::rule_depends_on_kind(),
+                    weight: 1.0,
+                    source_event_id: rule.key.clone(),
+                });
+            }
         }
     }
     for procedure in &session.procedures {
         if let Some(rule_key) = &procedure.derived_from {
-            written.edges.push(Edge {
-                src: FactId(procedure.key.clone()),
-                dst: FactId(rule_key.clone()),
-                rel: crate::procedure_from_rule_kind(),
-                weight: 1.0,
-                source_event_id: procedure.key.clone(),
-            });
+            if rule_fact_ids.contains_key(rule_key.as_str()) {
+                written.edges.push(Edge {
+                    src: FactId(procedure.key.clone()),
+                    dst: FactId(rule_key.clone()),
+                    rel: crate::procedure_from_rule_kind(),
+                    weight: 1.0,
+                    source_event_id: procedure.key.clone(),
+                });
+            }
         }
     }
 

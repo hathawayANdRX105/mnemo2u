@@ -65,7 +65,7 @@ fn an_episode_keeps_its_session_id() {
 }
 
 #[test]
-fn a_rule_drops_the_session_but_keeps_the_topic() {
+fn a_rule_keeps_its_session_and_its_topic() {
     let scope = TaskScope::in_topic("mnemo2u", "exec-1", "topic:release");
     let plan = plan(
         &SessionRecord {
@@ -76,16 +76,19 @@ fn a_rule_drops_the_session_but_keeps_the_topic() {
         0,
     );
     let fact = facts_of(&plan, "rule:lockfile");
-    // Project knowledge: the session id goes, or a project-wide recall could
-    // never read back what one run learned.
-    assert_eq!(fact.scope.session_id, None);
+    // The session id stays. A stored `None` is invisible to a query that names
+    // a session, so dropping it would make a rule unreadable from the very
+    // session that learned it — and a project-wide recall names no session, so
+    // `None` on the query side already admits everything. Keeping it costs
+    // nothing and both readers work.
+    assert_eq!(fact.scope.session_id.as_deref(), Some("exec-1"));
     // The topic stays, so a topic-scoped query finds it too.
     assert_eq!(fact.scope.task_id.as_deref(), Some("topic:release"));
     assert_eq!(fact.kind, "semantic");
 }
 
 #[test]
-fn a_procedure_is_procedural_and_session_free() {
+fn a_procedure_is_procedural_and_keeps_its_session() {
     let scope = TaskScope::in_topic("mnemo2u", "exec-1", "topic:release");
     let plan = plan(
         &SessionRecord {
@@ -97,7 +100,7 @@ fn a_procedure_is_procedural_and_session_free() {
     );
     let fact = facts_of(&plan, "procedure:release");
     assert_eq!(fact.kind, "procedural");
-    assert_eq!(fact.scope.session_id, None);
+    assert_eq!(fact.scope.session_id.as_deref(), Some("exec-1"));
     assert_eq!(fact.scope.task_id.as_deref(), Some("topic:release"));
 }
 
@@ -109,7 +112,9 @@ fn a_rule_records_the_episode_it_came_from() {
             rules: vec![rule(
                 "rule:lockfile",
                 "Building needs cargo fetch.",
-                Some("turn-7"),
+                // derived_from names the episode's slot key; the store resolves
+                // that key to the episode's fact id.
+                Some("episode:1"),
             )],
             ..SessionRecord::default()
         },
@@ -117,8 +122,9 @@ fn a_rule_records_the_episode_it_came_from() {
         0,
     );
     let fact = facts_of(&plan, "rule:lockfile");
-    // The provenance rides in the source reference.
-    assert_eq!(fact.source_refs[0].branch_id, "turn-7");
+    // The provenance rides in the source reference: the episode the rule came
+    // from, so the reasoning stays traceable.
+    assert_eq!(fact.source_refs[0].branch_id, "episode:1");
 }
 
 #[test]
@@ -126,13 +132,15 @@ fn the_plan_carries_a_rule_depends_on_edge_and_a_procedure_edge() {
     let scope = TaskScope::new("mnemo2u", "exec-1");
     let plan = plan(
         &SessionRecord {
+            episodes: vec![episode("episode:1", "The build broke.", Some("turn-7"))],
             rules: vec![rule(
                 "rule:lockfile",
                 "Building needs cargo fetch.",
-                Some("turn-7"),
+                // derived_from names the episode's slot key; the store resolves
+                // that key to the episode's fact id.
+                Some("episode:1"),
             )],
             procedures: vec![procedure("procedure:release", Some("rule:lockfile"))],
-            ..SessionRecord::default()
         },
         &scope,
         0,
@@ -142,7 +150,8 @@ fn the_plan_carries_a_rule_depends_on_edge_and_a_procedure_edge() {
         .iter()
         .find(|edge| edge.src.0 == "rule:lockfile")
         .expect("the rule depends on the episode that established it");
-    assert_eq!(depends.dst.0, "turn-7");
+    // The endpoint is the episode's fact id, not the slot key the rule named.
+    assert_eq!(depends.dst.0, "turn:turn-7");
     assert_eq!(depends.rel, RelKind::DependsOn);
 
     let from_rule = plan
@@ -162,10 +171,13 @@ fn derivation_edges_cross_sessions_by_construction() {
     let scope = TaskScope::in_topic("mnemo2u", "exec-1", "topic:release");
     let plan = plan(
         &SessionRecord {
+            episodes: vec![episode("episode:1", "The build broke.", Some("turn-7"))],
             rules: vec![rule(
                 "rule:lockfile",
                 "Building needs cargo fetch.",
-                Some("turn-7"),
+                // derived_from names the episode's slot key; the store resolves
+                // that key to the episode's fact id.
+                Some("episode:1"),
             )],
             ..SessionRecord::default()
         },
@@ -174,8 +186,57 @@ fn derivation_edges_cross_sessions_by_construction() {
     );
     let edge = plan.edges.first().expect("one edge");
     assert_eq!(edge.src.0, "rule:lockfile");
-    // The endpoint is the episode's fact id, which a turn id maps to directly.
+    // The endpoint is the episode's fact **id**, not the slot key the rule
+    // named: an episode filed from a turn lives under `turn:<turn_id>`.
     assert_eq!(edge.dst.0, "turn:turn-7");
+}
+
+#[test]
+fn an_edge_to_an_absent_episode_is_skipped_not_dangling() {
+    // A record may carry a rule before the episode it came from is written.
+    // Publishing an edge to an id with no row would leave a fact-less endpoint
+    // in the graph, so the plan leaves the edge out instead.
+    let scope = TaskScope::new("mnemo2u", "exec-1");
+    let plan = plan(
+        &SessionRecord {
+            rules: vec![rule(
+                "rule:lockfile",
+                "Building needs cargo fetch.",
+                // derived_from names the episode's slot key; the store resolves
+                // that key to the episode's fact id.
+                Some("episode:1"),
+            )],
+            ..SessionRecord::default()
+        },
+        &scope,
+        0,
+    );
+    assert!(
+        plan.edges.is_empty(),
+        "a rule with no episode in the record writes no edge"
+    );
+}
+
+#[test]
+fn a_procedure_edge_names_its_rule_by_its_slot_key() {
+    // A rule's key *is* its fact id, so the procedure's link needs no mapping.
+    let scope = TaskScope::new("mnemo2u", "exec-1");
+    let plan = plan(
+        &SessionRecord {
+            rules: vec![rule("rule:lockfile", "Building needs cargo fetch.", None)],
+            procedures: vec![procedure("procedure:release", Some("rule:lockfile"))],
+            ..SessionRecord::default()
+        },
+        &scope,
+        0,
+    );
+    let edge = plan
+        .edges
+        .iter()
+        .find(|edge| edge.src.0 == "procedure:release")
+        .expect("the procedure comes from its rule");
+    assert_eq!(edge.dst.0, "rule:lockfile");
+    assert_eq!(edge.rel, RelKind::Corrects);
 }
 
 #[test]
@@ -209,27 +270,57 @@ fn a_project_wide_recall_sees_every_session_rules() {
         "a procedure is project knowledge"
     );
 
-    // A session recall does not see them: they were never about that run.
-    let one_session = ScopeKey {
+    // A *different* session does not see them: the rule was learned here, not
+    // there. Cross-session sharing happens through the project-scoped recall
+    // above, which names no session at all.
+    let another_session = ScopeKey {
         workspace_id: "mnemo2u".to_string(),
         session_id: Some("other-exec".to_string()),
         task_id: None,
     };
     assert!(
-        !one_session.admits(&rule.scope),
+        !another_session.admits(&rule.scope),
         "another session must not adopt this rule"
     );
     // The episode belongs to its own session, so a different one cannot see
     // it either — the provenance an edge points at is fetchable from within
     // the session that produced it.
     let episode = facts_of(&plan, "turn:turn-7");
-    assert!(!one_session.admits(&episode.scope));
+    assert!(!another_session.admits(&episode.scope));
     let its_own_session = ScopeKey {
         workspace_id: "mnemo2u".to_string(),
         session_id: Some("exec-1".to_string()),
         task_id: None,
     };
     assert!(its_own_session.admits(&episode.scope));
+}
+
+#[test]
+fn the_session_that_wrote_a_rule_can_read_it_back() {
+    // The half of the scoping that the tavern craft got wrong and this one must
+    // not: a query that *names* a session only sees rows stored with that same
+    // session, so `ScopeKey::admits` makes a stored `None` invisible to a
+    // session-scoped caller. The harness reads a project's rules inside the
+    // session that is running, so the writer has to make that work.
+    let scope = TaskScope::in_topic("mnemo2u", "exec-1", "topic:release");
+    let plan = plan(
+        &SessionRecord {
+            rules: vec![rule("rule:lockfile", "Building needs cargo fetch.", None)],
+            procedures: vec![procedure("procedure:release", None)],
+            ..SessionRecord::default()
+        },
+        &scope,
+        0,
+    );
+    let the_session = scope.to_scope_key();
+    assert!(
+        the_session.admits(&facts_of(&plan, "rule:lockfile").scope),
+        "the session that wrote a rule must be able to read it back"
+    );
+    assert!(
+        the_session.admits(&facts_of(&plan, "procedure:release").scope),
+        "and likewise a procedure"
+    );
 }
 
 #[test]
