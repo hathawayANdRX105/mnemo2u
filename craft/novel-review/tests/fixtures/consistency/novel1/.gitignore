@@ -1,1 +1,5 @@
-research/
+# 构建产物（sqlite 影子表编码随 SQLite 实现漂移，不入库），但
+# review-feedback.jsonl 是**基线资产**：reports-workspace 的基线期望
+# feedback entries=1，而它由 consistency 测试的 feedback-add 确定性产出。
+# 把它签进来，干净 checkout 下 workspace 基线才不依赖测试执行顺序。
+research/consistency/consistency.sqlite3
