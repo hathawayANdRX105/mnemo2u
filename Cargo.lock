@@ -1207,7 +1207,6 @@ dependencies = [
  "anyhow",
  "clap",
  "coding-memory",
- "mnemo2u",
  "serde_json",
  "tempfile",
  "tokio",
