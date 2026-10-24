@@ -1,0 +1,34 @@
+[package]
+name = "novel-review-cli"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "The novel-review binary: the CLI entry point for the review craft"
+publish = false
+
+# The binary is named `novel-review` (the command users type) while the package
+# is named `novel-review-cli`: a package and a crate cannot share a name inside
+# one workspace, and `novel-review` is taken by the craft's library under
+# `craft/novel-review`.
+#
+# This is where the repo's layering bottoms out: every binary depends on a
+# craft, and a craft depends on the engine. The review craft is the library;
+# wiring it to a command line is this package's only job.
+[[bin]]
+name = "novel-review"
+path = "src/main.rs"
+
+[dependencies]
+novel-review = { path = "../../craft/novel-review" }
+anyhow = "1"
+clap = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+# The CLI tests compare the binary's output byte for byte against the golden
+# baselines the library's own tests share, so the fixtures live with the craft
+# and this package reaches them through a link — one copy, one source of truth.
+# The versions match the craft's, so both sides agree on one build.
+chrono = { version = "0.4.45", features = ["clock"] }
+serde_json = { workspace = true }
+tempfile = "3"
