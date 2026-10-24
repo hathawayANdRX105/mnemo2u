@@ -28,9 +28,15 @@ use mnemo2u::core::types::{Fact, FactId, RelKind, ScopeKey, SourceRef, TrustStat
 use narrative_core::hash::content_hash;
 use narrative_core::storytime::{Layer, StoryUnit, Tick, TICK_SCALE};
 
+pub mod config;
 pub mod conflict;
+pub mod store;
 
+pub use config::Config;
 pub use conflict::{detect, disagrees, Subject};
+pub use store::{
+    conflicts_of, default_store_root, event_id, plan, Coder, MemoryBackend, WritePlan, WriteReport,
+};
 
 /// The kind of a tavern fact: canon or event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
