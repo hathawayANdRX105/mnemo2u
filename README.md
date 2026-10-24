@@ -102,22 +102,28 @@ craft/                  # the task specializations
   novel-review/         # the review craft: audit, statistics, consistency reports
   tavern-memory/        # the tavern craft
   coding-memory/        # the coding craft
-bin/
-  mnemo2u/              # the operational CLI (package `mnemo2u-cli`)
+bin/                     # the CLI entry points
+  mnemo2u/              # the engine's operational CLI (package `mnemo2u-cli`)
+  novel-review/         # the review craft's CLI (package `novel-review-cli`)
 ```
 
-Two layers, one direction of dependency:
+Three layers, one direction of dependency — **`bin/*` → `craft/*` → `crates/*`**:
 
 - `crates/` is the **generic** memory engine: the bitemporal fact model, the
   three stores, the graph and vector indexes, the query paths, the evaluation
   harness. It knows nothing about fiction.
-- `craft/` holds one crate per **kind of work**: each bends that engine toward
-  a craft. `novel-memory` scans a novel directory into fact slots and reads
-  them back. `novel-review` audits the same novel against its rules and emits
-  reports, statistics trees and a consistency index. `tavern-memory` keeps a
-  character's canon and reports the events that contradict it.
+- `craft/` holds one **library** per *kind of work*: each bends that engine
+  toward a craft. `novel-memory` scans a novel directory into fact slots and
+  reads them back. `novel-review` audits the same novel against its rules and
+  emits reports, statistics trees and a consistency index. `tavern-memory`
+  keeps a character's canon and reports the events that contradict it.
   `coding-memory` remembers what a coding session did, the rules the project
-  learned, and the procedures worth repeating.
+  learned, and the procedures worth repeating. A craft carries no `main.rs`:
+  wiring it to a command line is a `bin/` package's only job.
+- `bin/` holds one package per **command**, each depending on the craft it
+  drives. `bin/mnemo2u` serves the engine directly (it is the engine's own
+  operational surface, not a specialization); `bin/novel-review` serves the
+  review craft.
 
 The two fiction crafts on the memory side share `narrative-core`: story-time
 coordinates and the slot-key-plus-hash scheme. A tavern session is a story too,
@@ -127,9 +133,19 @@ other. `novel-review` sits beside `novel-memory` without depending on it: it
 reads the novel from disk; only its CLI carries the `memory` subcommand that
 indexes the same corpus.
 
-A crate in `crates/` never depends on a crate in `craft/`. The other direction
-is the whole point: the specializations build on the engine, and the engine
-stays free of what any one craft happens to need.
+The rule that keeps the layers apart, stated once:
+
+**A crate in `crates/` never depends on a crate in `craft/`, and a craft never
+carries a `main.rs`.** The other directions are the whole point: the
+specializations build on the engine, and the commands build on the crafts. A
+craft that grew a binary would put the CLI's job inside the library, and the
+day a second CLI wants the same craft it would either duplicate the wiring or
+drag the first CLI's argument surface along.
+
+One exception exists and it is deliberate: `bin/mnemo2u` depends on the facade
+in `crates/` directly. The engine's operational CLI is the engine's own surface
+rather than a specialization of it, and routing it through a craft would invent
+a craft that does nothing but forward.
 
 The facade re-exports `mnemo-core` under the module paths the library has
 always published (`mnemo2u::core::traits::*`, `mnemo2u::store::*`, …), so

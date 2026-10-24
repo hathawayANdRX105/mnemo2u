@@ -6,8 +6,8 @@ license = "MIT"
 description = "The review craft: audit, statistics and consistency reports for a novel corpus"
 publish = false
 
-# The package carries both the library and its CLI: the review tool is one
-# thing, and splitting them apart would only move the wiring somewhere else.
+# This package is the review craft's **library**. Its CLI entry point lives in
+# `bin/novel-review` — see the layout section in the README.
 
 [dependencies]
 anyhow = "1"
@@ -30,7 +30,3 @@ tokio = { workspace = true }
 [dev-dependencies]
 tempfile = "3"
 tokio = { workspace = true }
-
-[[bin]]
-name = "novel-review"
-path = "src/main.rs"
