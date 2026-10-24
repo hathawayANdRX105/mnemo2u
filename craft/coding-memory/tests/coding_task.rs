@@ -31,6 +31,7 @@ fn procedure() -> Procedure {
         body: "1. run the tests\n2. tag the commit\nexpected: a green build".to_string(),
         inputs: vec!["a clean tree".to_string()],
         expected: "a green build".to_string(),
+        derived_from: None,
         used_count: 0,
         last_outcome: None,
     }
