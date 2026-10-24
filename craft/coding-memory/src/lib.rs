@@ -29,13 +29,13 @@ pub mod store;
 pub use config::Config;
 pub use store::{
     content_hash, default_store_root, event_id, hash_of_event_id, plan, Coder, MemoryBackend,
-    SessionRecord, WritePlan, WriteReport,
+    Reader, SessionRecord, WritePlan, WriteReport,
 };
 
 use mnemo2u::core::types::{Fact, FactId, RelKind, ScopeKey, SourceRef, TrustState};
 
 /// The scope of one coding task.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TaskScope {
     /// The repository (the project).
     pub project: String,
@@ -89,7 +89,7 @@ impl TaskScope {
 }
 
 /// The three kinds of thing a coding session remembers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum MemoryKind {
     /// What happened: a pit, a decision, a fix. Session-bound.
     Episode,
@@ -115,7 +115,7 @@ impl MemoryKind {
 }
 
 /// An episode: something that happened in a session.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Episode {
     /// The slot key.
     pub key: String,
@@ -144,7 +144,7 @@ impl Episode {
 ///
 /// A rule names the episode it came from, so the reasoning stays traceable:
 /// "this repo requires X" points at the run that learned it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Rule {
     /// The slot key.
     pub key: String,
@@ -158,7 +158,7 @@ pub struct Rule {
 ///
 /// The body is the three-part text the engine's procedure contract asks for:
 /// what the steps are, what they need, and what a good outcome looks like.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Procedure {
     /// The slot key.
     pub key: String,

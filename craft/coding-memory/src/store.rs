@@ -152,13 +152,21 @@ impl MemoryBackend {
 }
 
 /// Everything one session remembered: what happened, what holds, what to repeat.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// A session's memory as it arrives over the wire.
+///
+/// `Deserialize` matters more than `Serialize` here: this is the shape a harness
+/// pipes into `coding-remember remember` on stdin, so it is a *published input
+/// format* and renaming a field is a breaking change for whoever calls it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionRecord {
     /// The episodes, in the order they happened.
+    #[serde(default)]
     pub episodes: Vec<Episode>,
     /// The rules, each naming the episode it came from when it has one.
+    #[serde(default)]
     pub rules: Vec<Rule>,
     /// The procedures, each naming the rule it came from when it has one.
+    #[serde(default)]
     pub procedures: Vec<Procedure>,
 }
 
@@ -445,5 +453,88 @@ impl<'a> Coder<'a> {
     /// The fast path for an unchanged fact: refresh the derived vector only.
     async fn refresh_vectors(&self, scope: &ScopeKey, id: &FactId, text: &str) -> Result<()> {
         self.write_vector(scope, id, text).await
+    }
+}
+
+/// The reader: what a session's memory looks like once it is written.
+///
+/// A caller asks about a scope and gets back the facts of the kind it wants.
+/// The kinds are not query filters invented here — they are the strings the
+/// engine already stores in `Fact.kind`, so a scan plus a comparison is all a
+/// read needs.
+pub struct Reader<'a> {
+    backend: &'a MemoryBackend,
+}
+
+impl<'a> Reader<'a> {
+    /// Build a reader over an open backend.
+    pub fn new(backend: &'a MemoryBackend) -> Self {
+        Self { backend }
+    }
+
+    /// Every canon fact — the rules — a recall sees under `scope`.
+    ///
+    /// "Every" is honest: this is a scan, not a ranked retrieval. A harness that
+    /// wants "the rules relevant to this prompt" runs the engine's own recall
+    /// arms over the same rows; this returns the set so the answer is at least
+    /// complete, and cheap.
+    pub async fn rules(&self, scope: &ScopeKey) -> Result<Vec<Fact>> {
+        self.of_kind(scope, crate::MemoryKind::Rule.as_str()).await
+    }
+
+    /// Every procedure under `scope`.
+    pub async fn procedures(&self, scope: &ScopeKey) -> Result<Vec<Fact>> {
+        self.of_kind(scope, crate::MemoryKind::Procedure.as_str())
+            .await
+    }
+
+    /// Every episode under `scope`.
+    pub async fn episodes(&self, scope: &ScopeKey) -> Result<Vec<Fact>> {
+        self.of_kind(scope, crate::MemoryKind::Episode.as_str())
+            .await
+    }
+
+    /// The derivation edges under `scope`: which episode a rule came from, and
+    /// which rule a procedure came from.
+    pub async fn derivation_edges(
+        &self,
+        scope: &ScopeKey,
+    ) -> Result<Vec<mnemo2u::core::types::Edge>> {
+        let mut edges = self
+            .backend
+            .edges
+            .edges_by_rel(scope, crate::rule_depends_on_kind())
+            .await
+            .map_err(|error| anyhow!("read the derivation edges: {error}"))?;
+        edges.extend(
+            self.backend
+                .edges
+                .edges_by_rel(scope, crate::procedure_from_rule_kind())
+                .await
+                .map_err(|error| anyhow!("read the provenance edges: {error}"))?,
+        );
+        edges.sort_by(|left, right| {
+            (left.src.0.as_str(), left.dst.0.as_str())
+                .cmp(&(right.src.0.as_str(), right.dst.0.as_str()))
+        });
+        Ok(edges)
+    }
+
+    /// Scan the facts of one kind under a scope.
+    async fn of_kind(&self, scope: &ScopeKey, kind: &str) -> Result<Vec<Fact>> {
+        let facts = self
+            .backend
+            .facts
+            .scan(scope)
+            .await
+            .map_err(|error| anyhow!("scan the fact store: {error}"))?;
+        let mut matching: Vec<Fact> = facts
+            .into_iter()
+            .filter(|fact| fact.kind == kind && fact.superseded_by.is_none())
+            .collect();
+        // Stable output order: id, not insertion order, so two runs of the same
+        // read print the same list.
+        matching.sort_by(|left, right| left.id.0.cmp(&right.id.0));
+        Ok(matching)
     }
 }
